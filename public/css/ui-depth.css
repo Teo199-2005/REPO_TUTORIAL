@@ -513,8 +513,38 @@
   }
 }
 
-/* ---- Modals and dropdowns: elevated glass ----------------------------- */
-.modal-content,
+/* ---- Modals and dropdowns: elevated glass -----------------------------
+   SCOPED DELIBERATELY. A blanket `.modal-content` rule is wrong here, and was
+   a real bug: `registration_help_modal` renders
+   `<div class="modal-content reg-help-modal__content">`, where mascot.css sets
+   the panel to dark navy (#1e3a8a) and paints the body text near-white. The
+   blanket rule matched the `.modal-content` class at equal specificity but
+   carried `!important`, so it repainted that panel near-white and left white
+   text on a white sheet - the whole dialog became unreadable.
+
+   Every modal on the platform that carries a deliberate design follows the
+   BEM `__content` convention, and each one has a reason to keep it:
+     reg-help-modal__content        dark navy, white type
+     slide-editor-modal__content    blue radial + gradient
+     citizens-charter-modal__content  border: none, overflow hidden
+     school-materials-modal__content  border: none
+     reg-closed-modal__content      its own closed-state palette
+   So the exemption is `[class*="__content"]`, which covers all five and opts
+   any future themed modal out automatically instead of breaking it again.
+
+   `.border-0` is excluded because those dialogs ask for no border, and this
+   rule would otherwise draw one. `.login-captcha-modal` is the one themed
+   modal that does not use the `__content` suffix. */
+.modal-content:not([class*="__content"]):not(.login-captcha-modal):not(.border-0) {
+  background: var(--glass-bg) !important;
+  background-color: transparent !important;
+  border: var(--glass-edge) !important;
+  box-shadow: var(--glass-shadow-lift), var(--glass-sheen) !important;
+}
+
+/* The app's own generic modal shell. Unscoped by design: unlike the themed
+   dialogs above it is a plain light surface with no opinion of its own, so it
+   is exactly what the glass recipe is for. */
 .custom-modal-container {
   background: var(--glass-bg) !important;
   background-color: transparent !important;

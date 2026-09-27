@@ -120,22 +120,32 @@
   margin-bottom: 0.25rem;
 }
 
-.section-title {
+/* Scoped to .register-card for the same reason, and with the same root cause,
+   as the identical rule in register.php: app.css declares
+     .section-title:not([class*="text-"]) { color: var(--color-heading) }
+   whose :not([class*="text-"]) lifts it to (0,2,0), so it outranked a bare
+   `.section-title` and painted the heading dark navy-on-dark-navy. This page
+   shares that palette, so it needs the same rescue. */
+.register-card .section-title {
   font-size: 1rem;
   font-weight: 700;
-  color: white;
+  color: #fff;
   margin-bottom: 0.75rem;
   margin-top: 0;
   padding-bottom: 0.25rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.3);
 }
 
+/* Text colour is dark navy, not white, for the same reason as register.php:
+   white on this amber gradient measured 2.35:1, under the 4.5:1 that 14px bold
+   text needs. Navy on the same amber reaches 4.40:1 and matches the amber
+   button in the registration help dialog. */
 .register-btn {
   padding: 0.75rem 1.5rem;
   background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #ea580c 100%);
   border: none;
   border-radius: 10px;
-  color: white;
+  color: #1e3a8a;
   font-weight: 700;
   font-size: 0.9rem;
   letter-spacing: 0.025em;
@@ -146,6 +156,18 @@
   transform: translateY(-1px);
   box-shadow: 0 10px 25px rgba(251, 191, 36, 0.4);
   background: linear-gradient(135deg, #f59e0b 0%, #ea580c 50%, #dc2626 100%);
+}
+
+/* Same rescue as register.php: this chip inherits Bootstrap's .input-group-text,
+   which ui-depth.css paints with the light form-control gradient !important.
+   This page is also a dark navy card with white chip text, so that left white
+   on white. Translucent white keeps the label legible and keeps its chip shape. */
+.register-card .no-middle-name-check {
+  background: rgba(255, 255, 255, 0.12) !important;
+  background-color: rgba(255, 255, 255, 0.12) !important;
+  background-image: none !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  color: #fff;
 }
 
 .alert {
@@ -161,8 +183,10 @@
   color: #dc2626;
 }
 
+/* 0.75 rather than 0.6, for the same reason as register.php: at 0.6 this sat at
+   4.06:1 on the navy card, under the 4.5:1 floor. */
 .form-text, .text-muted {
-  color: rgba(255, 255, 255, 0.6) !important;
+  color: rgba(255, 255, 255, 0.75) !important;
   font-size: 0.8125rem;
 }
 

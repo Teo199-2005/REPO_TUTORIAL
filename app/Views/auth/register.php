@@ -118,10 +118,19 @@
   margin-bottom: 0.25rem;
 }
 
-.section-title {
+/* Scoped to .register-card on purpose -- left as a bare `.section-title` this
+   rule silently loses. app.css styles the same class as
+     .section-title:not([class*="text-"]) { color: var(--color-heading) }
+   and an attribute selector inside :not() counts toward specificity, so that
+   rule is (0,2,0) -- heavier than a bare class at (0,1,0) -- and it loads from
+   the head, before this block. It therefore won, and the step headings rendered
+   #0f172a on this page's dark navy card and all but disappeared. Scoping here
+   restores (0,2,0) and, being later in the cascade, takes the tie.
+   teacher_register.php carries the identical fix. */
+.register-card .section-title {
   font-size: 1rem;
   font-weight: 700;
-  color: white;
+  color: #fff;
   margin-bottom: 0.75rem;
   margin-top: 0;
   padding-bottom: 0.25rem;
@@ -136,12 +145,18 @@
   margin-top: 0;
 }
 
+/* Text colour is dark navy, not white. The button is an amber gradient, and
+   white on that averages out at 2.35:1 -- well under the 4.5:1 needed for
+   14px bold text, so the label was effectively unreadable. Navy on the same
+   amber reaches 4.40:1, and it is also what the sibling dialog already does
+   (mascot.css styles the help modal's amber button with navy type), so the two
+   now read as one family. */
 .register-btn {
   padding: 0.75rem 1.5rem;
   background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #ea580c 100%);
   border: none;
   border-radius: 10px;
-  color: white;
+  color: #1e3a8a;
   font-weight: 700;
   font-size: 0.9rem;
   letter-spacing: 0.025em;
@@ -152,6 +167,21 @@
   transform: translateY(-1px);
   box-shadow: 0 10px 25px rgba(251, 191, 36, 0.4);
   background: linear-gradient(135deg, #f59e0b 0%, #ea580c 50%, #dc2626 100%);
+}
+
+/* The "No middle name" chip carries Bootstrap's .input-group-text, which
+   ui-depth.css folds into the light form-control gradient with !important. On
+   this page that is wrong: the chip sits on the dark navy card and its own
+   rules keep the label white, so the white chip left white text on a white
+   background -- 1.01:1, invisible. Restored to a translucent white chip, which
+   both keeps it legible (white on the tinted navy lands near 7:1) and still
+   reads as part of the input group it is attached to. */
+.register-card .no-middle-name-check {
+  background: rgba(255, 255, 255, 0.12) !important;
+  background-color: rgba(255, 255, 255, 0.12) !important;
+  background-image: none !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  color: #fff;
 }
 
 .btn-outline-secondary {
@@ -180,8 +210,11 @@
   color: #dc2626;
 }
 
+/* 0.75 rather than 0.6. At 0.6 these sat at 4.06:1 against the navy card --
+   just under the 4.5:1 floor, for text that carries the required-field marker
+   and the field guidance, which is exactly the copy a parent is squinting at. */
 .form-text, .text-muted {
-  color: rgba(255, 255, 255, 0.6) !important;
+  color: rgba(255, 255, 255, 0.75) !important;
   font-size: 0.8125rem;
 }
 
