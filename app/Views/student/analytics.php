@@ -2,19 +2,19 @@
 <?= $this->section('content') ?>
 
 <style>
-/* Student Analytics Page */
+/* Student Analytics Page — widgets follow the shared recipe in app.css; this
+   block only sets the page's own layout. */
 .analytics-header {
   margin-bottom: 1.5rem;
 }
 
 .stat-card {
-  border-radius: 12px;
-  border: none;
-  transition: transform 0.2s;
+  transition: transform var(--motion-base) var(--ease-out-soft), box-shadow var(--motion-base) var(--ease-out-soft);
 }
 
 .stat-card:hover {
-  transform: translateY(-3px);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
 }
 
 .analytics-layout {
@@ -29,11 +29,13 @@
   height: 250px;
 }
 
+/* Overview panel: a soft tinted surface, not a saturated colour block. */
 .overview-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-radius: 16px;
-  border: none;
+  background: var(--surface-tint);
+  color: var(--color-text);
+  border-radius: var(--radius-lg);
+  border: var(--hairline);
+  box-shadow: var(--shadow-md);
 }
 
 .overview-card .card-body {
@@ -51,40 +53,30 @@
   min-width: 120px;
 }
 
+/* Attendance rows read as a list of items: hairline + a status dot in the
+   leading position, instead of a coloured stripe down the left edge. */
 .attendance-item {
-  border-left: 4px solid #007bff;
-  transition: all 0.2s;
+  border: var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--motion-base) var(--ease-out-soft), transform var(--motion-base) var(--ease-out-soft);
 }
 
 .attendance-item:hover {
-  border-left-color: #0056b3;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-1px);
 }
 
-.status-present {
-  color: #28a745;
-  font-weight: 600;
-}
-
-.status-absent {
-  color: #dc3545;
-  font-weight: 600;
-}
-
-.status-late {
-  color: #ffc107;
-  font-weight: 600;
-}
-
-.status-excused {
-  color: #17a2b8;
-  font-weight: 600;
-}
+.status-present  { color: var(--status-success-ink); font-weight: 700; }
+.status-absent   { color: var(--status-danger-ink);  font-weight: 700; }
+.status-late     { color: var(--status-warning-ink); font-weight: 700; }
+.status-excused  { color: var(--status-info-ink);    font-weight: 700; }
 
 .grade-badge {
   font-size: 1.1rem;
   padding: 0.5rem 1rem;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
 }
 
 @media (max-width: 768px) {
@@ -125,60 +117,246 @@
 .analytics-overview-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
 }
 .analytics-overview-row .analytics-stat-card {
   flex: 1 1 0;
-  min-width: 180px;
+  min-width: 140px;
+}
+.analytics-stat-card .stat-card {
+  border-radius: var(--radius-lg);
+}
+.analytics-stat-card .card-body {
+  padding: 0.9rem 0.6rem !important;
+}
+.analytics-stat-card .stat-icon {
+  font-size: var(--icon-lg);
+  line-height: 1;
+  margin-bottom: 0.45rem;
+  display: inline-block;
+}
+.analytics-stat-card .stat-title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  margin-bottom: 0.2rem;
+  color: var(--color-text-muted);
+}
+.analytics-stat-card .stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.1;
+  margin-bottom: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-heading);
+}
+.analytics-stat-card .stat-sub {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  display: block;
+  margin-top: 0.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>
+<?php if (!empty($isDomainMode)): ?>
+<!-- Non-numerical (developmental) sections are assessed with symbols, not 0-100
+     grades, so the Average / Highest / Lowest widgets are replaced by actual
+     developmental progress. -->
 <div class="analytics-overview-row">
   <div class="analytics-stat-card">
     <div class="card stat-card bg-primary text-white h-100">
-      <div class="card-body text-center p-3">
-        <i class="bi bi-journal-check display-6 mb-2"></i>
-        <h5 class="card-title mb-0">My Average</h5>
-        <p class="display-6 fw-bold mb-0"><?= number_format($analytics['studentAverage'], 1) ?>%</p>
+      <div class="card-body text-center">
+        <i class="bi bi-list-check stat-icon"></i>
+        <h5 class="card-title stat-title">Indicators Assessed</h5>
+        <p class="stat-value"><?= (int) ($domainAnalytics['assessed'] ?? 0) ?> / <?= (int) ($domainAnalytics['totalIndicators'] ?? 0) ?></p>
+        <small class="stat-sub"><?= number_format((float) ($domainAnalytics['completionRate'] ?? 0), 1) ?>% completion</small>
       </div>
     </div>
   </div>
-  
+
   <div class="analytics-stat-card">
     <div class="card stat-card bg-success text-white h-100">
-      <div class="card-body text-center p-3">
-        <i class="bi bi-trophy display-6 mb-2"></i>
-        <h5 class="card-title mb-0">Highest Grade</h5>
-        <p class="display-6 fw-bold mb-0"><?= $analytics['highestGrade']['value'] ?? 0 ?>%</p>
-        <small><?= esc($analytics['highestGrade']['subject'] ?? 'N/A') ?></small>
+      <div class="card-body text-center">
+        <i class="bi bi-trophy stat-icon"></i>
+        <h5 class="card-title stat-title">Mastery (P + AP)</h5>
+        <p class="stat-value"><?= number_format((float) ($domainAnalytics['masteryRate'] ?? 0), 1) ?>%</p>
+        <small class="stat-sub">Proficient + Approaching</small>
       </div>
     </div>
   </div>
-  
+
   <div class="analytics-stat-card">
     <div class="card stat-card bg-warning text-white h-100">
-      <div class="card-body text-center p-3">
-        <i class="bi bi-graph-down display-6 mb-2"></i>
-        <h5 class="card-title mb-0">Lowest Grade</h5>
-        <p class="display-6 fw-bold mb-0"><?= $analytics['lowestGrade']['value'] ?? 0 ?>%</p>
-        <small><?= esc($analytics['lowestGrade']['subject'] ?? 'N/A') ?></small>
+      <div class="card-body text-center">
+        <i class="bi bi-star stat-icon"></i>
+        <h5 class="card-title stat-title">Proficient (P)</h5>
+        <p class="stat-value"><?= (int) ($domainAnalytics['symbols']['P'] ?? 0) ?></p>
+        <small class="stat-sub">AP <?= (int) ($domainAnalytics['symbols']['AP'] ?? 0) ?> &middot; D <?= (int) ($domainAnalytics['symbols']['D'] ?? 0) ?> &middot; B <?= (int) ($domainAnalytics['symbols']['B'] ?? 0) ?></small>
       </div>
     </div>
   </div>
-  
+
   <div class="analytics-stat-card">
     <div class="card stat-card bg-info text-white h-100">
-      <div class="card-body text-center p-3">
-        <i class="bi bi-calendar-check display-6 mb-2"></i>
-        <h5 class="card-title mb-0">Attendance</h5>
-        <p class="display-6 fw-bold mb-0"><?= $analytics['attendanceRate'] ?>%</p>
-        <small><?= $analytics['attendanceStats']['total'] ?? 0 ?> records</small>
+      <div class="card-body text-center">
+        <i class="bi bi-calendar-check stat-icon"></i>
+        <h5 class="card-title stat-title">Attendance</h5>
+        <p class="stat-value"><?= $analytics['attendanceRate'] ?>%</p>
+        <small class="stat-sub"><?= $analytics['attendanceStats']['total'] ?? 0 ?> records</small>
       </div>
     </div>
   </div>
 </div>
+<?php else: ?>
+<div class="analytics-overview-row">
+  <div class="analytics-stat-card">
+    <div class="card stat-card bg-primary text-white h-100">
+      <div class="card-body text-center">
+        <i class="bi bi-journal-check stat-icon"></i>
+        <h5 class="card-title stat-title">My Average</h5>
+        <p class="stat-value"><?= number_format($analytics['studentAverage'], 1) ?>%</p>
+      </div>
+    </div>
+  </div>
 
-<?php if (isset($analytics['improvementRate'])): ?>
+  <div class="analytics-stat-card">
+    <div class="card stat-card bg-success text-white h-100">
+      <div class="card-body text-center">
+        <i class="bi bi-trophy stat-icon"></i>
+        <h5 class="card-title stat-title">Highest Grade</h5>
+        <p class="stat-value"><?= $analytics['highestGrade']['value'] ?? 0 ?>%</p>
+        <small class="stat-sub"><?= esc($analytics['highestGrade']['subject'] ?? 'N/A') ?></small>
+      </div>
+    </div>
+  </div>
+
+  <div class="analytics-stat-card">
+    <div class="card stat-card bg-warning text-white h-100">
+      <div class="card-body text-center">
+        <i class="bi bi-graph-down stat-icon"></i>
+        <h5 class="card-title stat-title">Lowest Grade</h5>
+        <p class="stat-value"><?= $analytics['lowestGrade']['value'] ?? 0 ?>%</p>
+        <small class="stat-sub"><?= esc($analytics['lowestGrade']['subject'] ?? 'N/A') ?></small>
+      </div>
+    </div>
+  </div>
+
+  <div class="analytics-stat-card">
+    <div class="card stat-card bg-info text-white h-100">
+      <div class="card-body text-center">
+        <i class="bi bi-calendar-check stat-icon"></i>
+        <h5 class="card-title stat-title">Attendance</h5>
+        <p class="stat-value"><?= $analytics['attendanceRate'] ?>%</p>
+        <small class="stat-sub"><?= $analytics['attendanceStats']['total'] ?? 0 ?> records</small>
+      </div>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
+
+<?php if (!empty($isDomainMode)): ?>
+<!-- Developmental domain & quarter progress (symbol-based, no numeric grades) -->
+<div class="row g-3 mb-4">
+  <div class="col-lg-7">
+    <div class="card bg-white border-0 shadow-sm rounded-3 h-100">
+      <div class="card-header bg-transparent border-0 p-3">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-diagram-3 me-2 text-primary"></i>Developmental Domains
+        </h5>
+        <small class="text-muted">Assessed indicators and mastery per domain</small>
+      </div>
+      <div class="card-body p-0">
+        <?php if (!empty($domainAnalytics['domains'])): ?>
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th class="border-0 fw-medium small">Domain</th>
+                  <th class="border-0 fw-medium small text-center">Assessed</th>
+                  <th class="border-0 fw-medium small text-center">Symbols (P/AP/D/B)</th>
+                  <th class="border-0 fw-medium small text-center">Mastery</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php foreach ($domainAnalytics['domains'] as $domainRow): ?>
+                  <tr>
+                    <td class="py-2 fw-medium small align-middle"><?= esc($domainRow['name']) ?></td>
+                    <td class="py-2 text-center small align-middle">
+                      <?= (int) $domainRow['assessed'] ?>/<?= (int) $domainRow['total'] ?>
+                    </td>
+                    <td class="py-2 text-center small align-middle text-nowrap">
+                      <?php foreach (['P' => 'success', 'AP' => 'primary', 'D' => 'warning', 'B' => 'danger'] as $symbolKey => $symbolColor): ?>
+                        <?php $symbolCountKey = ['P' => 'proficient', 'AP' => 'approaching', 'D' => 'developing', 'B' => 'beginning'][$symbolKey]; ?>
+                        <span class="badge bg-<?= $symbolColor ?> rounded-pill me-1" style="color: white !important;"
+                              title="<?= esc($symbolKey) ?>">
+                          <?= (int) ($domainRow[$symbolCountKey] ?? 0) ?>
+                        </span>
+                      <?php endforeach; ?>
+                      <?php if ((int) ($domainRow['observed'] ?? 0) > 0): ?>
+                        <span class="badge bg-secondary rounded-pill" style="color: white !important;" title="NO/NA">
+                          <?= (int) $domainRow['observed'] ?>
+                        </span>
+                      <?php endif; ?>
+                    </td>
+                    <td class="py-2 text-center align-middle">
+                      <span class="badge bg-<?= $domainRow['mastery'] >= 80 ? 'success' : ($domainRow['mastery'] >= 50 ? 'primary' : 'secondary') ?> small" style="color: white !important;">
+                        <?= number_format((float) $domainRow['mastery'], 1) ?>%
+                      </span>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        <?php else: ?>
+          <div class="p-4 text-center">
+            <h6 class="text-muted mb-1">No developmental domains configured</h6>
+            <p class="text-muted small mb-0">Your adviser will set up your section's domains.</p>
+          </div>
+        <?php endif; ?>
+      </div>
+      <div class="card-footer bg-transparent border-0 pt-0">
+        <small class="text-muted">Mastery = P + AP among rated indicators (NO/NA excluded).</small>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card bg-white border-0 shadow-sm rounded-3 h-100">
+      <div class="card-header bg-transparent border-0 p-3">
+        <h5 class="card-title mb-0">
+          <i class="bi bi-calendar3 me-2 text-info"></i>Assessment Coverage per Quarter
+        </h5>
+        <small class="text-muted"><?= (int) ($domainAnalytics['quartersDone'] ?? 0) ?> of 4 quarters recorded</small>
+      </div>
+      <div class="card-body">
+        <div class="row g-2 text-center mb-3">
+          <?php foreach ([1, 2, 3, 4] as $quarterNo): ?>
+            <div class="col-3">
+              <div class="border rounded-3 py-2">
+                <div class="text-muted small">Q<?= $quarterNo ?></div>
+                <div class="fw-bold"><?= (int) ($domainAnalytics['quarterCoverage'][$quarterNo] ?? 0) ?></div>
+              </div>
+            </div>
+          <?php endforeach; ?>
+        </div>
+        <div class="small">
+          <span class="badge bg-success small" style="color: white !important;">P</span> Proficient
+          <span class="badge bg-primary small" style="color: white !important;">AP</span> Approaching Proficiency
+          <span class="badge bg-warning small" style="color: white !important;">D</span> Developing
+          <span class="badge bg-danger small" style="color: white !important;">B</span> Beginning
+          <span class="badge bg-secondary small" style="color: white !important;">NO/NA</span> Not Observed/Not Applicable
+        </div>
+        <small class="text-muted d-block mt-2">Symbols are recorded per quarter by your adviser, independent of the admin term.</small>
+      </div>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
+
+<?php if (empty($isDomainMode) && isset($analytics['improvementRate'])): ?>
 <div class="alert alert-<?= $analytics['improvementRate'] >= 0 ? 'success' : 'warning' ?>">
   <i class="bi bi-arrow-<?= $analytics['improvementRate'] >= 0 ? 'up' : 'down' ?> me-2"></i>
   <strong>Performance Trend:</strong> 
@@ -332,7 +510,7 @@
           <thead class="table-light">
             <tr>
               <th class="border-0 fw-medium small">Date</th>
-              <th class="border-0 fw-medium small">Subject</th>
+              <th class="border-0 fw-medium small"><?= !empty($isDomainMode) ? 'Section' : 'Subject' ?></th>
               <th class="border-0 fw-medium small">Status</th>
             </tr>
           </thead>
@@ -340,7 +518,7 @@
             <?php foreach ($analytics['attendanceRecords'] as $record): ?>
               <tr class="attendance-item">
                 <td class="small"><?= date('M j, Y', strtotime($record['date'])) ?></td>
-                <td class="small"><?= esc($record['subject_name'] ?? 'N/A') ?></td>
+                <td class="small"><?= esc($record['subject_name'] ?? (!empty($isDomainMode) ? ($section['section_name'] ?? 'General') : 'N/A')) ?></td>
                 <td class="small">
                   <span class="status-<?= strtolower($record['status']) ?>">
                     <i class="bi bi-<?= $record['status'] === 'Present' ? 'check-circle' : ($record['status'] === 'Absent' ? 'x-circle' : ($record['status'] === 'Late' ? 'clock' : 'question-circle')) ?> me-1"></i>
@@ -385,6 +563,20 @@
 
 <!-- Chart.js Library -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Chart.js draws on a canvas, so no CSS cascade can reach it: the platform
+// typeface has to be handed to Chart.js explicitly, otherwise axis ticks,
+// legends and data labels fall back to Chart.js' own default stack.
+if (typeof Chart !== 'undefined') {
+  if (Chart.defaults.font) {
+    Chart.defaults.font.family = "'Times New Roman', Times, 'Liberation Serif', 'DejaVu Serif', serif";
+    Chart.defaults.font.weight = 400;
+  } else if (Chart.defaults.global) {
+    Chart.defaults.global.defaultFontFamily = "'Times New Roman', Times, 'Liberation Serif', 'DejaVu Serif', serif";
+    Chart.defaults.global.defaultFontWeight = 'normal';
+  }
+}
+</script>
 
 <script>
 // Term Trends Chart

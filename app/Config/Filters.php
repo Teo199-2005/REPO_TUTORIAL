@@ -40,6 +40,9 @@ class Filters extends BaseFilters
         'studentaccess' => \App\Filters\StudentAccessFilter::class,
         'teacheraccess' => \App\Filters\TeacherAccessFilter::class,
         'adminaccess'   => \App\Filters\AdminAccessFilter::class,
+        // Baseline activity-log trail + request correlation id (see the class
+        // docblock: only POST/PUT/PATCH/DELETE requests are recorded).
+        'audit'         => \App\Filters\AuditTrailFilter::class,
     ];
 
     /**
@@ -73,10 +76,13 @@ class Filters extends BaseFilters
      */
     public array $globals = [
         'before' => [
-            'csrf' => ['except' => ['sections/*', 'admin/childpro-gad/*', 'admin/dashboard/createAdmin', 'admin/dashboard/toggleEnrollment', 'admin/dashboard/toggleGrading']],
+            // Correlation id for the activity log (cheap; runs first).
+            'audit',
+            'csrf' => ['except' => ['sections/*', 'admin/childpro-gad/*', 'admin/dashboard/createAdmin', 'admin/dashboard/toggleEnrollment', 'admin/dashboard/toggleGrading', 'admin/teachers/delete/*', 'admin/sections/delete/*']],
             'invalidchars',
         ],
         'after' => [
+            'audit',
             'secureheaders',
             'honeypot',
         ],
@@ -108,6 +114,11 @@ class Filters extends BaseFilters
      */
     public array $filters = [
         'studentaccess' => ['before' => ['student/*']],
+        // The teacher portal is protected per-route by the 'teacheraccess'
+        // filter (see the group() in Routes.php). This URI pattern is an extra
+        // safety net; TeacherAccessFilter itself lets the public
+        // teacher/register form through (CI4 does not support an 'except' key
+        // in this section - it is only honoured for global filters).
         'teacheraccess' => ['before' => ['teacher/*']],
         'adminaccess'   => ['before' => ['admin/*']],
     ];

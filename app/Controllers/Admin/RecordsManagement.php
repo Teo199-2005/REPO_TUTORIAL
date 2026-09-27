@@ -63,15 +63,16 @@ class RecordsManagement extends BaseController
             $groupedRecords[$grade][$sectionName] = [];
         }
         
-        // Get students with grades (only those with sections)
+        // Get enrolled students in sections (LEFT JOIN grades so non-numerical
+        // sections — which use SNED domain grades, not the grades table — still show)
         $students = $db->query("
-            SELECT DISTINCT s.id, s.first_name, s.last_name, s.lrn, s.grade_level, sec.section_name
+            SELECT DISTINCT s.id, s.first_name, s.last_name, s.lrn, s.grade_level, sec.section_name, sec.grading_type
             FROM students s
-            JOIN grades g ON g.student_id = s.id
-            JOIN sections sec ON sec.id = s.section_id
-            WHERE g.school_year = ? AND s.enrollment_status = 'enrolled'
+            LEFT JOIN grades g ON g.student_id = s.id AND g.school_year = ?
+            JOIN sections sec ON sec.id = s.section_id AND sec.school_year = ?
+            WHERE s.enrollment_status = 'enrolled'
             ORDER BY s.grade_level ASC, sec.section_name ASC, s.last_name ASC
-        ", [$selectedYear])->getResultArray();
+        ", [$selectedYear, $selectedYear])->getResultArray();
         
         // Add students to their sections
         foreach ($students as $student) {
@@ -90,7 +91,7 @@ class RecordsManagement extends BaseController
         }
         
         return view('admin/records_management', [
-            'title' => 'Records Management - CSCS SMS',
+            'title' => 'Records Management - CSCS Tap n Track',
             'schoolYears' => $schoolYears,
             'selectedYear' => $selectedYear,
             'groupedRecords' => $groupedRecords
@@ -104,21 +105,25 @@ class RecordsManagement extends BaseController
         $systemSchoolYear = $systemSettingModel->getSetting('current_school_year');
         $schoolYear = $this->request->getGet('year') ?? ($systemSchoolYear ?: get_current_school_year());
         
-        // Get students in this section with grades
+        // Get enrolled students in this section (LEFT JOIN grades so non-numerical
+        // sections — which use SNED domain grades, not the grades table — still show)
         $students = $db->query("
-            SELECT DISTINCT s.id, s.first_name, s.last_name, s.lrn
+            SELECT DISTINCT s.id, s.first_name, s.last_name, s.lrn, sec.grading_type
             FROM students s
-            JOIN grades g ON g.student_id = s.id
-            JOIN sections sec ON sec.id = s.section_id
-            WHERE s.grade_level = ? AND sec.section_name = ? AND g.school_year = ? AND s.enrollment_status = 'enrolled'
+            LEFT JOIN grades g ON g.student_id = s.id AND g.school_year = ?
+            JOIN sections sec ON sec.id = s.section_id AND sec.school_year = ?
+            WHERE s.grade_level = ? AND sec.section_name = ? AND s.enrollment_status = 'enrolled'
             ORDER BY s.last_name ASC
-        ", [$gradeLevel, $sectionName, $schoolYear])->getResultArray();
+        ", [$schoolYear, $schoolYear, $gradeLevel, $sectionName])->getResultArray();
+        
+        $gradingType = $students[0]['grading_type'] ?? 'numerical';
         
         return view('admin/records_section', [
-            'title' => 'Records Management - CSCS SMS',
+            'title' => 'Records Management - CSCS Tap n Track',
             'gradeLevel' => $gradeLevel,
             'sectionName' => $sectionName,
             'students' => $students,
+            'gradingType' => $gradingType,
             'schoolYear' => $schoolYear
         ]);
     }
@@ -154,6 +159,15 @@ class RecordsManagement extends BaseController
             }
         }
         
+        audit_event('records.archived', [
+            'category'      => 'data',
+            'status'        => 'success',
+            'resource_type' => 'record',
+            'resource_id'   => (string) $schoolYear,
+            'description'   => "Archived {$archived} student record(s) for {$schoolYear}",
+            'metadata'      => ['archived' => (int) $archived, 'school_year' => (string) $schoolYear],
+        ]);
+
         return redirect()->back()->with('success', "Archived {$archived} student records for {$schoolYear}");
     }
 
@@ -231,13 +245,189 @@ class RecordsManagement extends BaseController
             $dompdf->setPaper('A4', 'portrait');
             $dompdf->render();
             
-            $filename = 'LPHS_Report_Card_' . $student['first_name'] . '_' . $student['last_name'] . '_' . $schoolYear . '.pdf';
+            $filename = 'CSCS_Report_Card_' . $student['first_name'] . '_' . $student['last_name'] . '_' . $schoolYear . '.pdf';
 
             return $this->sendPdfInline($dompdf, $filename);
         } catch (\Exception $e) {
             log_message('error', 'PDF generation error: ' . $e->getMessage());
             return redirect()->back()->with('error', 'Failed to generate report card: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Developmental (non-numerical) report card for a student — admin view.
+     * Reuses the same domain/categories/symbols data and layout as the
+     * teacher SNED report card.
+     */
+    public function viewSnedRecord($studentId)
+    {
+        $student = $this->loadSnedStudent($studentId);
+        if ($student === null) {
+            return redirect()->to(base_url('admin/records'))->with('error', 'Invalid non-numerical student');
+        }
+
+        return view('teacher/sned_report_card', [
+            'student'      => $student['student'],
+            'section'      => $student['section'],
+            'categories'   => $student['categories'],
+            'allGrades'    => $student['allGrades'],
+            'schoolYear'   => $student['schoolYear'],
+            'quarters'     => sned_quarters(),
+            'gradeSymbols' => $student['gradeSymbols'],
+            'reportDate'   => date('F j, Y'),
+            'pdfUrl'       => base_url('admin/records/sned-report-card-pdf/' . $studentId),
+        ]);
+    }
+
+    /**
+     * PDF export of the developmental (non-numerical) report card — admin.
+     */
+    public function viewSnedRecordPdf($studentId)
+    {
+        $student = $this->loadSnedStudent($studentId);
+        if ($student === null) {
+            return redirect()->to(base_url('admin/records'))->with('error', 'Invalid non-numerical student');
+        }
+
+        try {
+            $html = view('teacher/sned_report_card_pdf', [
+                'student'      => $student['student'],
+                'section'      => $student['section'],
+                'categories'   => $student['categories'],
+                'allGrades'    => $student['allGrades'],
+                'schoolYear'   => $student['schoolYear'],
+                'quarters'     => sned_quarters(),
+                'gradeSymbols' => $student['gradeSymbols'],
+                'reportDate'   => date('F j, Y'),
+                'logoBase64'   => school_logo_base64(),
+            ]);
+
+            $options = new \Dompdf\Options();
+            $options->set('defaultFont', 'Times');
+            $options->set('isRemoteEnabled', false);
+            $options->set('isHtml5ParserEnabled', true);
+            $options->set('isPhpEnabled', false);
+
+            $dompdf = new \Dompdf\Dompdf($options);
+            $dompdf->loadHtml($html);
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->render();
+
+            $sectionSlug = preg_replace('/\s+/', '_', $student['section']['section_name'] ?? 'SNED');
+            $filename = 'Report_Card_' . $sectionSlug . '_'
+                . preg_replace('/\s+/', '_', $student['student']['first_name']) . '_'
+                . preg_replace('/\s+/', '_', $student['student']['last_name']) . '.pdf';
+
+            return $this->sendPdfInline($dompdf, $filename);
+        } catch (\Exception $e) {
+            log_message('error', 'SNED report card PDF (admin) failed for student ' . $studentId . ': ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Failed to generate report card: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * PDF export of the Learner Development Report — non-numerical learner.
+     *
+     * Conduct, values and character development on the 2026 three-term
+     * layout. It sits beside the developmental report card above and carries
+     * no subject grades, averages, ranking or final rating.
+     */
+    public function learnerDevelopmentReportPdf($studentId)
+    {
+        $student = $this->loadSnedStudent($studentId);
+        if ($student === null) {
+            return redirect()->to(base_url('admin/records'))->with('error', 'Invalid non-numerical student');
+        }
+
+        try {
+            $html = view('teacher/learner_development_report_pdf', [
+                'student'    => $student['student'],
+                'section'    => $student['section'],
+                'schoolYear' => $student['schoolYear'],
+                'reportDate' => date('F j, Y'),
+                'logoBase64' => school_logo_base64(),
+                'report'     => learner_development_report_data(
+                    $student['student'],
+                    $student['section'],
+                    $student['schoolYear']
+                ),
+            ]);
+
+            $options = new \Dompdf\Options();
+            $options->set('defaultFont', 'Times');
+            $options->set('isRemoteEnabled', false);
+            $options->set('isHtml5ParserEnabled', true);
+            $options->set('isPhpEnabled', false);
+
+            $dompdf = new \Dompdf\Dompdf($options);
+            $dompdf->loadHtml($html);
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->render();
+
+            return $this->sendPdfInline(
+                $dompdf,
+                learner_development_pdf_filename($student['student'], $student['section'])
+            );
+        } catch (\Throwable $e) {
+            log_message('error', 'Learner development report PDF (admin) failed for student ' . $studentId . ': ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Failed to generate the learner development report: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Shared loader for the admin developmental report card views.
+     * Returns null when the student/section is not non-numerical.
+     */
+    private function loadSnedStudent($studentId)
+    {
+        $db = \Config\Database::connect();
+
+        $student = $db->query("
+            SELECT s.*, sec.section_name, sec.grading_type, sec.adviser_id,
+                   CONCAT(t.first_name, ' ', t.last_name) as adviser_name
+            FROM students s
+            LEFT JOIN sections sec ON sec.id = s.section_id
+            LEFT JOIN teachers t ON t.id = sec.adviser_id
+            WHERE s.id = ?
+        ", [$studentId])->getRowArray();
+
+        if (!$student || !in_array($student['grading_type'] ?? 'numerical', ['non_numerical', 'custom'])) {
+            return null;
+        }
+
+        $section = [
+            'id'           => $student['section_id'],
+            'section_name' => $student['section_name'],
+            'grading_type' => $student['grading_type'],
+            'grade_level'  => $student['grade_level'],
+            'adviser_id'   => $student['adviser_id'],
+        ];
+
+        $systemSettingModel = new \App\Models\SystemSettingModel();
+        $systemSchoolYear = $systemSettingModel->getSetting('current_school_year');
+        $schoolYear = $this->request->getGet('year') ?? ($systemSchoolYear ?: get_current_school_year());
+
+        $categoryModel = new \App\Models\SnedCategoryModel();
+        $gradeModel = new \App\Models\SnedGradeModel();
+
+        $categories = $categoryModel->getAllCategoriesWithFields((int) $section['id'], (int) ($section['grade_level'] ?? 0));
+        $allGrades = $gradeModel->getStudentAllGrades($studentId, $schoolYear);
+
+        $gradeSymbols = $db->table('section_grading_symbols')
+            ->where('section_id', $section['id'])
+            ->where('is_active', 1)
+            ->orderBy('display_order', 'ASC')
+            ->get()
+            ->getResultArray();
+
+        return [
+            'student'      => $student,
+            'section'      => $section,
+            'categories'   => $categories,
+            'allGrades'    => $allGrades,
+            'schoolYear'   => $schoolYear,
+            'gradeSymbols' => $gradeSymbols,
+        ];
     }
 }
 

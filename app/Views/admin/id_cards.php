@@ -24,7 +24,7 @@
   <div class="card-body">
     <form method="GET" class="row g-3">
       <div class="col-md-3">
-        <label class="form-label">Grade Level</label>
+        <label class="form-label"><i class="bi bi-mortarboard me-1 text-muted"></i>Grade Level</label>
         <select class="form-select" name="grade">
           <option value="">All Grades</option>
           <?php foreach (grade_level_options() as $grade): ?>
@@ -33,7 +33,7 @@
         </select>
       </div>
       <div class="col-md-3">
-        <label class="form-label">Section</label>
+        <label class="form-label"><i class="bi bi-people me-1 text-muted"></i>Section</label>
         <select class="form-select" name="section">
           <option value="">All Sections</option>
           <?php foreach ($allSections as $section): ?>
@@ -44,13 +44,19 @@
         </select>
       </div>
       <div class="col-md-4">
-        <label class="form-label">Search Student</label>
+        <label class="form-label"><i class="bi bi-search me-1 text-muted"></i>Search Student</label>
         <input type="text" class="form-control" name="search" value="<?= esc($searchTerm) ?>" placeholder="Name or Student ID">
       </div>
       <div class="col-md-2">
         <label class="form-label">&nbsp;</label>
         <div class="d-grid">
-          <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>Filter</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-funnel-fill me-1"></i>Filter</button>
+        </div>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">&nbsp;</label>
+        <div class="d-grid">
+          <a href="<?= base_url('admin/id-cards') ?>" class="btn btn-outline-secondary"><i class="bi bi-arrow-counterclockwise me-1"></i>Clear</a>
         </div>
       </div>
     </form>
@@ -61,9 +67,12 @@
 <div class="card border-0 shadow-sm">
   <div class="card-header bg-white">
     <div class="d-flex justify-content-between align-items-center">
-      <h5 class="mb-0">Student ID Cards (<?= $totalStudents ?> students)</h5>
+      <h5 class="mb-0"><i class="bi bi-person-vcard me-2 text-muted"></i>Student ID Cards <span class="text-muted fw-normal">(<?= $totalStudents ?> students)</span></h5>
       <div class="col-md-4">
-        <input type="text" class="form-control form-control-sm" id="searchInput" placeholder="Search students..." onkeyup="searchStudents()">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+          <input type="text" class="form-control" id="searchInput" placeholder="Search students..." onkeyup="searchStudents()">
+        </div>
       </div>
     </div>
   </div>
@@ -107,6 +116,9 @@
               <div class="d-grid gap-2 mt-2">
                 <a href="<?= base_url('admin/id-cards/view/' . $student['id']) ?>" class="btn btn-light btn-sm">
                   <i class="bi bi-eye me-1"></i>View ID Card
+                </a>
+                <a href="<?= base_url('admin/id-cards/print/' . $student['id']) ?>" class="btn btn-light btn-sm">
+                  <i class="bi bi-printer me-1"></i>Print Front &amp; Back
                 </a>
               </div>
             </div>

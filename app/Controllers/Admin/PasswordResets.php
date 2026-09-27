@@ -21,17 +21,48 @@ class PasswordResets extends BaseController
      */
     public function index()
     {
+        $status   = trim((string) ($this->request->getGet('status') ?? ''));
+        if (! in_array($status, ['pending', 'approved', 'rejected', 'used', 'expired'], true)) {
+            $status = '';
+          }
+        $q        = trim((string) ($this->request->getGet('q') ?? ''));
+        $perPage  = (int) ($this->request->getGet('per_page') ?? 15);
+        if (! in_array($perPage, [15, 25, 50], true)) {
+            $perPage = 15;
+        }
+        $page     = max(1, (int) ($this->request->getGet('page') ?? 1));
+
         try {
             $this->resetRequestModel->markExpiredRequests();
-            $requests = $this->resetRequestModel->getAllRequestsWithDetails();
+
+            $result   = $this->resetRequestModel->getFilteredRequestsWithDetails(
+                ['status' => $status, 'q' => $q],
+                $perPage,
+                $page
+            );
+            $requests    = $result['rows'];
+            $total       = $result['total'];
+            $totalPages  = $result['total_pages'];
+            $page        = min($page, $totalPages);
         } catch (\Exception $e) {
-            $requests = [];
+            $requests   = [];
+            $total      = 0;
+            $totalPages = 1;
+            $page       = 1;
         }
-        
+
         return view('admin/password_resets', [
-            'title' => 'Password Reset Requests - CSCS SMS',
-            'requests' => $requests,
-            'table_missing' => false
+            'title'        => 'Password Reset Requests - CSCS Tap n Track',
+            'requests'     => $requests,
+            'table_missing' => false,
+            'filter_status' => $status,
+            'filter_q'      => $q,
+            'per_page'      => $perPage,
+            'current_page'  => $page,
+            'total'         => $total,
+            'total_pages'   => $totalPages,
+            'showing_from'  => $total > 0 ? ($page - 1) * $perPage + 1 : 0,
+            'showing_to'    => min($page * $perPage, $total),
         ]);
     }
 
@@ -63,9 +94,41 @@ class PasswordResets extends BaseController
             return $this->response->setStatusCode(404)->setJSON(['error' => 'Request not found']);
         }
 
+        // A pending, rejected, inactive or deleted teacher must not be able to
+        // regain a working password through the reset workflow. Reject the
+        // stale request instead of approving it.
+        $targetUser = model(\CodeIgniter\Shield\Models\UserModel::class)->find((int) ($request['user_id'] ?? 0));
+
+        if ($targetUser && teacher_account_claims_teacher_role($targetUser)) {
+            helper('teacher_access');
+
+            $teacherState = teacher_record_state(find_teacher_record_for_user($targetUser));
+
+            if ($teacherState !== 'approved') {
+                log_message('info', 'Password reset approval blocked - teacher record state "' . $teacherState . '" for user ID: ' . $request['user_id']);
+
+                $this->resetRequestModel->rejectRequest($requestId, $adminId, 'Auto-rejected: teacher account is no longer approved.');
+
+                return $this->response->setJSON([
+                    'success'   => false,
+                    'error'     => 'This request belongs to a teacher account that is no longer approved. It was rejected.',
+                    'csrf_hash' => csrf_hash(),
+                ]);
+            }
+        }
+
         $success = $this->resetRequestModel->approveRequest($requestId, $adminId, $notes);
 
         if ($success) {
+            audit_event('account.password_reset_approved', [
+                'category'      => 'account',
+                'status'        => 'success',
+                'resource_type' => 'password_reset_request',
+                'resource_id'   => (string) $requestId,
+                'description'   => 'Password reset request approved',
+                'metadata'      => ['target_user_id' => (int) ($request['user_id'] ?? 0), 'has_notes' => $notes !== null && $notes !== ''],
+            ]);
+
             return $this->response->setJSON([
                 'success' => true,
                 'redirect' => base_url("admin/password-resets/change/{$requestId}"),
@@ -100,6 +163,15 @@ class PasswordResets extends BaseController
         $success = $this->resetRequestModel->rejectRequest($requestId, $adminId, $notes);
 
         if ($success) {
+            audit_event('account.password_reset_rejected', [
+                'category'      => 'account',
+                'status'        => 'success',
+                'resource_type' => 'password_reset_request',
+                'resource_id'   => (string) $requestId,
+                'description'   => 'Password reset request rejected',
+                'metadata'      => ['has_notes' => $notes !== null && $notes !== ''],
+            ]);
+
             return $this->response->setJSON([
                 'success' => true,
                 'message' => 'Password reset request rejected.',
@@ -332,7 +404,7 @@ class PasswordResets extends BaseController
         }
         
         return view('admin/password_reset_change', [
-            'title' => 'Change Password - CSCS SMS',
+            'title' => 'Change Password - CSCS Tap n Track',
             'reset' => $request
         ]);
     }
@@ -354,13 +426,32 @@ class PasswordResets extends BaseController
             return redirect()->back()->with('error', 'Passwords do not match.');
         }
 
-        if (strlen($newPassword) < 6) {
-            return redirect()->back()->with('error', 'Password must be at least 6 characters long.');
+        // Shared password policy: length AND at least one digit.
+        $policyError = password_meets_policy($newPassword);
+        if ($policyError !== null) {
+            return redirect()->back()->with('error', $policyError);
         }
 
         $request = $this->resetRequestModel->find($resetId);
         if (!$request) {
             return redirect()->back()->with('error', 'Reset request not found.');
+        }
+
+        // Defense in depth: never write a usable password for a teacher whose
+        // record is pending, rejected, inactive or deleted, even if the request
+        // slipped past approval.
+        $targetUser = model(\CodeIgniter\Shield\Models\UserModel::class)->find((int) ($request['user_id'] ?? 0));
+
+        if ($targetUser && teacher_account_claims_teacher_role($targetUser)) {
+            helper('teacher_access');
+
+            $teacherState = teacher_record_state(find_teacher_record_for_user($targetUser));
+
+            if ($teacherState !== 'approved') {
+                log_message('info', 'Password change blocked - teacher record state "' . $teacherState . '" for user ID: ' . $request['user_id']);
+
+                return redirect()->back()->with('error', teacher_account_denial_message($teacherState));
+            }
         }
 
         // Update password in auth_identities table
@@ -388,8 +479,8 @@ class PasswordResets extends BaseController
             'user_id' => $request['user_id'],
             'type' => 'email_password',
             'name' => $cleanEmail,
-            'secret' => $hashedPassword,
-            'secret2' => null,
+            'secret' => $cleanEmail,
+            'secret2' => $hashedPassword,
             'expires' => null,
             'extra' => null,
             'force_reset' => 0,
@@ -401,27 +492,20 @@ class PasswordResets extends BaseController
         if ($updated) {
             // Mark request as used
             $this->resetRequestModel->update($resetId, ['status' => 'used']);
-            
+
+            audit_event('account.password_reset_by_admin', [
+                'category'      => 'account',
+                'status'        => 'success',
+                'resource_type' => 'user',
+                'resource_id'   => (string) ($request['user_id'] ?? ''),
+                'description'   => 'Password set by an administrator from a reset request',
+                'metadata'      => ['request_id' => (int) $resetId, 'method' => 'password_reset_request'],
+            ]);
+
             return redirect()->to('admin/password-resets')->with('success', 'Password changed successfully!');
         }
         
         return redirect()->back()->with('error', 'Failed to update password.');
-    }
-
-    /**
-     * Debug method to show all requests - restricted to master admin only
-     */
-    public function debug()
-    {
-        helper('admin_access');
-        if (! function_exists('is_master_admin') || ! is_master_admin()) {
-            return redirect()->to(base_url('/'));
-        }
-        
-        $requests = $this->resetRequestModel->findAll();
-        echo '<h3>All Password Reset Requests:</h3>';
-        echo '<pre>' . print_r($requests, true) . '</pre>';
-        die();
     }
 }
 

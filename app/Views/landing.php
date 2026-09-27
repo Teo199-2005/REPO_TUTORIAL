@@ -1,154 +1,18 @@
-﻿<?= $this->extend('layout') ?>
+<?= $this->extend('layout') ?>
 <?= $this->section('content') ?>
 
-<!-- Full-page load overlay (landing only) -->
-<style>
-  #landingPageLoader {
-    position: fixed;
-    inset: 0;
-    z-index: 2147483000;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: clamp(1.25rem, 4vw, 2rem);
-    padding: 1.5rem;
-    background:
-      radial-gradient(ellipse 120% 80% at 50% 20%, rgba(59, 130, 246, 0.35) 0%, transparent 55%),
-      radial-gradient(ellipse 90% 70% at 80% 100%, rgba(251, 191, 36, 0.18) 0%, transparent 45%),
-      linear-gradient(155deg, #0b1220 0%, #132447 38%, #1e3a8a 72%, #172554 100%);
-    transition:
-      opacity 0.55s cubic-bezier(0.4, 0, 0.2, 1),
-      visibility 0.55s,
-      transform 0.55s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  #landingPageLoader.is-done {
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transform: scale(1.03);
-  }
-  #landingPageLoader .landing-page-loader__dial {
-    position: relative;
-    width: min(92vw, 360px);
-    height: min(92vw, 360px);
-    max-width: 360px;
-    max-height: 360px;
-  }
-  #landingPageLoader .landing-page-loader__ring {
-    position: absolute;
-    border-radius: 50%;
-    inset: 0;
-    box-sizing: border-box;
-  }
-  #landingPageLoader .landing-page-loader__ring--outer {
-    border: 14px solid rgba(255, 255, 255, 0.09);
-    border-top-color: #fbbf24;
-    border-right-color: #f59e0b;
-    box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.06) inset,
-      0 0 72px rgba(251, 191, 36, 0.28),
-      0 24px 48px rgba(0, 0, 0, 0.35);
-    animation: landingLoaderSpin 0.95s cubic-bezier(0.6, 0.05, 0.35, 1) infinite;
-  }
-  #landingPageLoader .landing-page-loader__ring--mid {
-    inset: 20px;
-    border: 8px solid rgba(255, 255, 255, 0.05);
-    border-bottom-color: rgba(96, 165, 250, 0.85);
-    border-left-color: rgba(59, 130, 246, 0.55);
-    box-shadow: 0 0 40px rgba(59, 130, 246, 0.2);
-    animation: landingLoaderSpin 1.45s linear infinite reverse;
-  }
-  #landingPageLoader .landing-page-loader__logo-shell {
-    position: absolute;
-    inset: clamp(52px, 16vw, 68px);
-    border-radius: 50%;
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.06) 100%);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    box-shadow:
-      0 24px 56px rgba(0, 0, 0, 0.4),
-      inset 0 1px 0 rgba(255, 255, 255, 0.35),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.12);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-  }
-  #landingPageLoader .landing-page-loader__logo {
-    width: 72%;
-    height: 72%;
-    max-width: 160px;
-    max-height: 160px;
-    object-fit: contain;
-    border-radius: 50%;
-    filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.35));
-  }
-  #landingPageLoader .landing-page-loader__label {
-    margin: 0;
-    font-family: 'Inter', system-ui, sans-serif;
-    font-size: clamp(0.95rem, 2.8vw, 1.15rem);
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.88);
-    text-align: center;
-    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
-  }
-  #landingPageLoader .landing-page-loader__sub {
-    margin: -0.75rem 0 0;
-    font-family: 'Inter', system-ui, sans-serif;
-    font-size: clamp(0.75rem, 2vw, 0.875rem);
-    font-weight: 500;
-    color: rgba(251, 191, 36, 0.9);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-  }
-  @keyframes landingLoaderSpin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    #landingPageLoader .landing-page-loader__ring--outer,
-    #landingPageLoader .landing-page-loader__ring--mid {
-      animation-duration: 2.4s;
-    }
-    #landingPageLoader.is-done {
-      transition-duration: 0.2s;
-    }
-  }
-  html.landing-loader-active body {
-    overflow: hidden;
-  }
-</style>
-<div id="landingPageLoader" class="landing-page-loader" role="progressbar" aria-busy="true" aria-valuetext="Loading">
-  <div class="landing-page-loader__dial">
-    <div class="landing-page-loader__ring landing-page-loader__ring--outer" aria-hidden="true"></div>
-    <div class="landing-page-loader__ring landing-page-loader__ring--mid" aria-hidden="true"></div>
-    <div class="landing-page-loader__logo-shell">
-      <img
-        src="<?= asset_url('LPHS2.png') ?>"
-        alt="Cauayan South Central School"
-        class="landing-page-loader__logo"
-        width="160"
-        height="160"
-        decoding="async"
-        fetchpriority="high"
-      />
-    </div>
-  </div>
-  <p class="landing-page-loader__label">Cauayan South Central School</p>
-  <p class="landing-page-loader__sub">School Management System</p>
-</div>
+<?php
+// Shared branded loading overlay (see partials/page_loader.php). The same
+// component is reused by the login screen, so every loader looks identical.
+?>
+<?= view('partials/page_loader', ['loaderId' => 'landingPageLoader']) ?>
 
 <!-- Landing-specific CSS -->
 <link href="<?= asset_url('css/landing.css') ?>" rel="stylesheet" />
 <style>
 /* Professional Typography & Layout */
 #landing {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Times New Roman', Times, serif;
   line-height: 1.6;
   margin: 0;
   padding: 0;
@@ -179,7 +43,7 @@
   white-space: nowrap !important;
   border: 0 !important;
 }
-#landing .hero-description { font-size: 1.5rem !important; font-weight: 500 !important; line-height: 1.55 !important; max-width: 900px !important; margin: 0 auto 2rem !important; color: rgba(255, 255, 255, 0.98) !important; letter-spacing: -0.01em !important; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35) !important; }
+#landing .hero-description { font-size: 1.5rem !important; font-weight: 400 !important; line-height: 1.55 !important; max-width: 900px !important; margin: 0 auto 2rem !important; color: rgba(255, 255, 255, 0.98) !important; letter-spacing: 0 !important; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35) !important; }
 
 /* Hero slideshow */
 #landing .hero.hero-slideshow {
@@ -259,8 +123,8 @@
   z-index: 6 !important;
   background: linear-gradient(90deg, #1e3a8a 0%, #2563eb 45%, #1d4ed8 100%) !important;
   color: #fff !important;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2) !important;
-  border-bottom: 2px solid #fbbf24 !important;
+  /* Separation from the hero is a soft shadow, not a coloured strip. */
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.14) inset, 0 6px 18px rgba(0, 0, 0, 0.18) !important;
 }
 #landing .landing-announcement-strip__viewport {
   overflow: hidden !important;
@@ -295,7 +159,7 @@
   padding: 0.5rem 1.75rem !important;
   white-space: nowrap !important;
   font-size: clamp(0.8rem, 1.6vw, 0.95rem) !important;
-  font-weight: 600 !important;
+  font-weight: 700 !important;
   letter-spacing: 0.02em !important;
   line-height: 1.2 !important;
 }
@@ -307,15 +171,33 @@
 #landing .landing-announcement-strip__text {
   white-space: nowrap !important;
 }
-#landing .landing-announcement-strip__text .announcement-link {
+#landing .landing-announcement-strip__text .strip-link {
   color: #fbbf24 !important;
+  font-weight: 700 !important;
   text-decoration: underline !important;
   text-underline-offset: 2px !important;
-  transition: color 0.2s ease, text-decoration-color 0.2s ease !important;
+  /* The strip scrolls underneath a pointer that is already over the bar, so a
+     plain click often lands on empty space where the text used to be. Padding
+     gives the target somewhere to actually hit. */
+  padding: 0.1rem 0.15rem !important;
+  border-radius: 4px !important;
 }
-#landing .landing-announcement-strip__text .announcement-link:hover {
+#landing .landing-announcement-strip__text .strip-link:hover,
+#landing .landing-announcement-strip__text .strip-link:focus-visible {
   color: #fff !important;
-  text-decoration-color: #fbbf24 !important;
+  background: rgba(251, 191, 36, 0.18) !important;
+  outline: 2px solid #fbbf24 !important;
+  outline-offset: 2px !important;
+}
+/* A link travelling at marquee speed is effectively uncatchable: the pointer
+   arrives where the text was rather than where it is. Hold the track still
+   while the pointer is anywhere over the strip, and while a link inside it
+   holds keyboard focus, so the target stays put long enough to click or to tab
+   onto. Hovering the bar is a large, easy target, so this does not require
+   hitting the link itself to stop the motion. */
+#landing .landing-announcement-strip:hover .landing-announcement-strip__track,
+#landing .landing-announcement-strip:focus-within .landing-announcement-strip__track {
+  animation-play-state: paused !important;
 }
 #landing .landing-announcement-strip__sep {
   color: rgba(251, 191, 36, 0.65) !important;
@@ -423,10 +305,10 @@
 .hero-lifelines .lifeline-body .lifeline-title {
   font-weight: 700 !important;
   color: #fff !important;
-  font-size: 0.72rem !important; /* slightly smaller */
+  font-size: 0.8125rem !important; /* slightly smaller */
 }
 .hero-lifelines .lifeline-body .lifeline-status {
-  font-weight: 800 !important;
+  font-weight: 700 !important;
   color: #22c55e !important;
   font-size: 0.82rem !important; /* slightly smaller */
 }
@@ -455,7 +337,7 @@
     font-size: 0.82rem !important;
   }
   .hero-lifelines .lifeline-body .lifeline-title {
-    font-size: 0.68rem !important;
+    font-size: 0.8125rem !important;
   }
   .hero-lifelines .lifeline-body .lifeline-status {
     font-size: 0.76rem !important;
@@ -537,17 +419,17 @@
     max-width: 95% !important;
   }
 }
-#landing .section-title { font-size: 2.75rem !important; font-weight: 800 !important; line-height: 1.1 !important; margin-bottom: 1.5rem !important; color: #0f172a !important; letter-spacing: -0.025em !important; }
-#landing .section-subtitle { font-size: 1.375rem !important; font-weight: 500 !important; color: #475569 !important; margin-bottom: 3rem !important; line-height: 1.5 !important; letter-spacing: -0.01em !important; }
+#landing .section-title { font-size: 2.75rem !important; font-weight: 700 !important; line-height: 1.1 !important; margin-bottom: 1.5rem !important; color: #0f172a !important; letter-spacing: 0 !important; }
+#landing .section-subtitle { font-size: 1.375rem !important; font-weight: 400 !important; color: #475569 !important; margin-bottom: 3rem !important; line-height: 1.5 !important; letter-spacing: 0 !important; }
 
 /* Card Typography */
-#landing .stats-number { font-size: 3rem !important; font-weight: 800 !important; line-height: 1 !important; margin-bottom: 0.5rem !important; }
-#landing .stats-label { font-size: 1.125rem !important; font-weight: 600 !important; margin-bottom: 0.75rem !important; }
-#landing .stats-trend { font-size: 0.875rem !important; font-weight: 500 !important; }
+#landing .stats-number { font-size: 3rem !important; font-weight: 700 !important; line-height: 1 !important; margin-bottom: 0.5rem !important; }
+#landing .stats-label { font-size: 1.125rem !important; font-weight: 700 !important; margin-bottom: 0.75rem !important; }
+#landing .stats-trend { font-size: 0.875rem !important; font-weight: 400 !important; }
 #landing .feature-title { font-size: 1.5rem !important; font-weight: 700 !important; line-height: 1.3 !important; margin-bottom: 1rem !important; }
 #landing .feature-description { font-size: 1.125rem !important; font-weight: 400 !important; line-height: 1.6 !important; margin-bottom: 1.5rem !important; }
-#landing .analytics-value { font-size: 2.5rem !important; font-weight: 800 !important; line-height: 1 !important; margin-bottom: 0.5rem !important; }
-#landing .analytics-label { font-size: 1rem !important; font-weight: 600 !important; margin-bottom: 0.75rem !important; }
+#landing .analytics-value { font-size: 2.5rem !important; font-weight: 700 !important; line-height: 1 !important; margin-bottom: 0.5rem !important; }
+#landing .analytics-label { font-size: 1rem !important; font-weight: 700 !important; margin-bottom: 0.75rem !important; }
 
 /* Professional Cards */
 #landing .stats-card, #landing .feature-card, #landing .analytics-item {
@@ -595,7 +477,7 @@
 
 #landing .stat-item {
   display: flex !important; align-items: center !important; gap: 0.5rem !important;
-  font-size: 0.8rem !important; color: #475569 !important; font-weight: 500 !important;
+  font-size: 0.8rem !important; color: #475569 !important; font-weight: 400 !important;
 }
 
 #landing .stat-item i {
@@ -663,7 +545,7 @@
 
 #landing .overlay-content { text-align: center !important; }
 #landing .overlay-content i { font-size: 2rem !important; margin-bottom: 0.5rem !important; background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #ea580c 100%) !important; -webkit-background-clip: text !important; -webkit-text-fill-color: transparent !important; background-clip: text !important; }
-#landing .overlay-content p { margin: 0 !important; font-size: 0.875rem !important; font-weight: 500 !important; }
+#landing .overlay-content p { margin: 0 !important; font-size: 0.875rem !important; font-weight: 400 !important; }
 
 #landing .tourism-excellence, #landing .partnerships-section {
   background: white !important; padding: 3rem !important; border-radius: 16px !important;
@@ -913,7 +795,7 @@
   background: #f1f5f9 !important;
   color: #475569 !important;
   font-size: clamp(0.72rem, 0.9vw, 0.8rem) !important;
-  font-weight: 500 !important;
+  font-weight: 400 !important;
   padding: 0.15rem 0.45rem !important;
   border-radius: 4px !important;
   border: none !important;
@@ -1024,7 +906,6 @@
 #landing .feature-details span {
   font-size: 0.875rem !important; color: #475569 !important; line-height: 1.5 !important;
   padding: 0.75rem !important; background: #f8fafc !important; border-radius: 6px !important;
-  border-left: 3px solid #1e40af !important;
 }
 
 #landing .partnership-list {
@@ -1088,7 +969,7 @@
 }
 
 #landing .campus-badge span {
-  font-size: 0.875rem !important; color: #475569 !important; font-weight: 500 !important;
+  font-size: 0.875rem !important; color: #475569 !important; font-weight: 400 !important;
 }
 
 /* Responsive Design */
@@ -1193,6 +1074,9 @@
   height: 100% !important;
   position: relative !important;
   overflow: hidden !important;
+  background-image:
+
+    linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%) !important;
   background-size: 20px 20px, 20px 20px, 100% 100% !important;
 }
 
@@ -1239,7 +1123,7 @@
   font-size: 0.7rem !important;
   padding: 0.25rem 0.5rem !important;
   border-radius: 4px !important;
-  font-weight: 500 !important;
+  font-weight: 400 !important;
   border: 1px solid rgba(255, 255, 255, 0.2) !important;
   backdrop-filter: blur(10px) !important;
 }
@@ -1248,7 +1132,7 @@
   color: white !important;
   text-decoration: none !important;
   font-size: 0.8rem !important;
-  font-weight: 600 !important;
+  font-weight: 700 !important;
   transition: all 0.3s ease !important;
   background: rgba(255, 255, 255, 0.1) !important;
   padding: 0.5rem 1rem !important;
@@ -1412,7 +1296,6 @@
   top: -3px !important;
   width: 0 !important;
   height: 0 !important;
-  border-left: 8px solid #1e40af !important;
   border-top: 4px solid transparent !important;
   border-bottom: 4px solid transparent !important;
 }
@@ -1437,7 +1320,6 @@
     top: auto !important;
     border-left: 4px solid transparent !important;
     border-right: 4px solid transparent !important;
-    border-top: 8px solid #1e40af !important;
     border-bottom: none !important;
   }
 
@@ -1733,7 +1615,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2px solid #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.55);
   box-shadow: 0 2px 8px rgba(30, 64, 175, 0.3);
 }
 
@@ -1750,22 +1632,22 @@
 
 .badge-title {
   color: #1e40af;
-  font-weight: 800;
+  font-weight: 700;
   font-size: 0.875rem;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .badge-subtitle {
   color: #475569;
-  font-weight: 500;
+  font-weight: 400;
   font-size: 0.875rem;
   letter-spacing: 0.01em;
 }
 
 .badge-id {
   color: #64748b;
-  font-weight: 600;
-  font-size: 0.75rem;
+  font-weight: 700;
+  font-size: 0.8125rem;
   letter-spacing: 0.025em;
   text-transform: uppercase;
 }
@@ -1838,7 +1720,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2px solid #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.55);
   box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
 }
 
@@ -1857,13 +1739,13 @@
   color: #1e40af;
   font-weight: 700;
   font-size: 0.875rem;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .small-subtitle {
   color: #64748b;
-  font-weight: 500;
-  font-size: 0.75rem;
+  font-weight: 400;
+  font-size: 0.8125rem;
   letter-spacing: 0.01em;
 }
 
@@ -1900,16 +1782,35 @@
   }
 }
 
-/* Section backgrounds — portal and other landing sections */
+/* Section backgrounds — portal and other landing sections
+
+   These used to hotlink batthern.png and dotnoise from transparenttextures.com,
+   which put a third-party request on every visitor's page load and broke the
+   texture entirely if that host was unreachable. The local Tappy tile replaces
+   both when it is installed; the external URL stays as the fallback so a site
+   with no artwork is unchanged.
+
+   The tile is thin line art at 640x213, so it renders at natural size rather
+   than stretched: stretching a 3:1 tile across a 1200px section would smear the
+   motifs. Remove the background-size line to tile it denser instead. */
+<?php
+$tappyPattern = mascot_pattern_url();
+$lightTexture = $tappyPattern !== ''
+  ? "url('" . $tappyPattern . "')"
+  : 'url("https://www.transparenttextures.com/patterns/batthern.png")';
+$darkTexture = $tappyPattern !== ''
+  ? "url('" . $tappyPattern . "')"
+  : 'url("https://www.transparenttextures.com/patterns/dotnoise-light-grey.png")';
+?>
 #landing .section-light {
   background-color: #ffffff !important;
-  background-image: url("https://www.transparenttextures.com/patterns/batthern.png") !important;
+  background-image: <?= $lightTexture ?> !important;
   background-size: auto !important;
   background-repeat: repeat !important;
 }
 #landing .section-dark {
   background-color: #dbeafe !important;
-  background-image: url("https://www.transparenttextures.com/patterns/dotnoise-light-grey.png") !important;
+  background-image: <?= $darkTexture ?> !important;
   background-size: auto !important;
   background-repeat: repeat !important;
 }
@@ -1921,10 +1822,14 @@
 
 <script>
 (function () {
-  var loader = document.getElementById('landingPageLoader');
-  if (!loader) return;
+  // PageLoader.show/hide already no-op when the overlay is absent, so there is
+  // no need to probe for the element here: an early return would skip the
+  // hide() call and could leave the loader stuck on screen.
+  var api = window.PageLoader;
+  if (!api || !api.show || !api.hide) { return; }
 
-  document.documentElement.classList.add('landing-loader-active');
+  // Lock page scroll while the landing page loads (handled by PageLoader).
+  api.show('landingPageLoader');
 
   var start = Date.now();
   var minMs = 1100;
@@ -1932,14 +1837,7 @@
   function dismiss() {
     var wait = Math.max(0, minMs - (Date.now() - start));
     window.setTimeout(function () {
-      loader.classList.add('is-done');
-      loader.setAttribute('aria-busy', 'false');
-      document.documentElement.classList.remove('landing-loader-active');
-      window.setTimeout(function () {
-        if (loader.parentNode) {
-          loader.parentNode.removeChild(loader);
-        }
-      }, 600);
+      api.hide('landingPageLoader');
     }, wait);
   }
 
@@ -2021,6 +1919,80 @@
   hero.addEventListener('focusout', start);
 
   start();
+})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+<script>
+(function () {
+  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+  gsap.registerPlugin(ScrollTrigger);
+
+  var root = document.querySelector('#landing');
+  if (!root) return;
+
+  var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reducedMotion) return;
+
+  var heroEase = 'power3.out';
+  var scrollEase = 'power2.out';
+
+  // Hero entrance (formal + subtle)
+  var heroDesc = root.querySelector('.hero-description');
+  if (heroDesc) {
+    gsap.timeline({ defaults: { ease: heroEase } }).from(heroDesc, { opacity: 0, y: 20, duration: 0.55 });
+  }
+
+  // Utility: animate in without hiding content permanently.
+  // We do NOT set opacity:0 upfront in CSS; ScrollTrigger.batch will only animate when entering view.
+  function batchReveal(targets, opts) {
+    ScrollTrigger.batch(targets, {
+      start: 'top 90%',
+      once: true,
+      onEnter: function (batch) {
+        gsap.fromTo(
+          batch,
+          { autoAlpha: 1, y: (opts && opts.fromY) || 18, x: (opts && opts.fromX) || 0 },
+          {
+            autoAlpha: 1,
+            y: 0,
+            x: 0,
+            duration: (opts && opts.duration) || 0.6,
+            ease: scrollEase,
+            stagger: (opts && opts.stagger) || 0.06,
+            overwrite: 'auto',
+            immediateRender: false
+          }
+        );
+      }
+    });
+  }
+
+  // Titles + section subtitles
+  batchReveal('#landing .section-title', { fromY: 20, duration: 0.55, stagger: 0.08 });
+  batchReveal('#landing .section-subtitle', { fromY: 14, duration: 0.5, stagger: 0.08 });
+
+  // Features, process, accreditations
+  batchReveal('#landing .feature-item', { fromY: 18, duration: 0.6, stagger: 0.06 });
+  batchReveal('#landing .process-item', { fromY: 18, duration: 0.6, stagger: 0.08 });
+  batchReveal('#landing .accreditation-badge', { fromY: 14, duration: 0.55, stagger: 0.06 });
+
+  // CTA
+  ScrollTrigger.create({
+    trigger: '#landing .cta-section',
+    start: 'top 90%',
+    once: true,
+    onEnter: function () {
+      var cta = root.querySelector('#landing .cta-content');
+      if (!cta) return;
+      gsap.fromTo(cta, { autoAlpha: 1, y: 18 }, { autoAlpha: 1, y: 0, duration: 0.6, ease: scrollEase, immediateRender: false });
+    }
+  });
+
+  // Ensure triggers account for images/layout
+  window.addEventListener('load', function () {
+    ScrollTrigger.refresh();
+  });
 })();
 </script>
 <script>

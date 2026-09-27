@@ -13,10 +13,23 @@ class SupabaseEmailService
         $this->supabaseKey = env('SUPABASE_ANON_KEY', ''); // You'll set this in .env
         $this->fromEmail = 'noreply@lphs.edu.ph';
     }
+
+    /**
+     * Current school principal for the email signature block. Public schools
+     * change their principal every few years, so the name is read from
+     * system_settings (Admin > Settings) instead of being hardcoded here. Falls
+     * back to the built-in default if the setting row is missing.
+     */
+    private function principalName(): string
+    {
+        helper('principal');
+
+        return school_principal_name();
+    }
     
     public function sendVerificationEmail($toEmail, $studentName, $lrn, $tempPassword = null)
     {
-        $subject = 'CSCS - Your Enrollment Application Has Been Approved';
+        $subject = 'CSCS Tap n Track - Your Enrollment Application Has Been Approved';
         
         $message = $this->getEmailTemplate($studentName, $lrn, $tempPassword);
         
@@ -27,7 +40,7 @@ class SupabaseEmailService
     
     public function sendRejectionEmail($toEmail, $studentName)
     {
-        $subject = 'CSCS - Enrollment Application Status Update';
+        $subject = 'CSCS Tap n Track - Enrollment Application Status Update';
         
         $message = $this->getRejectionEmailTemplate($studentName);
         
@@ -118,7 +131,7 @@ class SupabaseEmailService
         ];
         
         $email->initialize($config);
-        $email->setFrom('lphscodenectars@gmail.com', 'CSCS School System');
+        $email->setFrom('lphscodenectars@gmail.com', 'CSCS Tap n Track');
         $email->setTo($to);
         $email->setSubject($subject);
         $email->setMessage($htmlContent);
@@ -139,25 +152,27 @@ class SupabaseEmailService
     
     private function getEmailTemplate($studentName, $lrn, $tempPassword = null)
     {
+        $principalName = $this->principalName();
+
         return "
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset='utf-8'>
             <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                body { font-family: 'Times New Roman', Times, serif; line-height: 1.6; color: #333; }
                 .container { max-width: 600px; margin: 0 auto; padding: 20px; }
                 .header { background: #1e40af; color: white; padding: 20px; text-align: center; }
                 .content { padding: 20px; background: #f8f9fa; }
-                .button { background: #fbbf24; color: #ffffff !important; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px 0; }
-                .credentials { background: white; padding: 15px; border-left: 4px solid #fbbf24; margin: 15px 0; }
+                .button { background: #1e40af; color: #ffffff !important; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px 0; }
+                .credentials { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 15px; margin: 15px 0; }
                 .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
             </style>
         </head>
         <body>
             <div class='container'>
                 <div class='header'>
-                    <h1>🎓 CSCS Enrollment Approved!</h1>
+                    <h1>🎓 CSCS Tap n Track — Enrollment Approved!</h1>
                     <p>Cauayan South Central School</p>
                 </div>
                 
@@ -190,8 +205,7 @@ class SupabaseEmailService
                 <div class='footer'>
                     <p>Cauayan South Central School<br>
                     Mabini Street, District I, Cauayan City, Isabela, Philippines<br>
-                    Plus Code: WQ8Q+J5V / WQJC+MM7, Cauayan City<br>
-                    Principal: Ronnie G. Rumbaoa</p>
+                    Principal: {$principalName}</p>
                 </div>
             </div>
         </body>
@@ -200,24 +214,26 @@ class SupabaseEmailService
     
     private function getRejectionEmailTemplate($studentName)
     {
+        $principalName = $this->principalName();
+
         return "
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset='utf-8'>
             <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                body { font-family: 'Times New Roman', Times, serif; line-height: 1.6; color: #333; }
                 .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background: #dc2626; color: white; padding: 20px; text-align: center; }
+                .header { background: #8f2020; color: white; padding: 20px; text-align: center; }
                 .content { padding: 20px; background: #f8f9fa; }
                 .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-                .notice { background: #fef2f2; padding: 15px; border-left: 4px solid #dc2626; margin: 15px 0; }
+                .notice { background: #fdf1f1; border: 1px solid #f0d4d4; border-radius: 10px; padding: 15px; margin: 15px 0; }
             </style>
         </head>
         <body>
             <div class='container'>
                 <div class='header'>
-                    <h1>📋 CSCS Enrollment Update</h1>
+                    <h1>📋 CSCS Tap n Track — Enrollment Update</h1>
                     <p>Cauayan South Central School</p>
                 </div>
                 
@@ -244,8 +260,7 @@ class SupabaseEmailService
                 <div class='footer'>
                     <p>Cauayan South Central School<br>
                     Mabini Street, District I, Cauayan City, Isabela, Philippines<br>
-                    Plus Code: WQ8Q+J5V / WQJC+MM7, Cauayan City<br>
-                    Principal: Ronnie G. Rumbaoa</p>
+                    Principal: {$principalName}</p>
                 </div>
             </div>
         </body>
@@ -254,7 +269,7 @@ class SupabaseEmailService
     
     public function sendPromotionEmail($toEmail, $studentName, $nextGradeLevel)
     {
-        $subject = 'CSCS - Grade Promotion Approved for Next School Year';
+        $subject = 'CSCS Tap n Track - Grade Promotion Approved for Next School Year';
         $message = $this->getPromotionEmailTemplate($studentName, $nextGradeLevel);
         $result = $this->sendEmail($toEmail, $subject, $message);
         log_message('info', 'Promotion email processing completed for: ' . $toEmail);
@@ -264,6 +279,7 @@ class SupabaseEmailService
     private function getPromotionEmailTemplate($studentName, $nextGradeLevel)
     {
         helper('grade_level');
+        $principalName = $this->principalName();
         $nextGradeLabel = grade_level_label((int) $nextGradeLevel);
 
         return "
@@ -272,12 +288,12 @@ class SupabaseEmailService
         <head>
             <meta charset='utf-8'>
             <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                body { font-family: 'Times New Roman', Times, serif; line-height: 1.6; color: #333; }
                 .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background: #10b981; color: white; padding: 20px; text-align: center; }
+                .header { background: #15803d; color: white; padding: 20px; text-align: center; }
                 .content { padding: 20px; background: #f8f9fa; }
-                .button { background: #fbbf24; color: #ffffff !important; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px 0; }
-                .promotion-box { background: white; padding: 15px; border-left: 4px solid #10b981; margin: 15px 0; }
+                .button { background: #1e40af; color: #ffffff !important; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px 0; }
+                .promotion-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 15px; margin: 15px 0; }
                 .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
             </style>
         </head>
@@ -315,8 +331,7 @@ class SupabaseEmailService
                 <div class='footer'>
                     <p>Cauayan South Central School<br>
                     Mabini Street, District I, Cauayan City, Isabela, Philippines<br>
-                    Plus Code: WQ8Q+J5V / WQJC+MM7, Cauayan City<br>
-                    Principal: Ronnie G. Rumbaoa</p>
+                    Principal: {$principalName}</p>
                 </div>
             </div>
         </body>

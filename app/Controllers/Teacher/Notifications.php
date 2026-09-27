@@ -28,7 +28,7 @@ class Notifications extends BaseController
             ->findAll();
 
         return view('teacher/notifications', [
-            'title' => 'Notifications - CSCS SMS',
+            'title' => 'Notifications - CSCS Tap n Track',
             'notifications' => $notifications,
         ]);
     }

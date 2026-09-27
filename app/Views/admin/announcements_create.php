@@ -1,13 +1,10 @@
-﻿<?= $this->extend('dashboard_layout') ?>
+<?= $this->extend('dashboard_layout') ?>
 <?= $this->section('content') ?>
 
 <style>
 .blue-divider {
-  height: 3px;
-  background: linear-gradient(90deg, #007bff, #0056b3);
-  border-radius: 2px;
-  margin: 1rem 0;
-}
+  height: 1px;
+  background: var(--hairline-strong);
 
 .form-floating textarea {
   min-height: 120px;

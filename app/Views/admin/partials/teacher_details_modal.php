@@ -1,7 +1,7 @@
 <style>
 .teacher-info-section { margin-bottom: 2rem; }
 .teacher-info-title {
-  font-size: 1.1rem; font-weight: 600; color: #1e40af; margin-bottom: 1rem;
+  font-size: 1.1rem; font-weight: 700; color: #1e40af; margin-bottom: 1rem;
   padding-bottom: 0.5rem; border-bottom: 2px solid #e5e7eb;
   display: flex; align-items: center; gap: 0.5rem;
 }
@@ -10,14 +10,14 @@
 }
 .teacher-info-item { display: flex; flex-direction: column; gap: 0.25rem; }
 .teacher-info-label {
-  font-size: 0.875rem; font-weight: 600; color: #6b7280;
+  font-size: 0.875rem; font-weight: 700; color: #6b7280;
   text-transform: uppercase; letter-spacing: 0.05em;
 }
-.teacher-info-value { font-size: 1rem; color: #111827; font-weight: 500; }
+.teacher-info-value { font-size: 1rem; color: #111827; font-weight: 400; }
 .teacher-info-value.empty { color: #9ca3af; font-style: italic; }
 .status-badge {
   display: inline-flex; align-items: center; padding: 0.375rem 0.75rem;
-  border-radius: 0.5rem; font-size: 0.75rem; font-weight: 600;
+  border-radius: 0.5rem; font-size: 0.8125rem; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.05em;
 }
 .status-active { background-color: #d1fae5; color: #065f46; }
@@ -28,7 +28,7 @@
 .sections-list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .section-badge {
   background-color: #dbeafe; color: #1e40af; padding: 0.25rem 0.75rem;
-  border-radius: 0.375rem; font-size: 0.875rem; font-weight: 500;
+  border-radius: 0.375rem; font-size: 0.875rem; font-weight: 400;
 }
 </style>
 

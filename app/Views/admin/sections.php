@@ -1,101 +1,125 @@
 <?= $this->extend('dashboard_layout') ?>
 <?= $this->section('content') ?>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h1 class="h3">Manage Sections</h1>
-  <div>
-    <button class="btn btn-warning me-2" onclick="showBulkEditSections()">
-      <i class="bi bi-pencil-square"></i> Edit Sections
-    </button>
-    <button class="btn btn-primary me-2" onclick="showCreateSection()">
-      <i class="bi bi-plus-circle"></i> Create Section
-    </button>
-    <a href="<?= base_url('admin/dashboard') ?>" class="btn btn-outline-secondary">Back</a>
-  </div>
+<?php
+// Valid school year choices for the section edit dialogs.
+// Built from the active school year so an administrator can only pick a real
+// YYYY-YYYY value instead of typing free text (the server rejects bad formats).
+$currentSy = function_exists('get_current_school_year')
+    ? (string) get_current_school_year()
+    : ((int) date('n') >= 6 ? date('Y') . '-' . ((int) date('Y') + 1) : ((int) date('Y') - 1) . '-' . date('Y'));
+
+$currentSyStart = (int) substr($currentSy, 0, 4);
+if ($currentSyStart <= 0) {
+    $currentSyStart = (int) date('Y');
+}
+
+$schoolYearOptions = [];
+for ($syYear = $currentSyStart - 2; $syYear <= $currentSyStart + 2; $syYear++) {
+    $schoolYearOptions[] = $syYear . '-' . ($syYear + 1);
+}
+?>
+
+<?php if (session()->getFlashdata('error')): ?>
+<div class="alert alert-danger alert-dismissible fade show">
+  <i class="bi bi-exclamation-triangle-fill me-2"></i><?= session()->getFlashdata('error') ?>
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 </div>
+<?php endif; ?>
+
+<?= view('admin/partials/page_header', ['pageHeader' => [
+  'icon'     => 'bi-grid-3x3-gap',
+  'title'    => 'Manage Sections',
+  'subtitle' => 'Create sections, assign advisers and set capacity for each grade level',
+  'actions'  => '<a class="btn btn-outline-secondary" href="' . base_url('admin/dashboard') . '">'
+    . '<i class="bi bi-arrow-left"></i> Back</a>'
+    . '<button class="btn btn-outline-secondary" onclick="showBulkEditSections()">'
+    . '<i class="bi bi-pencil-square"></i> Edit sections</button>'
+    . '<button class="btn btn-primary admin-btn-primary" onclick="showCreateSection()">'
+    . '<i class="bi bi-plus-circle"></i> Create section</button>',
+]]) ?>
 
 <!-- Summary Statistics -->
-<div class="card mb-4">
-  <div class="card-body">
-    <div class="row sections-summary-stats text-center g-3">
-      <div class="col-6 col-lg-3">
-        <div class="d-flex align-items-center justify-content-center">
-          <div class="text-primary me-3">
-            <i class="bi bi-building fs-2"></i>
-          </div>
-          <div>
-            <h4 class="mb-0"><?= count($sections) ?></h4>
-            <small class="text-muted">Total Sections</small>
-          </div>
-        </div>
-      </div>
-      <div class="col-6 col-lg-3">
-        <div class="d-flex align-items-center justify-content-center">
-          <div class="text-success me-3">
-            <i class="bi bi-person-check fs-2"></i>
-          </div>
-          <div>
-            <h4 class="mb-0"><?= count(array_filter($sections, fn($s) => !empty($s['adviser_name']))) ?></h4>
-            <small class="text-muted">With Advisers</small>
-          </div>
-        </div>
-      </div>
-      <div class="col-6 col-lg-3">
-        <div class="d-flex align-items-center justify-content-center">
-          <div class="text-warning me-3">
-            <i class="bi bi-person-x fs-2"></i>
-          </div>
-          <div>
-            <h4 class="mb-0"><?= count(array_filter($sections, fn($s) => empty($s['adviser_name']))) ?></h4>
-            <small class="text-muted">Need Advisers</small>
-          </div>
-        </div>
-      </div>
-      <div class="col-6 col-lg-3">
-        <div class="d-flex align-items-center justify-content-center">
-          <div class="text-info me-3">
-            <i class="bi bi-people fs-2"></i>
-          </div>
-          <div>
-            <h4 class="mb-0"><?= array_sum(array_column($sections, 'max_capacity')) ?></h4>
-            <small class="text-muted">Total Capacity</small>
-          </div>
-        </div>
-      </div>
+<div class="sections-summary-stats mb-4">
+  <div class="stat-tile stat-tile--primary">
+    <div class="stat-tile__icon"><i class="bi bi-building"></i></div>
+    <div class="stat-tile__body">
+      <div class="stat-tile__value"><?= count($sections) ?></div>
+      <div class="stat-tile__label">Total Sections</div>
+    </div>
+  </div>
+  <div class="stat-tile stat-tile--success">
+    <div class="stat-tile__icon"><i class="bi bi-person-check"></i></div>
+    <div class="stat-tile__body">
+      <div class="stat-tile__value"><?= count(array_filter($sections, fn($s) => !empty($s['adviser_name']))) ?></div>
+      <div class="stat-tile__label">With Advisers</div>
+    </div>
+  </div>
+  <div class="stat-tile stat-tile--warning">
+    <div class="stat-tile__icon"><i class="bi bi-person-x"></i></div>
+    <div class="stat-tile__body">
+      <div class="stat-tile__value"><?= count(array_filter($sections, fn($s) => empty($s['adviser_name']))) ?></div>
+      <div class="stat-tile__label">Need Advisers</div>
+    </div>
+  </div>
+  <div class="stat-tile stat-tile--info">
+    <div class="stat-tile__icon"><i class="bi bi-people"></i></div>
+    <div class="stat-tile__body">
+      <div class="stat-tile__value"><?= array_sum(array_column($sections, 'max_capacity')) ?></div>
+      <div class="stat-tile__label">Total Capacity</div>
     </div>
   </div>
 </div>
 
-<!-- Filter Options -->
-<form class="row g-2 mb-3" method="get">
-  <div class="col-auto">
-    <label class="form-label">Grade Level</label>
-    <select name="grade" class="form-select" onchange="this.form.submit()">
-      <option value="">All Grades</option>
-      <?php foreach (grade_level_options() as $g): ?>
-        <option value="<?= $g ?>" <?= (($gradeFilter ?? '') == $g ? 'selected' : '') ?>><?= esc(grade_level_label($g)) ?></option>
-      <?php endforeach; ?>
-    </select>
-  </div>
-  <div class="col-auto">
-    <label class="form-label">Adviser Status</label>
-    <select name="adviser_status" class="form-select" onchange="this.form.submit()">
-      <option value="">All Sections</option>
-      <option value="with_adviser" <?= (($adviserFilter ?? '') == 'with_adviser' ? 'selected' : '') ?>>With Adviser</option>
-      <option value="no_adviser" <?= (($adviserFilter ?? '') == 'no_adviser' ? 'selected' : '') ?>>Need Adviser</option>
-    </select>
-  </div>
-  <div class="col-auto">
-    <label class="form-label">Search</label>
-    <input type="text" name="search" class="form-control" value="<?= esc($searchTerm ?? '') ?>" placeholder="Section name or teacher">
-  </div>
-  <div class="col-auto align-self-end">
-    <button class="btn btn-primary">Filter</button>
-    <?php if (!empty($gradeFilter) || !empty($adviserFilter) || !empty($searchTerm)): ?>
-      <a href="<?= base_url('admin/sections') ?>" class="btn btn-outline-secondary">Clear</a>
-    <?php endif; ?>
-  </div>
-</form>
+<!-- Filters — shared admin standard: up to 4 visible, rest behind "More filters" -->
+<?php
+  $sectionFilterValues = [
+    'grade'          => $gradeFilter ?? '',
+    'adviser_status' => $adviserFilter ?? '',
+    'search'         => $searchTerm ?? '',
+  ];
+
+  $sectionFilterActive = admin_filter_count_active(
+    $sectionFilterValues,
+    ['grade', 'adviser_status', 'search']
+  );
+
+  $gradeOptions = [admin_filter_option('', 'All Grades')];
+  foreach (grade_level_options() as $g) {
+    $gradeOptions[] = admin_filter_option((string) $g, grade_level_label($g));
+  }
+
+  echo view('admin/partials/filter_bar', ['filterBar' => [
+    'action'      => base_url('admin/sections'),
+    'id'          => 'sectionFilter',
+    'label'       => 'Filter sections',
+    'resetUrl'    => base_url('admin/sections'),
+    'activeCount' => $sectionFilterActive['total'],
+    'totalCount'  => $sectionFilterActive['total'],
+    'primary'     => [
+      [
+        'name' => 'search', 'label' => 'Search', 'icon' => 'bi-search', 'type' => 'search',
+        'value'       => admin_filter_value($sectionFilterValues, 'search'),
+        'placeholder' => 'Section name or teacher',
+      ],
+      [
+        'name' => 'grade', 'label' => 'Grade level', 'icon' => 'bi-mortarboard',
+        'value'   => admin_filter_value($sectionFilterValues, 'grade'),
+        'options' => $gradeOptions,
+      ],
+      [
+        'name' => 'adviser_status', 'label' => 'Adviser', 'icon' => 'bi-person-check',
+        'value'   => admin_filter_value($sectionFilterValues, 'adviser_status'),
+        'options' => [
+          admin_filter_option('', 'All sections'),
+          admin_filter_option('with_adviser', 'With adviser'),
+          admin_filter_option('no_adviser', 'Needs adviser'),
+        ],
+      ],
+    ],
+    'advanced' => [],
+  ]]);
+?>
 
 <!-- Sections Table -->
 <?php if (!empty($sections)): ?>
@@ -110,18 +134,23 @@
 
   <?php foreach ($sectionsByGrade as $gradeLevel => $gradeSections): ?>
     <div class="card mb-4">
-      <div class="card-header d-flex justify-content-between align-items-center">
+      <div class="card-header d-flex justify-content-between align-items-center sections-grade-header"
+           role="button" tabindex="0"
+           data-bs-toggle="collapse" data-bs-target="#grade-<?= $gradeLevel ?>-sections"
+           aria-expanded="false" aria-controls="grade-<?= $gradeLevel ?>-sections">
         <h6 class="card-title mb-0 fw-semibold">
+          <i class="bi bi-chevron-right sections-grade-chevron me-1"></i>
           <i class="bi bi-mortarboard"></i> <?= esc(grade_level_label((int) $gradeLevel)) ?> Sections
           <span class="badge bg-secondary ms-2"><?= count($gradeSections) ?> sections</span>
         </h6>
-        <button class="btn btn-primary btn-sm" onclick="autoAssignStudents(<?= $gradeLevel ?>)">
+        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); autoAssignStudents(<?= $gradeLevel ?>)">
           <i class="bi bi-distribute-vertical"></i> Auto-Assign
         </button>
       </div>
+      <div id="grade-<?= $gradeLevel ?>-sections" class="collapse">
       <div class="card-body p-0">
         <div class="table-responsive">
-                      <table class="table table-striped table-hover mb-0 table-sections-list" data-no-enhance="1">
+          <table class="table table-hover align-middle mb-0 admin-table table-sections-list" data-no-enhance="1">
               <thead>
                 <tr>
                   <th>Section Name</th>
@@ -179,7 +208,7 @@
                   </td>
                   <td>
                     <div class="table-actions-grid" role="group" aria-label="Section actions">
-                      <button type="button" class="btn btn-sm table-action-btn table-action-btn--adviser" onclick="assignAdviser(<?= $section['id'] ?>, '<?= esc($section['section_name']) ?>', <?= $gradeLevel ?>)" title="Assign adviser">
+                      <button type="button" class="btn btn-sm table-action-btn table-action-btn--adviser" onclick="assignAdviser(<?= $section['id'] ?>, '<?= esc($section['section_name']) ?>', <?= $gradeLevel ?>, '<?= esc($section['grading_type'] ?? 'numerical', 'attr') ?>')" title="Assign adviser">
                         <i class="bi bi-person-plus" aria-hidden="true"></i><span class="table-action-label">Adviser</span>
                       </button>
                       <button type="button" class="btn btn-sm table-action-btn table-action-btn--teachers" onclick="viewSectionTeachers(<?= $section['id'] ?>, '<?= esc($section['section_name']) ?>')" title="View teachers">
@@ -191,9 +220,15 @@
                       <button type="button" class="btn btn-sm table-action-btn table-action-btn--enroll" onclick="assignStudents(<?= $section['id'] ?>, '<?= esc($section['section_name']) ?>', <?= $section['grade_level'] ?>)" title="Assign students">
                         <i class="bi bi-person-plus-fill" aria-hidden="true"></i><span class="table-action-label">Enroll</span>
                       </button>
+                      <?php if (in_array($section['grading_type'] ?? 'numerical', ['non_numerical', 'custom'], true)): ?>
+                      <button type="button" class="btn btn-sm table-action-btn table-action-btn--subjects" onclick="viewSectionDomains(<?= $section['id'] ?>)" title="Choose the developmental domains this section uses">
+                        <i class="bi bi-diagram-3" aria-hidden="true"></i><span class="table-action-label">Domains</span>
+                      </button>
+                      <?php else: ?>
                       <button type="button" class="btn btn-sm table-action-btn table-action-btn--subjects" onclick="viewSectionSubjects(<?= $section['id'] ?>, '<?= esc($section['section_name']) ?>', <?= $section['grade_level'] ?>)" title="View subjects">
                         <i class="bi bi-book" aria-hidden="true"></i><span class="table-action-label">Subjects</span>
                       </button>
+                      <?php endif; ?>
                       <button type="button" class="btn btn-sm table-action-btn table-action-btn--edit" onclick="editSection(<?= $section['id'] ?>)" title="Edit section">
                         <i class="bi bi-pencil" aria-hidden="true"></i><span class="table-action-label">Edit</span>
                       </button>
@@ -208,6 +243,7 @@
           </table>
         </div>
       </div>
+      </div><!-- /.collapse -->
     </div>
   <?php endforeach; ?>
 <?php else: ?>
@@ -228,6 +264,30 @@
 <!-- Section Students Modal is generated dynamically and appended to <body> by JS -->
 
 <style>
+/* Collapsible grade-level section groups */
+.sections-grade-header {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color .15s ease;
+}
+.sections-grade-header:hover,
+.sections-grade-header:focus-visible {
+  background-color: rgba(0, 0, 0, .04);
+}
+.sections-grade-header:focus-visible {
+  outline: 2px solid #0d6efd;
+  outline-offset: -2px;
+}
+.sections-grade-chevron {
+  display: inline-block;
+  transition: transform .2s ease;
+  color: #6c757d;
+}
+/* Bootstrap flips aria-expanded on the header automatically */
+.sections-grade-header[aria-expanded="true"] .sections-grade-chevron {
+  transform: rotate(90deg);
+}
+
 /* Custom styling for assign students modal close button */
 #assignStudentsModal .modal-footer .btn-danger {
   background-color: #dc3545 !important;
@@ -236,6 +296,19 @@
 }
 
 #assignStudentsModal .modal-footer .btn-danger:hover {
+  background-color: #c82333 !important;
+  border-color: #c82333 !important;
+  color: white !important;
+}
+
+/* Custom styling for assign teachers modal close button (matches Assign Students) */
+#assignTeachersModal .modal-footer .btn-danger {
+  background-color: #dc3545 !important;
+  border-color: #dc3545 !important;
+  color: white !important;
+}
+
+#assignTeachersModal .modal-footer .btn-danger:hover {
   background-color: #c82333 !important;
   border-color: #c82333 !important;
   color: white !important;
@@ -287,9 +360,38 @@ const sectionsData = <?= json_encode($sections) ?>;
 const availableTeachers = <?= json_encode($availableTeachers ?? []) ?>;
 const gradeLevelOptions = <?= json_encode(grade_level_options()) ?>;
 const gradeLevelLabels = <?= json_encode(grade_level_js_labels()) ?>;
+const schoolYearOptions = <?= json_encode($schoolYearOptions ?? []) ?>;
 
 function formatGradeLevel(gradeLevel) {
   return gradeLevelLabels[gradeLevel] || 'Grade ' + gradeLevel;
+}
+
+// Keyboard support for the collapsible grade-level headers (Enter / Space)
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const header = e.target.closest('.sections-grade-header');
+  if (!header) return;
+  e.preventDefault();
+  header.click();
+});
+
+function escapeOption(value) {
+  return String(value === null || value === undefined ? '' : value)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Builds <option> markup for the school year dropdowns, always keeping the
+// section's existing value selectable (legacy rows may hold older years).
+function schoolYearChoices(selected) {
+  const list = schoolYearOptions.slice();
+  if (selected && list.indexOf(selected) === -1) {
+    list.push(selected);
+  }
+  list.sort();
+
+  return list.map(function (year) {
+    return `<option value="${escapeOption(year)}" ${year === selected ? 'selected' : ''}>${escapeOption(year)}</option>`;
+  }).join('');
 }
 
 // DEBUG: Log available teachers data
@@ -305,51 +407,233 @@ availableTeachers.forEach((teacher, index) => {
   });
 });
 
-function buildAssignTeachersModal({ sectionId, sectionName, gradeLevel }) {
+/**
+ * Turn a native <select> into a searchable one.
+ * Dependency-free: the original choices are cached and re-rendered on every
+ * keystroke, so the <select> itself keeps working for form validation and
+ * submission (no hidden inputs, no "required control not focusable" pitfalls).
+ * Options: placeholder, noun, size ('sm'), inputId, rowLayout + labelHtml
+ * (rowLayout puts the search beside its label in a two-column row, matching the
+ * "Assign Students" modal header).
+ * Must be called after the <select> exists in the DOM.
+ */
+function makeSearchableSelect(selectEl, opts = {}) {
+  if (!selectEl || selectEl.dataset.searchReady === '1') return;
+
+  const placeholder = opts.placeholder || 'Search...';
+  const noun = opts.noun || 'option';
+  const sizeClass = opts.size === 'sm' ? ' input-group-sm' : '';
+  const rowLayout = opts.rowLayout === true;
+
+  // Cache the original choices — filtering must never destroy them
+  const source = Array.from(selectEl.options).map(o => ({
+    value: o.value,
+    label: o.textContent.trim(),
+    disabled: o.disabled
+  }));
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'searchable-select';
+  selectEl.parentNode.insertBefore(wrapper, selectEl);
+  wrapper.appendChild(selectEl);
+
+  const group = document.createElement('div');
+  group.className = 'input-group' + sizeClass;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'form-control';
+  input.placeholder = placeholder;
+  input.autocomplete = 'off';
+  input.setAttribute('aria-label', placeholder);
+  if (opts.inputId) input.id = opts.inputId;
+  const searchBtn = document.createElement('button');
+  searchBtn.type = 'button';
+  searchBtn.className = 'btn btn-outline-primary';
+  searchBtn.innerHTML = '<i class="bi bi-search"></i> Search';
+  const clearBtn = document.createElement('button');
+  clearBtn.type = 'button';
+  clearBtn.className = 'btn btn-outline-secondary';
+  clearBtn.title = 'Clear search';
+  clearBtn.innerHTML = '<i class="bi bi-x"></i>';
+  clearBtn.hidden = true;
+  group.append(input, searchBtn, clearBtn);
+
+  const results = document.createElement('div');
+  results.className = 'list-group mb-2 d-none';
+  results.style.maxHeight = '170px';
+  results.style.overflowY = 'auto';
+
+  const counter = document.createElement('div');
+  counter.className = 'form-text';
+  counter.hidden = true;
+
+  // In row layout the search sits beside its label (same two-column header row
+  // the "Assign Students" modal uses); otherwise it sits directly above the select.
+  if (rowLayout) {
+    const row = document.createElement('div');
+    row.className = 'row align-items-center';
+    const labelCol = document.createElement('div');
+    labelCol.className = 'col-md-6';
+    labelCol.innerHTML = opts.labelHtml || '';
+    const searchCol = document.createElement('div');
+    searchCol.className = 'col-md-6';
+    searchCol.appendChild(group);
+    row.append(labelCol, searchCol);
+    const head = document.createElement('div');
+    head.className = 'mb-2';
+    head.appendChild(row);
+    wrapper.insertBefore(head, selectEl);
+  } else {
+    group.classList.add('mb-2');
+    wrapper.insertBefore(group, selectEl);
+  }
+
+  wrapper.insertBefore(results, selectEl);
+  wrapper.insertBefore(counter, selectEl);
+  selectEl.dataset.searchReady = '1';
+
+  const apply = () => {
+    const query = input.value.trim().toLowerCase();
+    const selected = selectEl.value;
+
+    const queryMatches = source.filter(o =>
+      !query || o.label.toLowerCase().includes(query) || String(o.value).toLowerCase().includes(query)
+    );
+
+    // Always keep the current choice in the <select>. Without this the browser
+    // auto-selects the first filtered option and silently changes the value.
+    const selectedOpt = source.find(o => o.value === selected);
+    const keep = selectedOpt && !queryMatches.includes(selectedOpt) ? selectedOpt : null;
+    const matches = keep ? [keep].concat(queryMatches) : queryMatches;
+
+    selectEl.innerHTML = '';
+    if (matches.length === 0) {
+      const none = document.createElement('option');
+      none.value = '';
+      none.textContent = 'No matches';
+      none.disabled = true;
+      selectEl.appendChild(none);
+    } else {
+      matches.forEach(o => {
+        const opt = document.createElement('option');
+        opt.value = o.value;
+        opt.textContent = o.label;
+        opt.disabled = o.disabled;
+        if (o.value === selected) opt.selected = true;
+        selectEl.appendChild(opt);
+      });
+    }
+
+    clearBtn.hidden = query === '';
+    results.innerHTML = '';
+    counter.hidden = true;
+
+    if (query === '') {
+      results.classList.add('d-none');
+      return;
+    }
+
+    // The dropdown lists only genuine matches (the kept current choice is not a
+    // "match"), so the first entry — and Enter — picks the best result.
+    const choosable = queryMatches.filter(o => !o.disabled && o.value !== '');
+    if (choosable.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'list-group-item text-muted small';
+      empty.textContent = 'No matches found';
+      results.appendChild(empty);
+    } else {
+      choosable.slice(0, 50).forEach(o => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'list-group-item list-group-item-action small py-2';
+        item.textContent = o.label;
+        item.addEventListener('click', () => {
+          selectEl.value = o.value;
+          input.value = '';
+          apply();
+        });
+        results.appendChild(item);
+      });
+    }
+    results.classList.remove('d-none');
+    counter.innerHTML = '<i class="bi bi-funnel me-1"></i>' + choosable.length + ' matching ' +
+      noun + (choosable.length === 1 ? '' : 's');
+    counter.hidden = false;
+  };
+
+  input.addEventListener('input', apply);
+  searchBtn.addEventListener('click', () => {
+    apply();
+    input.focus();
+  });
+  // Enter must not submit the surrounding form while the user is searching
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const first = results.querySelector('button');
+      if (first) first.click();
+    } else if (e.key === 'Escape') {
+      input.value = '';
+      apply();
+    }
+  });
+  clearBtn.addEventListener('click', () => {
+    input.value = '';
+    apply();
+    input.focus();
+  });
+}
+
+
+function buildAssignTeachersModal({ sectionId, sectionName, gradeLevel, gradingType }) {
   const existing = document.getElementById('assignTeachersModal');
   if (existing) existing.remove();
+
+  // Non-numerical sections (grade 1 CAMIA, SNED, SSES ...) are assessed with
+  // developmental domains, so the second tab must talk about domains.
+  const isDomainMode = gradingType === 'non_numerical';
 
   const modalHtml = `
   <div class="modal fade" id="assignTeachersModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>Assign Teachers - ${sectionName}</h5>
+          <h5 class="modal-title">Assign Teachers to ${sectionName}</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
-          <div class="mb-4 p-3 bg-light rounded">
-            <h6 class="mb-1">${sectionName}</h6>
-            <small class="text-muted">${formatGradeLevel(gradeLevel)} • School Year <?= date('Y') . '-' . (date('Y') + 1) ?></small>
+          <div class="mb-3">
+            <div class="p-3 bg-light rounded">
+              <h6 class="mb-1">${sectionName}</h6>
+              <small class="text-muted">${formatGradeLevel(gradeLevel)} &bull; School Year <?= date('Y') . '-' . (date('Y') + 1) ?></small>
+            </div>
           </div>
-          
+
           <ul class="nav nav-tabs mb-3" role="tablist">
             <li class="nav-item">
-              <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#adviserTab">Section Adviser</button>
+              <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#adviserTab">
+                <i class="bi bi-person-badge me-1"></i>Section Adviser
+              </button>
             </li>
             <li class="nav-item">
-              <button class="nav-link" data-bs-toggle="tab" data-bs-target="#subjectTeachersTab">Subject Teachers</button>
+              <button class="nav-link" data-bs-toggle="tab" data-bs-target="#subjectTeachersTab">
+                <i class="bi ${isDomainMode ? 'bi-diagram-3' : 'bi-journal-bookmark'} me-1"></i>${isDomainMode ? 'Domain Teachers' : 'Subject Teachers'}
+              </button>
             </li>
           </ul>
-          
+
           <div class="tab-content">
             <div class="tab-pane fade show active" id="adviserTab">
               <form id="assignAdviserForm" method="post" action="<?= base_url('admin/sections/assign-adviser/') ?>${sectionId}">
                 <?= csrf_field() ?>
-                <div class="mb-3">
-                  <label class="form-label fw-semibold">Select Section Adviser</label>
-                  <select name="adviser_id" class="form-select" required>
-                    <option value="">Choose a teacher...</option>
-                    ${ (availableTeachers || []).map(t => `<option value="${t.id}">${t.first_name} ${t.last_name}${t.email ? ` (${t.email})` : ''}</option>`).join('') }
-                  </select>
-                  <div class="form-text">The section adviser manages the class and students</div>
-                </div>
-                <button type="submit" class="btn btn-success w-100">
-                  <i class="bi bi-person-check"></i> Assign Adviser
-                </button>
+                <select name="adviser_id" class="form-select" required>
+                  <option value="">Choose a teacher...</option>
+                  ${ (availableTeachers || []).map(t => `<option value="${t.id}">${t.first_name} ${t.last_name}${t.email ? ` (${t.email})` : ''}</option>`).join('') }
+                </select>
+                <div class="form-text">The section adviser manages the class and students</div>
               </form>
             </div>
-            
+
             <div class="tab-pane fade" id="subjectTeachersTab">
               <div id="subjectTeachersContent">
                 <div class="text-center py-4">
@@ -361,25 +645,56 @@ function buildAssignTeachersModal({ sectionId, sectionName, gradeLevel }) {
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="background-color: #495057; border-color: #495057;">Close</button>
+          <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Close</button>
+          <button type="submit" form="assignAdviserForm" class="btn btn-primary" id="assignAdviserSubmitBtn">
+            <i class="bi bi-person-check"></i> Assign Adviser
+          </button>
         </div>
       </div>
     </div>
   </div>`;
 
   document.body.insertAdjacentHTML('beforeend', modalHtml);
-  return document.getElementById('assignTeachersModal');
+
+  const modalEl = document.getElementById('assignTeachersModal');
+
+  // Same two-column header row the "Assign Students" modal uses:
+  // label on the left, search box on the right, the picker underneath.
+  makeSearchableSelect(modalEl.querySelector('select[name="adviser_id"]'), {
+    placeholder: 'Search by name or email...',
+    noun: 'teacher',
+    rowLayout: true,
+    inputId: 'adviserSearch',
+    labelHtml: '<label class="form-label fw-semibold mb-0" for="adviserSearch"><i class="bi bi-person-badge me-1 text-muted"></i>Select Section Adviser</label>'
+  });
+
+  // The footer action only applies to the adviser tab — the Subject Teachers tab
+  // renders its own "Assign Teachers" button inside the subject list.
+  const footerAction = modalEl.querySelector('#assignAdviserSubmitBtn');
+  modalEl.querySelectorAll('[data-bs-toggle="tab"]').forEach(tabBtn => {
+    tabBtn.addEventListener('shown.bs.tab', (ev) => {
+      if (footerAction) {
+        footerAction.hidden = ev.target.getAttribute('data-bs-target') !== '#adviserTab';
+      }
+    });
+  });
+
+  return modalEl;
 }
 
-function assignAdviser(sectionId, sectionName, gradeLevel) {
-  const modalEl = buildAssignTeachersModal({ sectionId, sectionName, gradeLevel });
+function assignAdviser(sectionId, sectionName, gradeLevel, gradingType) {
+  const modalEl = buildAssignTeachersModal({ sectionId, sectionName, gradeLevel, gradingType });
   const modal = new bootstrap.Modal(modalEl, { backdrop: true, keyboard: true, focus: true });
   modal.show();
-  
-  // Load subject teachers when tab is clicked
-  document.querySelector('[data-bs-target="#subjectTeachersTab"]').addEventListener('click', () => {
-    loadSubjectTeachersAssignment(sectionId, gradeLevel);
-  });
+
+  // Load subject/domain teachers when the tab is clicked. Scoped to this modal:
+  // a bare document.querySelector could bind to a stray element elsewhere.
+  const tabBtn = modalEl.querySelector('[data-bs-target="#subjectTeachersTab"]');
+  if (tabBtn) {
+    tabBtn.addEventListener('click', () => {
+      loadSubjectTeachersAssignment(sectionId, gradeLevel, gradingType);
+    });
+  }
 }
 
 
@@ -393,7 +708,7 @@ function viewSectionTeachers(sectionId, sectionName) {
     .then(response => response.json())
     .then(data => {
       if (data.success) {
-        displaySectionTeachers(data.adviser, data.subjectTeachers, sectionId);
+        displaySectionTeachers(data.adviser, data.subjectTeachers, sectionId, data.domain_mode === true);
       } else {
         document.getElementById('sectionTeachersList').innerHTML = `<div class="alert alert-danger">${data.message || 'Failed to load teachers'}</div>`;
       }
@@ -434,7 +749,8 @@ function buildSectionTeachersModal(sectionId, sectionName) {
   return document.getElementById('sectionTeachersModal');
 }
 
-function displaySectionTeachers(adviser, subjectTeachers, sectionId) {
+function displaySectionTeachers(adviser, subjectTeachers, sectionId, isDomainMode = false) {
+  const itemLabel = isDomainMode ? 'Domain' : 'Subject';
   let html = '';
   
   if (adviser) {
@@ -482,7 +798,7 @@ function displaySectionTeachers(adviser, subjectTeachers, sectionId) {
     html += `
       <div class="card">
         <div class="card-header bg-info text-white">
-          <h6 class="mb-0"><i class="bi bi-book me-2"></i>Subject Teachers</h6>
+          <h6 class="mb-0"><i class="bi ${isDomainMode ? 'bi-diagram-3' : 'bi-book'} me-2"></i>${isDomainMode ? 'Domain Teachers' : 'Subject Teachers'}</h6>
         </div>
         <div class="card-body">
           <div class="table-responsive">
@@ -509,8 +825,8 @@ function displaySectionTeachers(adviser, subjectTeachers, sectionId) {
             <button class="btn btn-primary btn-sm" onclick="toggleScheduleView('${teacherKey}')">
               <i class="bi bi-calendar3"></i> View Schedule
             </button>
-            <button class="btn btn-info btn-sm ms-1" onclick="viewTeacherSubjectClasses('${teacherGroup.first_name}', '${teacherGroup.last_name}', ${JSON.stringify(teacherSubjects).replace(/"/g, '&quot;')})">
-              <i class="bi bi-book"></i> View Subject Classes
+            <button class="btn btn-info btn-sm ms-1" onclick="viewTeacherSubjectClasses('${teacherGroup.first_name}', '${teacherGroup.last_name}', ${JSON.stringify(teacherSubjects).replace(/"/g, '&quot;')}, ${isDomainMode})">
+              <i class="bi bi-book"></i> View ${itemLabel} Classes
             </button>
             <button class="btn btn-danger btn-sm ms-1" onclick="removeSelectedSchedules('${teacherKey}')">
               <i class="bi bi-trash"></i> Remove Selected
@@ -524,7 +840,7 @@ function displaySectionTeachers(adviser, subjectTeachers, sectionId) {
                 <thead>
                   <tr>
                     <th><input class="form-check-input" type="checkbox" onchange="toggleTeacherSchedules('${teacherKey}', this)"></th>
-                    <th>Subject</th>
+                    <th>${itemLabel}</th>
                     <th>Day</th>
                     <th>Time</th>
                   </tr>
@@ -623,7 +939,7 @@ function removeSelectedSchedules(teacherKey) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            '<?= csrf_token() ?>': '<?= csrf_hash() ?>'
+            'X-CSRF-TOKEN': '<?= csrf_hash() ?>'
           }
         })
         .then(response => response.json())
@@ -652,7 +968,8 @@ function removeSelectedSchedules(teacherKey) {
   );
 }
 
-function viewTeacherSubjectClasses(firstName, lastName, subjects = null) {
+function viewTeacherSubjectClasses(firstName, lastName, subjects = null, isDomainMode = false) {
+  const itemLabel = isDomainMode ? 'Domain' : 'Subject';
   const teacherName = `${firstName} ${lastName}`;
   let teacherSchedules = [];
   
@@ -685,7 +1002,7 @@ function viewTeacherSubjectClasses(firstName, lastName, subjects = null) {
     <div class="modal-dialog modal-lg">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title"><i class="bi bi-book me-2"></i>${teacherName} - Subject Classes</h5>
+          <h5 class="modal-title"><i class="bi bi-book me-2"></i>${teacherName} - ${itemLabel} Classes</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
@@ -707,16 +1024,17 @@ function viewTeacherSubjectClasses(firstName, lastName, subjects = null) {
   
   
   // Display the schedules
-  displayTeacherSubjectClassesFromSchedules(teacherSchedules);
+  displayTeacherSubjectClassesFromSchedules(teacherSchedules, isDomainMode);
 }
 
-function displayTeacherSubjectClassesFromSchedules(schedules) {
+function displayTeacherSubjectClassesFromSchedules(schedules, isDomainMode = false) {
+  const itemLabel = isDomainMode ? 'Domain' : 'Subject';
   if (!schedules || schedules.length === 0) {
     document.getElementById('teacherSubjectClassesList').innerHTML = `
       <div class="text-center py-4">
-        <i class="bi bi-book fs-1 text-muted mb-3"></i>
-        <h6 class="text-muted">No Subject Classes</h6>
-        <p class="text-muted">This teacher is not assigned to any subjects.</p>
+        <i class="bi ${isDomainMode ? 'bi-diagram-3' : 'bi-book'} fs-1 text-muted mb-3"></i>
+        <h6 class="text-muted">No ${itemLabel} Classes</h6>
+        <p class="text-muted">This teacher is not assigned to any ${itemLabel.toLowerCase()}s.</p>
       </div>
     `;
     return;
@@ -740,7 +1058,7 @@ function displayTeacherSubjectClassesFromSchedules(schedules) {
   });
   
   html += '</div>';
-  html += `<div class="mt-3"><small class="text-muted">Total: ${uniqueSubjects.length} subject(s)</small></div>`;
+  html += `<div class="mt-3"><small class="text-muted">Total: ${uniqueSubjects.length} ${itemLabel.toLowerCase()}(s)</small></div>`;
   
   document.getElementById('teacherSubjectClassesList').innerHTML = html;
 }
@@ -773,7 +1091,7 @@ function removeSubjectTeacher(scheduleId, teacherName) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          '<?= csrf_token() ?>': '<?= csrf_hash() ?>'
+          'X-CSRF-TOKEN': '<?= csrf_hash() ?>'
         }
       })
       .then(response => response.json())
@@ -802,6 +1120,9 @@ function viewSectionStudents(sectionId) {
     alert('Section not found.');
     return;
   }
+
+  // Track the section being viewed so post-action refreshes target the right section
+  window.currentSectionId = sectionId;
 
   // Remove any existing modal first
   const existing = document.getElementById('sectionStudentsModal');
@@ -1006,17 +1327,23 @@ function buildEditSectionModal(section) {
             </div>
             <div class="col-md-6 mb-3">
               <label class="form-label fw-semibold">School Year</label>
-              <input type="text" name="school_year" class="form-control" value="${section.school_year}" required>
+              <input type="text" name="school_year" class="form-control" readonly required value="<?= esc($currentSy) ?>">
+              <div class="form-text">Locked to current school year from admin settings.</div>
             </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Grading Type</label>
+            <select name="grading_type" class="form-select">
+              <option value="numerical" ${String(section.grading_type || 'numerical') === 'numerical' ? 'selected' : ''}>Numerical &mdash; Subjects with numerical scores</option>
+              <option value="non_numerical" ${String(section.grading_type || '') === 'non_numerical' ? 'selected' : ''}>Non-Numerical &mdash; Categories with custom symbols</option>
+              <option value="custom" ${String(section.grading_type || '') === 'custom' ? 'selected' : ''}>Custom &mdash; User-defined grading system</option>
+            </select>
+            <div class="form-text">Changing this affects how grades are entered for this section.</div>
           </div>
           <div class="mb-3">
             <label class="form-label fw-semibold">Max Capacity</label>
             <input type="number" name="max_capacity" class="form-control" min="1" required value="${section.max_capacity || 40}">
             <div class="form-text">Current: ${section.current_enrollment || 0} students</div>
-          </div>
-          <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" id="isActiveSwitch" name="is_active" ${section.is_active ? 'checked' : ''}>
-            <label class="form-check-label" for="isActiveSwitch">Active</label>
           </div>
         </div>
         <div class="modal-footer">
@@ -1097,8 +1424,11 @@ document.addEventListener('submit', function(e) {
     e.preventDefault();
     
     const form = e.target;
-    const submitBtn = form.querySelector('button[type="submit"]');
-    const originalText = submitBtn.innerHTML;
+    // The adviser form's submit button lives in the modal footer (form="…"),
+    // so fall back to the form-associated button when it is not a child.
+    const submitBtn = form.querySelector('button[type="submit"]') ||
+      document.querySelector(`button[type="submit"][form="${form.id}"]`);
+    const originalText = submitBtn ? submitBtn.innerHTML : '';
     const adviserSelect = form.querySelector('select[name="adviser_id"]');
     const adviserId = adviserSelect ? adviserSelect.value : '';
     
@@ -1107,8 +1437,10 @@ document.addEventListener('submit', function(e) {
       return;
     }
     
-    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Assigning...';
-    submitBtn.disabled = true;
+    if (submitBtn) {
+      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Assigning...';
+      submitBtn.disabled = true;
+    }
     
     const formData = new FormData(form);
     
@@ -1147,8 +1479,10 @@ document.addEventListener('submit', function(e) {
       showNotification('Network error occurred. Please try again.', 'error');
     })
     .finally(() => {
-      submitBtn.innerHTML = originalText;
-      submitBtn.disabled = false;
+      if (submitBtn) {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+      }
     });
   }
 });
@@ -1188,14 +1522,15 @@ function loadAllStudentsInitially() {
 
 function assignStudents(sectionId, sectionName, gradeLevel) {
   try {
-    // Validate parameters
-    if (!sectionId || !sectionName || !gradeLevel) {
+    // Validate parameters (gradeLevel 0 = Kindergarten, so avoid falsy checks)
+    if (sectionId === undefined || sectionId === null || !sectionName ||
+        gradeLevel === undefined || gradeLevel === null || gradeLevel === '') {
       console.error('Invalid parameters:', { sectionId, sectionName, gradeLevel });
       showNotification('Invalid section information', 'error');
       return;
     }
     
-    if (gradeLevel < 1 || gradeLevel > 6) {
+    if (gradeLevel < 0 || gradeLevel > 6) {
       console.error('Invalid grade level:', gradeLevel);
       showNotification('Invalid grade level', 'error');
       return;
@@ -1235,7 +1570,7 @@ function loadStudentsPage(page = 1, search = '') {
     return;
   }
   
-  if (!currentGradeLevel) {
+  if (currentGradeLevel === null || currentGradeLevel === undefined || currentGradeLevel === '') {
     console.error('Grade level not set');
     listEl.innerHTML = `
       <div class="alert alert-danger">
@@ -1579,7 +1914,7 @@ function buildAssignStudentsModal({ sectionId, sectionName, gradeLevel }) {
         <div class="mb-3">
           <div class="p-3 bg-light rounded">
             <h6 class="mb-1">${sectionName}</h6>
-            <small class="text-muted">${formatGradeLevel(gradeLevel)} • Unassigned students only</small>
+            <small class="text-muted">${formatGradeLevel(gradeLevel)} &bull; Unassigned students only</small>
           </div>
         </div>
         <div id="unassignedStudentsList"></div>
@@ -1806,7 +2141,7 @@ function assignSelectedStudents(sectionId) {
     headers: {
       'Content-Type': 'application/json',
       'X-Requested-With': 'XMLHttpRequest',
-      '<?= csrf_token() ?>': '<?= csrf_hash() ?>'
+      'X-CSRF-TOKEN': '<?= csrf_hash() ?>'
     },
     body: JSON.stringify({ student_ids: selectedStudents })
   })
@@ -1952,9 +2287,11 @@ function viewSectionSubjects(sectionId, sectionName, gradeLevel) {
   const section = sectionsData.find(s => s.id == sectionId);
   const gradingType = section ? (section.grading_type || 'numerical') : 'numerical';
   
-  // For non-numerical/custom sections, show domain management instead of subjects
+  // For non-numerical/custom sections, show the developmental-domain chooser
+  // instead of subjects. (The toolbar already renders a "Domains" button for
+  // these; this guard covers any stale page still calling the Subjects one.)
   if (gradingType === 'non_numerical' || gradingType === 'custom') {
-    window.location.href = `<?= base_url('teacher/sned/') ?>`;
+    viewSectionDomains(sectionId);
     return;
   }
   
@@ -2027,7 +2364,6 @@ function displaySectionSubjects(subjects) {
         <h6 class="text-muted">No subjects found</h6>
         <p class="text-muted">No subjects are linked to this section yet.</p>
         <button class="btn btn-primary" onclick="addSubjectToSection()">
-          <i class="bi bi-plus-circle me-1"></i>Add Subjects from Grade Level
           <i class="bi bi-plus-circle me-1"></i>Add Subjects from Grade Level
         </button>
       </div>
@@ -2154,6 +2490,205 @@ function toggleAllSubjects() {
   });
 }
 
+// ---- Non-numerical sections: choose from the shared developmental domains ----
+// A non-numerical section does not use subjects. Instead it uses the shared
+// developmental domains (categories with performance indicators) created once
+// on Settings, and ticks the ones this section actually assesses.
+function viewSectionDomains(sectionId) {
+  const existing = document.getElementById('sectionDomainsModal');
+  if (existing) existing.remove();
+
+  const html = `
+  <div class="modal fade" id="sectionDomainsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-diagram-3 me-2"></i><span id="sectionDomainsTitle">Developmental Domains</span></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div id="sectionDomainsInfo" class="mb-3"></div>
+          <div id="sectionDomainsList">
+            <div class="text-center py-4">
+              <div class="spinner-border text-primary" role="status"></div>
+              <p class="text-muted mt-2 mb-0">Loading developmental domains...</p>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <span id="sectionDomainsCount" class="text-muted small me-auto"></span>
+          <button type="button" class="btn btn-success" id="saveSectionDomainsBtn">
+            <i class="bi bi-check-circle me-1"></i>Save Selection
+          </button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="background-color: #495057; border-color: #495057;">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+
+  const modalEl = document.getElementById('sectionDomainsModal');
+  const modal = new bootstrap.Modal(modalEl, { backdrop: true, keyboard: true, focus: true });
+  modal.show();
+
+  const listEl = document.getElementById('sectionDomainsList');
+
+  fetch(`<?= base_url('admin/sned/section-domains/') ?>${sectionId}`)
+    .then(res => res.json())
+    .then(data => {
+      if (!data.success) {
+        listEl.innerHTML = `
+          <div class="alert alert-danger mb-0">
+            <i class="bi bi-exclamation-triangle me-1"></i>${data.error || 'Could not load the developmental domains.'}
+          </div>`;
+        document.getElementById('saveSectionDomainsBtn').disabled = true;
+        return;
+      }
+
+      const section = data.section || {};
+      document.getElementById('sectionDomainsTitle').textContent =
+        `${section.name || 'Section'} - Developmental Domains`;
+      document.getElementById('sectionDomainsInfo').innerHTML = `
+        <div class="alert alert-info mb-0">
+          <i class="bi bi-info-circle me-1"></i>
+          <strong>${escapeSectionDomainHtml(section.name || '')}</strong> is a non-numerical section, so it is assessed through
+          <strong>developmental domains</strong> with performance indicators instead of subjects.
+          Domains are created on <a href="<?= base_url('admin/settings') ?>" target="_blank">Settings</a>;
+          tick here the ones this section uses.
+        </div>`;
+
+      renderSectionDomainChoices(listEl, data.domains || [], data.configured);
+
+      const saveBtn = document.getElementById('saveSectionDomainsBtn');
+      saveBtn.onclick = () => saveSectionDomains(sectionId, modalEl);
+    })
+    .catch(error => {
+      listEl.innerHTML = `
+        <div class="alert alert-danger mb-0">
+          <i class="bi bi-exclamation-triangle me-1"></i>Error loading domains: ${error.message}
+        </div>`;
+      document.getElementById('saveSectionDomainsBtn').disabled = true;
+    });
+}
+
+function escapeSectionDomainHtml(value) {
+  const div = document.createElement('div');
+  div.textContent = value == null ? '' : String(value);
+  return div.innerHTML;
+}
+
+function renderSectionDomainChoices(listEl, domains, configured) {
+  if (!domains || domains.length === 0) {
+    listEl.innerHTML = `
+      <div class="text-center py-4">
+        <i class="bi bi-diagram-3 fs-1 text-muted mb-3"></i>
+        <h6 class="text-muted">No shared domains defined yet</h6>
+        <p class="text-muted mb-3">Developmental domains are created once on the Settings page and then shared by every non-numerical section.</p>
+        <a href="<?= base_url('admin/settings') ?>" target="_blank" class="btn btn-primary">
+          <i class="bi bi-plus-circle me-1"></i>Add Domains in Settings
+        </a>
+      </div>`;
+    updateSectionDomainsCount();
+    return;
+  }
+
+  listEl.innerHTML = `
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <div class="form-check mb-0">
+        <input class="form-check-input" type="checkbox" id="selectAllSectionDomains">
+        <label class="form-check-label fw-semibold" for="selectAllSectionDomains">Select all</label>
+      </div>
+      <span class="badge bg-secondary">${domains.length} shared domain${domains.length === 1 ? '' : 's'}</span>
+    </div>
+    ${!configured ? `
+      <div class="alert alert-warning py-2 mb-2 small">
+        <i class="bi bi-clock-history me-1"></i>This section was never configured, so it currently uses
+        <strong>every</strong> shared domain (all ticked below).
+      </div>` : ''}
+    <div class="list-group">
+      ${domains.map(d => `
+        <label class="list-group-item d-flex align-items-start gap-2" for="section-domain-${d.id}">
+          <input class="form-check-input mt-1 section-domain-checkbox" type="checkbox"
+                 value="${d.id}" id="section-domain-${d.id}" ${d.selected ? 'checked' : ''}>
+          <span class="flex-grow-1">
+            <strong>${escapeSectionDomainHtml(d.name)}</strong>
+            <span class="badge bg-warning text-dark ms-2">${d.field_count} Field${d.field_count === 1 ? '' : 's'}</span>
+            ${d.description ? `<div class="text-muted small mt-1">${escapeSectionDomainHtml(d.description)}</div>` : ''}
+          </span>
+        </label>`).join('')}
+    </div>`;
+
+  const selectAll = document.getElementById('selectAllSectionDomains');
+  const boxes = listEl.querySelectorAll('.section-domain-checkbox');
+
+  const syncSelectAll = () => {
+    const checked = listEl.querySelectorAll('.section-domain-checkbox:checked').length;
+    if (selectAll) {
+      selectAll.checked = checked === boxes.length;
+      selectAll.indeterminate = checked > 0 && checked < boxes.length;
+    }
+    updateSectionDomainsCount();
+  };
+
+  if (selectAll) {
+    selectAll.addEventListener('change', () => {
+      boxes.forEach(cb => { cb.checked = selectAll.checked; });
+      syncSelectAll();
+    });
+  }
+  boxes.forEach(cb => cb.addEventListener('change', syncSelectAll));
+
+  syncSelectAll();
+}
+
+function updateSectionDomainsCount() {
+  const countEl = document.getElementById('sectionDomainsCount');
+  if (!countEl) return;
+  const total = document.querySelectorAll('.section-domain-checkbox').length;
+  const checked = document.querySelectorAll('.section-domain-checkbox:checked').length;
+  countEl.textContent = total === 0 ? '' : `${checked} of ${total} selected`;
+}
+
+function saveSectionDomains(sectionId, modalEl) {
+  const ids = Array.from(document.querySelectorAll('.section-domain-checkbox:checked'))
+    .map(cb => parseInt(cb.value, 10))
+    .filter(v => !isNaN(v));
+
+  const saveBtn = document.getElementById('saveSectionDomainsBtn');
+  const original = saveBtn.innerHTML;
+  saveBtn.disabled = true;
+  saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+
+  fetch('<?= base_url('admin/sned/section-domains/save') ?>', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+      'X-CSRF-TOKEN': '<?= csrf_hash() ?>'
+    },
+    body: JSON.stringify({ section_id: sectionId, domain_ids: ids })
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        bootstrap.Modal.getInstance(modalEl)?.hide();
+        showNotification(data.message || 'Domain selection saved.', 'success');
+        // Reload so the row and any counts reflect the new selection.
+        setTimeout(() => location.reload(), 1200);
+      } else {
+        showNotification(data.error || 'Could not save the domain selection.', 'error');
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = original;
+      }
+    })
+    .catch(error => {
+      showNotification('Error saving the selection: ' + error.message, 'error');
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = original;
+    });
+}
+
 function saveSelectedSubjects() {
   const selected = Array.from(document.querySelectorAll('.subject-checkbox:checked')).map(cb => cb.value);
   const sectionId = window.currentSectionId;
@@ -2167,7 +2702,7 @@ function saveSelectedSubjects() {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      '<?= csrf_token() ?>': '<?= csrf_hash() ?>'
+      'X-CSRF-TOKEN': '<?= csrf_hash() ?>'
     },
     body: JSON.stringify({ section_id: sectionId, subject_ids: selected })
   })
@@ -2206,13 +2741,9 @@ function editSubject(id, code, name, isActive, sectionSubjectId) {
             <label class="form-label">Subject Name</label>
             <input type="text" class="form-control" id="subjectName" value="${name}" required>
           </div>
-          <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="isActive" ${isActive ? 'checked' : ''}>
-            <label class="form-check-label" for="isActive">Active</label>
-          </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="background-color: #495057; border-color: #495057;">Cancel</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
           <button type="submit" class="btn btn-primary">Update Subject</button>
         </div>
       </form>
@@ -2234,7 +2765,7 @@ function deleteSubject(id, code) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          '<?= csrf_token() ?>': '<?= csrf_hash() ?>'
+          'X-CSRF-TOKEN': '<?= csrf_hash() ?>'
         }
       })
       .then(response => response.json())
@@ -2258,10 +2789,9 @@ function saveSubject(event, action, gradeLevel, id = null) {
   
   const code = document.getElementById('subjectCode').value;
   const name = document.getElementById('subjectName').value;
-  const isActive = document.getElementById('isActive').checked ? 1 : 0;
   
   const url = action === 'add' ? '<?= base_url('admin/subjects/add') ?>' : `<?= base_url('admin/subjects/edit/') ?>${id}`;
-  const data = { subject_code: code, subject_name: name, is_active: isActive };
+  const data = { subject_code: code, subject_name: name };
   if (action === 'add') data.grade_level = gradeLevel;
   if (action === 'edit' && window.currentSectionSubjectId) data.section_subject_id = window.currentSectionSubjectId;
   
@@ -2340,11 +2870,11 @@ function buildBulkEditSectionsModal() {
           </div>
           <div class="col-md-6">
             <label class="form-label fw-semibold">Grading Type</label>
-            <select id="bulkEditGradingType" class="form-select" onchange="updateGradingTypeForAllSections()">
+            <select id="bulkEditGradingType" class="form-select">
               <option value="numerical">Numerical</option>
               <option value="non_numerical">Non-Numerical</option>
             </select>
-            <div class="form-text">All sections in this grade level will use this grading type</div>
+            <div class="form-text">Applied to all sections in this grade level when you click Save Changes</div>
           </div>
         </div>
 
@@ -2404,8 +2934,11 @@ function loadSectionsForBulkEdit() {
       <div class="row">
         <div class="col-md-6">
           <div class="mb-3">
-            <label class="form-label fw-semibold">School Year</label>
-            <input type="text" id="bulkEditSchoolYear" class="form-control" value="${sections[0].school_year}">
+            <label class="form-label fw-semibold" for="bulkEditSchoolYear">School Year</label>
+            <select id="bulkEditSchoolYear" class="form-select">
+              ${schoolYearChoices(sections[0].school_year)}
+            </select>
+            <div class="form-text"><i class="bi bi-info-circle"></i> Format: YYYY-YYYY (e.g. 2026-2027)</div>
           </div>
         </div>
         <div class="col-md-6">
@@ -2477,77 +3010,7 @@ function loadSectionsForBulkEdit() {
   window.currentBulkEditSections = sections;
 }
 
-function updateGradingTypeForAllSections() {
-  const gradingType = document.getElementById('bulkEditGradingType').value;
-  const sections = window.currentBulkEditSections || [];
-  
-  if (sections.length === 0) return;
-  
-  // Show confirmation
-  if (!confirm(`Change all ${sections.length} sections to ${gradingType === 'non_numerical' ? 'Non-Numerical' : 'Numerical'} grading? This will update all sections in this grade level.`)) {
-    // Revert the select
-    const currentTypes = [...new Set(sections.map(s => s.grading_type || 'numerical'))];
-    if (currentTypes.length === 1) {
-      document.getElementById('bulkEditGradingType').value = currentTypes[0];
-    }
-    return;
-  }
-  
-  let completed = 0;
-  let failed = 0;
-  let total = sections.length;
-  
-  sections.forEach(section => {
-    const formData = new FormData();
-    formData.append('section_name', section.section_name);
-    formData.append('grade_level', section.grade_level);
-    formData.append('school_year', section.school_year);
-    formData.append('max_capacity', section.max_capacity);
-    formData.append('grading_type', gradingType);
-    formData.append('is_active', section.is_active ? '1' : '0');
-    formData.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
-    
-    fetch(`<?= base_url('admin/sections/update/') ?>${section.id}`, {
-      method: 'POST',
-      body: formData
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (data.success) {
-        completed++;
-      } else {
-        failed++;
-      }
-      
-      // Show notification when all requests complete
-      if (completed + failed === total) {
-        if (completed > 0 && failed === 0) {
-          showNotification(`Successfully updated ${completed} section(s) to ${gradingType === 'non_numerical' ? 'Non-Numerical' : 'Numerical'} grading`, 'success');
-          setTimeout(() => location.reload(), 1500);
-        } else if (completed > 0 && failed > 0) {
-          showNotification(`Updated ${completed} section(s), but ${failed} failed`, 'warning');
-          setTimeout(() => location.reload(), 2000);
-        } else {
-          showNotification(`Failed to update ${failed} section(s)`, 'error');
-        }
-      }
-    })
-    .catch(error => {
-      failed++;
-      console.error('Update error:', error);
-      
-      // Show notification when all requests complete
-      if (completed + failed === total) {
-        if (completed > 0 && failed > 0) {
-          showNotification(`Updated ${completed} section(s), but ${failed} failed`, 'warning');
-          setTimeout(() => location.reload(), 2000);
-        } else if (failed === total) {
-          showNotification(`Failed to update ${failed} section(s)`, 'error');
-        }
-      }
-    });
-  });
-}
+// Grading type changes are applied via saveBulkEdit() when "Save Changes" is clicked.
 
 function saveBulkEdit() {
   const schoolYear = document.getElementById('bulkEditSchoolYear').value;
@@ -2556,7 +3019,12 @@ function saveBulkEdit() {
   const sections = window.currentBulkEditSections || [];
   
   if (!schoolYear) {
-    showNotification('Please enter a school year', 'warning');
+    showNotification('Please select a school year', 'warning');
+    return;
+  }
+
+  if (!/^\d{4}-\d{4}$/.test(schoolYear)) {
+    showNotification('Invalid school year format. Please use YYYY-YYYY (e.g. 2026-2027).', 'error');
     return;
   }
   
@@ -2568,7 +3036,8 @@ function saveBulkEdit() {
   let completed = 0;
   let failed = 0;
   let total = sections.length;
-  
+  let lastError = '';
+
   sections.forEach(section => {
     const formData = new FormData();
     formData.append('section_name', section.section_name);
@@ -2578,17 +3047,20 @@ function saveBulkEdit() {
     formData.append('grading_type', gradingType);
     formData.append('is_active', section.is_active ? '1' : '0');
     formData.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
-    
+
     fetch(`<?= base_url('admin/sections/update/') ?>${section.id}`, {
       method: 'POST',
-      body: formData
+      body: formData,
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
     })
-    .then(r => r.json())
+    .then(r => r.json().catch(() => ({ success: false, message: 'Unexpected server response (not JSON)' })))
     .then(data => {
       if (data.success) {
         completed++;
       } else {
         failed++;
+        lastError = data.message || data.error || 'Unknown error';
+        console.error(`Section #${section.id} update failed:`, data);
       }
       
       // Show notification when all requests complete
@@ -2600,13 +3072,14 @@ function saveBulkEdit() {
           showNotification(`Updated ${completed} section(s), but ${failed} failed`, 'warning');
           setTimeout(() => location.reload(), 2000);
         } else {
-          showNotification(`Failed to update ${failed} section(s)`, 'error');
+          showNotification(`Failed to update ${failed} section(s)${lastError ? ': ' + lastError : ''}`, 'error');
         }
       }
     })
     .catch(error => {
       failed++;
       console.error('Update error:', error);
+      lastError = 'Network error - please check your connection.';
       
       // Show notification when all requests complete
       if (completed + failed === total) {
@@ -2614,7 +3087,7 @@ function saveBulkEdit() {
           showNotification(`Updated ${completed} section(s), but ${failed} failed`, 'warning');
           setTimeout(() => location.reload(), 2000);
         } else if (failed === total) {
-          showNotification(`Failed to update ${failed} section(s)`, 'error');
+          showNotification(`Failed to update ${failed} section(s)${lastError ? ': ' + lastError : ''}`, 'error');
         }
       }
     });
@@ -2732,21 +3205,29 @@ function deleteSection(sectionId, sectionName, currentEnrollment) {
         headers: {
           'Content-Type': 'application/json',
           'X-Requested-With': 'XMLHttpRequest',
-          '<?= csrf_token() ?>': '<?= csrf_hash() ?>'
+          'X-CSRF-TOKEN': '<?= csrf_hash() ?>'
         }
       })
-      .then(response => response.json())
-      .then(data => {
-        if (data.success) {
+      .then(async response => {
+        let data = null;
+        try { data = await response.json(); } catch (e) { /* non-JSON (e.g. security error page) */ }
+        if (response.ok && data && data.success) {
           showNotification(`Section "${sectionName}" deleted successfully!`, 'success');
           setTimeout(() => location.reload(), 1000);
-        } else {
-          showNotification(data.message || 'Failed to delete section', 'error');
+          return;
         }
+        // The delete did NOT happen - tell the truth and refresh so the page
+        // gets a fresh CSRF token and the list reflects the real database.
+        const reason = (data && (data.message || data.error))
+          || (response.status === 403 ? 'Your session expired. The page has been refreshed - please try again.'
+            : 'Failed to delete section (HTTP ' + response.status + '). The page has been refreshed - please try again.');
+        showNotification(reason, 'error');
+        setTimeout(() => location.reload(), 2500);
       })
       .catch(error => {
         console.error('Error:', error);
-        showNotification('Network error occurred. Please try again.', 'error');
+        showNotification('Failed to reach the server. The page has been refreshed - please try again.', 'error');
+        setTimeout(() => location.reload(), 2500);
       });
     }
   );
@@ -2833,7 +3314,7 @@ function confirmAutoAssign(gradeLevel) {
     headers: {
       'Content-Type': 'application/json',
       'X-Requested-With': 'XMLHttpRequest',
-      '<?= csrf_token() ?>': '<?= csrf_hash() ?>'
+      'X-CSRF-TOKEN': '<?= csrf_hash() ?>'
     }
   })
   .then(response => response.json())
@@ -2857,7 +3338,7 @@ function rebalanceGrade(gradeLevel) {
   }
 }
 
-function loadSubjectTeachersAssignment(sectionId, gradeLevel) {
+function loadSubjectTeachersAssignment(sectionId, gradeLevel, gradingType) {
   const contentEl = document.getElementById('subjectTeachersContent');
   
   console.log('Loading subjects for section:', sectionId, 'grade:', gradeLevel);
@@ -2867,13 +3348,23 @@ function loadSubjectTeachersAssignment(sectionId, gradeLevel) {
     .then(data => {
       console.log('Subjects API response:', data);
       
+      // Trust the server (it knows the section's grading type) and fall back to
+      // what the caller passed in.
+      const isDomainMode = data.is_non_numerical === true || gradingType === 'non_numerical';
+
       if (!data.success || !data.subjects || data.subjects.length === 0) {
-        console.warn('No subjects found. Response:', data);
+        console.warn('Nothing assignable found. Response:', data);
         contentEl.innerHTML = `
           <div class="alert alert-warning">
-            <i class="bi bi-exclamation-triangle"></i> No subjects found for this section.
-            <br><small>Please add subjects to this section first from the main sections page.</small>
-            <br><small class="text-muted">Debug: Section ID = ${sectionId}, Grade = ${gradeLevel}</small>
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            ${isDomainMode
+              ? 'No developmental domains are available for this section.'
+              : 'No subjects found for this section.'}
+            <br><small>
+              ${isDomainMode
+                ? 'Add domains on the Settings page, then use <strong>Domains</strong> on this section\'s row to tick the ones it uses.'
+                : 'Please add subjects to this section first from the main sections page.'}
+            </small>
           </div>
         `;
         return;
@@ -2897,7 +3388,7 @@ function loadSubjectTeachersAssignment(sectionId, gradeLevel) {
             .then(assignData => {
               console.log('Assignments API response:', assignData);
               const assignments = assignData.success ? assignData.assignments : [];
-              displaySubjectTeacherAssignment(data.subjects, teacherData.teachers, assignments, sectionId);
+              displaySubjectTeacherAssignment(data.subjects, teacherData.teachers, assignments, sectionId, isDomainMode);
             });
         });
     })
@@ -2907,7 +3398,7 @@ function loadSubjectTeachersAssignment(sectionId, gradeLevel) {
     });
 }
 
-function displaySubjectTeacherAssignment(subjects, teachers, assignments, sectionId) {
+function displaySubjectTeacherAssignment(subjects, teachers, assignments, sectionId, isDomainMode) {
   const contentEl = document.getElementById('subjectTeachersContent');
   
   // Get the section's adviser ID to exclude from subject teacher list
@@ -2928,7 +3419,7 @@ function displaySubjectTeacherAssignment(subjects, teachers, assignments, sectio
         <div class="d-flex justify-content-between align-items-start mb-2">
           <div>
             <h6 class="mb-1" style="font-size: 16px;">${subject.subject_name}</h6>
-            <span class="text-muted" style="font-size: 14px;">${subject.subject_code}</span>
+            <span class="text-muted" style="font-size: 14px;">${subject.is_domain || isDomainMode ? 'Developmental domain' : (subject.subject_code || '')}</span>
           </div>
           ${assigned ? `<span class="badge bg-success" style="font-size: 14px;">Assigned</span>` : `<span class="badge bg-warning" style="font-size: 14px;">Not Assigned</span>`}
         </div>
@@ -2951,9 +3442,14 @@ function displaySubjectTeacherAssignment(subjects, teachers, assignments, sectio
   });
   
   html += '</div>';
-  html += '<button type="submit" class="btn btn-primary w-100"><i class="bi bi-plus-circle me-2"></i>Assign Teachers</button>';
+  html += `<button type="submit" class="btn btn-primary w-100"><i class="bi bi-plus-circle me-2"></i>Assign ${isDomainMode ? 'Domain ' : ''}Teachers</button>`;
   html += '</form>';
   contentEl.innerHTML = html;
+
+  // Same searchable teacher list for every subject's selector
+  contentEl.querySelectorAll('select[data-subject-id]').forEach(sel => {
+    makeSearchableSelect(sel, { placeholder: 'Search by name or email...', noun: 'teacher', size: 'sm' });
+  });
 }
 
 function assignSubjectTeacher(event, sectionId, subjectId) {
@@ -3043,17 +3539,20 @@ function removeSubjectTeacherAssignment(scheduleId, sectionId) {
     'Confirm Action',
     'Remove this teacher assignment?',
     () => {
-      fetch(`<?= base_url('admin/sections/remove-subject-teacher/') ?>${scheduleId}`, {
+      // all=1: also delete the duplicate teacher_schedules rows this section
+      // accumulated from earlier bulk assigns, so the teacher actually shows
+      // as removed after one click (the modal lists one row per subject).
+      fetch(`<?= base_url('admin/sections/remove-subject-teacher/') ?>${scheduleId}?all=1`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          '<?= csrf_token() ?>': '<?= csrf_hash() ?>'
+          'X-CSRF-TOKEN': '<?= csrf_hash() ?>'
         }
       })
       .then(r => r.json())
       .then(data => {
         if (data.success) {
-          showNotification('Teacher removed successfully', 'success');
+          showNotification(data.message || 'Teacher removed successfully', 'success');
           loadSubjectTeachersAssignment(sectionId, window.currentGradeLevel);
         } else {
           showNotification(data.message || 'Failed to remove teacher', 'error');
@@ -3085,7 +3584,7 @@ function buildCreateSectionModal() {
           <div class="row">
             <div class="col-md-6 mb-3">
               <label class="form-label fw-semibold">Grade Level *</label>
-              <select name="grade_level" id="createGradeLevel" class="form-select" required onchange="toggleCreateGradeLevelCustom(this)">
+              <select name="grade_level" id="createGradeLevel" class="form-select" required onchange="toggleCreateGradeLevelCustom(this); syncCreateGradingType(this.value);">
                 <option value="">Select Grade</option>
                 <?php foreach (grade_level_options() as $g): ?>
                   <option value="<?= $g ?>"><?= esc(grade_level_label($g)) ?></option>
@@ -3150,6 +3649,23 @@ function buildCreateSectionModal() {
   
   document.body.insertAdjacentHTML('beforeend', html);
   return document.getElementById('createSectionModal');
+}
+
+// Per-grade grading type map (from Settings). When the admin picks a grade
+// level on the create form, pre-select the matching grading type.
+window.GRADE_GRADING_TYPES = <?= json_encode(grade_grading_types()) ?>;
+
+function syncCreateGradingType(gradeLevel) {
+  const grade = parseInt(gradeLevel, 10);
+  if (isNaN(grade)) return;
+
+  let type = window.GRADE_GRADING_TYPES[String(grade)] || 'numerical';
+  // Grade 7 is always SNED (non-numerical); grade 99 is a custom system.
+  if (grade === 7) type = 'non_numerical';
+  if (grade === 99) type = 'custom';
+
+  const radio = document.querySelector(`input[name="grading_type"][value="${type}"]`);
+  if (radio) radio.checked = true;
 }
 </script>
 

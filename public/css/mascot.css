@@ -1,0 +1,1405 @@
+/* ==========================================================================
+   Tappy — CSCS Tap n Track mascot
+   --------------------------------------------------------------------------
+   Loaded by BOTH layouts (layout.php and dashboard_layout.php) because the
+   mascot appears on the public pages, the auth pages and every dashboard.
+
+   The artwork is AI-generated and pasted in later, so the whole file is
+   written to degrade to nothing: a .mascot wrapper whose <img> fails to load
+   is hidden by :not(:defined)-style fallbacks below, and every background-image
+   rule is decorative only. The site is fully functional with zero images.
+
+   Colours come from the app.css tokens, never a literal hex.
+   ========================================================================== */
+
+:root {
+  --mascot-blue: var(--color-primary, #1e40af);
+  --mascot-sky: var(--color-primary-light, #3b82f6);
+  --mascot-amber: var(--color-accent, #f59e0b);
+  --mascot-emerald: var(--color-secondary, #059669);
+  --mascot-size: 120px;
+
+  /* Placement scale. One name per job, so a page asks for "big" instead of
+     inventing a pixel value and drifting away from the rest of the system.
+     --mascot-size is the box's LONG edge; mascot_img() also sets
+     --mascot-ratio from the artwork, so the short edge follows the real
+     proportions instead of letterboxing inside a square. */
+  --mascot-xs: 56px;    /* inline sticker beside a heading */
+  --mascot-sm: 96px;    /* alert decoration */
+  --mascot-md: 140px;   /* dialog decoration */
+  --mascot-lg: 200px;   /* empty states */
+  --mascot-xl: 260px;   /* in-page banners */
+  --mascot-hero: 320px; /* sign-in, about, dashboard hero */
+  --mascot-dock: 220px; /* floating dock */
+  --mascot-tour: 140px; /* guided tour card */
+
+  /* Wide-format placements. These are not a continuation of the square scale
+     above: a poster is 21:9, so its long edge is its WIDTH and the short edge
+     follows from --mascot-ratio. Sizing them off the same tokens as a portrait
+     pose would make them enormous. */
+  --mascot-poster: 520px; /* ultrawide CTA/section art */
+  --mascot-band: 120px;   /* section divider band */
+  --mascot-footer: 96px;  /* Tappy peeking over the footer edge */
+  --mascot-logo: 40px;    /* icon-scale mark in a navbar or tab */
+}
+
+/* The peek is positioned against the footer's own top edge, so the footer has
+   to be a positioning context. Set here rather than in layout.php's inline
+   styles, which are a single long declaration string and not a place to add
+   layout rules. */
+.site-footer {
+  position: relative;
+}
+
+/* --- Tappy standing on the footer ----------------------------------------
+   The figure sits on the footer's top border: the wrapper is bottom-aligned at
+   bottom:100% so the artwork's own bottom edge meets the border. Nothing is
+   clipped here on purpose - an overflow:hidden on the footer would cut the art
+   at the wrong place and would also clip any focus ring inside the footer.
+
+   The wrapper is a sibling of .footer-container rather than a child, so it
+   cannot disturb the footer's grid. It is aria-hidden and pointer-events:none
+   so it never intercepts a click or reaches a screen reader. */
+.mascot-footer-peek-wrap {
+  position: absolute;
+  bottom: 100%;
+  right: 4%;
+  margin: 0;
+  line-height: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.mascot-footer-peek-wrap .mascot {
+  --mascot-size: var(--mascot-footer);
+}
+
+@media (max-width: 640px) {
+  .mascot-footer-peek-wrap {
+    right: 2%;
+  }
+
+  .mascot-footer-peek-wrap .mascot {
+    --mascot-size: 64px;
+  }
+}
+
+/* --- Wide section-divider band --------------------------------------------
+   Sized from the artwork's own 3:1 proportion rather than a fixed height. The
+   earlier version used a fixed clamp() height with background-size:100% auto,
+   which scaled a 640x212 image to 397px tall inside a 108px box - so only the
+   bottom 27% of the band was ever visible, and it cropped differently again at
+   every breakpoint. Letting the aspect ratio drive the height means the whole
+   band always shows.
+
+   Capped by max-width so it reads as a flourish between sections rather than a
+   second hero: at 760px wide the band is about 250px tall. */
+.mascot-band-divider {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  aspect-ratio: 640 / 212;
+  background-image: var(--mascot-band-image);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .mascot-band-divider {
+    max-width: 480px;
+  }
+}
+
+/* --- Full-width poster banner --------------------------------------------
+   The art is full-frame, so this is a stacked block and never a background for
+   text. The wrapper .mascot is sized from --mascot-ratio, the artwork's real
+   proportion, so the fixed aspect-ratio on .mascot is released here and the
+   width drives the height instead - otherwise a wide poster would be
+   letterboxed inside a square-derived box. */
+.mascot-poster-banner {
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+}
+
+.mascot-poster-banner .mascot {
+  --mascot-size: 100%;
+  aspect-ratio: auto;
+  height: auto;
+  max-width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+.mascot-poster-banner .mascot img {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+/* The "Need help?" trigger, now a small icon beside the step counter.
+
+   It is white, and it has to be. The registration card is rgba(30, 64, 175, 0.95)
+   dark blue, so the previous styling -- dark blue #1e40af text on a 10%-opacity
+   blue wash -- was dark text on a dark card and effectively unreadable. White on
+   the card is the only combination with real contrast here.
+
+   Icon rather than a labelled button for the same reason it moved out of the
+   header: the form is the primary action on this page and this is a way out for
+   anyone stuck, so it must not read as a second call to action. */
+
+.reg-help-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: 1.05rem;
+  line-height: 1;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 50%;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+/* Invert on hover: solid white disc, dark glyph. */
+.reg-help-open:hover,
+.reg-help-open:focus-visible {
+  color: #1e3a8a;
+  background: #fff;
+  border-color: #fff;
+}
+
+/* Keep the focus ring in the site's amber so it is visible on the dark card and
+   clearly distinct from the white hover state. */
+.reg-help-open:focus-visible {
+  outline: 2px solid #fbbf24;
+  outline-offset: 2px;
+}
+
+/* --- Registration help modal ----------------------------------------------
+   The guidance a parent reads before starting, and the one they open again when
+   a field does not make sense.
+
+   Dark with white type, matching the registration card it is opened from. It
+   used to be a white sheet, which flashed a bright panel into the middle of an
+   otherwise dark page; matching the card removes that jolt and lets the text
+   carry the dialog on its own. The school banner, the logo and the ENROLL NOW
+   poster are gone from the markup -- decoration competing with the one thing
+   this dialog is for. */
+.reg-help-modal__content {
+  background: #1e3a8a;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+  overflow: hidden;
+  color: #fff;
+}
+
+.reg-help-modal__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem 0.75rem;
+}
+
+.reg-help-modal__title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin: 0;
+  color: #fff;
+}
+
+/* Bootstrap ships a dark close glyph, which vanishes on this panel. */
+.reg-help-modal__close {
+  margin-left: auto;
+  filter: invert(1) grayscale(100%) brightness(200%);
+  opacity: 0.75;
+}
+
+.reg-help-modal__close:hover {
+  opacity: 1;
+}
+
+.reg-help-modal__body {
+  padding: 0 1.5rem 0.5rem;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.reg-help-modal__intro {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.reg-help-modal__lead {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: rgba(255, 255, 255, 0.92);
+  margin-bottom: 0;
+}
+
+/* Capped hard, and sharing a row with the opening line. Full width, a 2:1
+   illustration pushed the guidance below the fold, which defeats the dialog. */
+.reg-help-modal__poster {
+  flex: 0 0 auto;
+  width: 250px;
+  max-width: 42%;
+}
+
+.reg-help-modal__poster .mascot-poster-banner {
+  width: 100%;
+  max-width: 250px;
+  height: auto;
+}
+
+.reg-help-modal__heading {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #fbbf24;
+  margin: 1.25rem 0 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.reg-help-modal__text {
+  color: rgba(255, 255, 255, 0.88);
+  margin-bottom: 0.5rem;
+}
+
+.reg-help-modal__list {
+  padding-left: 1.15rem;
+  color: rgba(255, 255, 255, 0.92);
+  margin-bottom: 0.5rem;
+}
+
+.reg-help-modal__list li {
+  margin-bottom: 0.5rem;
+}
+
+/* The lead-in phrases are the scannable part of each bullet, so they take full
+   white while the explanation around them stays slightly softened. */
+.reg-help-modal__list strong {
+  color: #fff;
+}
+
+.reg-help-modal__list--options {
+  list-style: none;
+  padding-left: 0;
+}
+
+.reg-help-modal__list--options li {
+  padding: 0.65rem 0.85rem;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 0 8px 8px 0;
+}
+
+.reg-help-modal__note {
+  background: rgba(251, 191, 36, 0.12);
+  border-radius: 0 8px 8px 0;
+  padding: 0.75rem 0.9rem;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.9rem;
+  margin-top: 1rem;
+  margin-bottom: 0;
+}
+
+.reg-help-modal__foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 1rem 1.5rem 1.25rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+/* Bootstrap's default primary blue is too close to this panel to read as a
+   button at all. The site's amber reads clearly against it. */
+.reg-help-modal__foot .btn-primary {
+  background: #fbbf24;
+  border-color: #fbbf24;
+  color: #1e3a8a;
+  font-weight: 700;
+}
+
+.reg-help-modal__foot .btn-primary:hover,
+.reg-help-modal__foot .btn-primary:focus {
+  background: #f59e0b;
+  border-color: #f59e0b;
+  color: #1e3a8a;
+}
+
+@media (max-width: 640px) {
+  .reg-help-modal__header,
+  .reg-help-modal__body,
+  .reg-help-modal__foot {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  /* No room for a side-by-side intro on a phone, so the poster stacks above the
+     opening line and is capped so it cannot dominate the dialog. */
+  .reg-help-modal__intro {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .reg-help-modal__poster {
+    width: 100%;
+    max-width: 250px;
+    margin: 0 auto;
+  }
+
+  .reg-help-modal__lead {
+    margin-bottom: 0;
+  }
+}
+
+/* The poster on the welcome modal's "What you can do here" slide.
+
+   Capped well under the dialog width: the slide also carries a bulleted list,
+   and a full-bleed 2:1 illustration would push that list below the fold. */
+.mascot-welcome__poster {
+  margin: 0.75rem auto 1rem;
+  max-width: 320px;
+}
+
+.mascot-welcome__poster .mascot-poster-banner {
+  max-width: 320px;
+}
+
+/* --- Announcements page header -------------------------------------------
+   The poster is a wide illustration and the megaphone is a small figure, so
+   they stack: the poster on top, Tappy beneath it, both left-aligned to the
+   content column. Collapses entirely under 640px - a full-width illustration
+   above a list of announcements is more furniture than the page needs on a
+   phone. */
+.mascot-announce-head {
+  margin-bottom: 1rem;
+}
+
+.mascot-announce-head__chip {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
+.mascot-announce-head__chip .mascot {
+  --mascot-size: 96px;
+}
+
+@media (max-width: 640px) {
+  .mascot-announce-head {
+    display: none;
+  }
+}
+
+/* --- Seamless pattern tile ------------------------------------------------
+   Deliberately faint. This sits behind body text, so it has to be readable
+   through, and it must be hidden entirely on small screens where it would only
+   add weight to a scroll the user is trying to get through. */
+.mascot-pattern {
+  position: absolute;
+  inset: 0;
+  background-repeat: repeat;
+  background-position: center;
+  opacity: 0.05;
+  pointer-events: none;
+}
+
+@media (max-width: 768px) {
+  .mascot-pattern {
+    display: none;
+  }
+}
+
+/* --- Core wrapper ------------------------------------------------------- */
+.mascot {
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: center;
+  /* The long edge is fixed by --mascot-size and the short edge comes from the
+     artwork's own ratio. The 1 fallback keeps an unreadable or missing file
+     square rather than collapsing the layout. */
+  width: auto;
+  height: var(--mascot-size);
+  aspect-ratio: var(--mascot-ratio, 1);
+  flex: 0 0 auto;
+  vertical-align: middle;
+  line-height: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.mascot img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: bottom center;
+}
+
+/* If the artwork has not been pasted in yet, collapse the wrapper so it
+   cannot leave a hole in the layout. `not([src])` never matches, so the rule
+   below is what hides it once the image errors — mascot.js adds
+   .mascot--missing in that case; this is the belt-and-braces version for
+   browsers that block the script. */
+.mascot--missing {
+  display: none !important;
+}
+
+.mascot-noscript { display: none; }
+
+/* Optional decorative treatments */
+.mascot--ring {
+  border-radius: 50%;
+  background: #ffffff;
+  padding: 6px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+}
+
+.mascot--circle {
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--color-surface, #f8fafc);
+  padding: 4px;
+}
+
+/* A sticker with no explicit size gets its size from here. The inline
+   --mascot-size is deliberately absent in that case, so this rule is allowed to
+   win - which is the whole point of mascot_sticker() not passing a default. */
+.mascot-sticker {
+  --mascot-size: 38px;
+  vertical-align: -0.35em;
+}
+
+.mascot-sticker img { object-position: center; }
+
+/* ==========================================================================
+   Stickers
+   --------------------------------------------------------------------------
+   The 8 stickers are flat badges, not the character, so they get their own
+   treatment: no breathing, no letterboxing games, and they sit *next to* text
+   rather than standing alone. mascot_sticker_for() picks one by meaning, so a
+   view never names a file.
+   ========================================================================== */
+.mascot-chip {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  line-height: 0;
+  margin-inline: 0.35rem;
+}
+
+.mascot-chip .mascot {
+  --mascot-size: 38px;
+  /* One short pop as it appears. Stickers are punctuation, so they must not
+     loop - a breathing badge next to a sentence is just noise. */
+  animation: mascot-pop 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.mascot-chip--lg .mascot { --mascot-size: 64px; }
+.mascot-chip--sm .mascot { --mascot-size: 28px; }
+
+/* Centred variant, for a card that stacks its sticker above the text. */
+.mascot-chip--center { margin: 0 auto 0.5rem; }
+/* ==========================================================================
+   Alerts
+   186 alert blocks exist across the views, so the mascot is injected here
+   rather than edited into each one. mascot.js decorates the DOM; this is the
+   styling, and the decoration is always right-hand side so it can never push
+   the message text around.
+
+   :not(.modal-body *) is deliberate: eight alerts live inside modal bodies and
+   would otherwise end up with a second mascot next to the dialog's own.
+   ========================================================================== */
+.mascot-alert {
+  position: relative;
+  padding-right: 3.25rem;
+  min-height: 2.75rem;
+}
+
+.mascot-alert .mascot {
+  position: absolute;
+  top: 50%;
+  right: 0.5rem;
+  transform: translateY(-50%);
+  --mascot-size: var(--mascot-sm);
+  /* One short pop as the alert appears: enough to notice, not enough to
+     distract from the message itself. */
+  animation: mascot-pop 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.mascot-alert .mascot img { object-position: center; }
+
+.alert-success.mascot-alert .mascot { filter: saturate(1.05); }
+.alert-danger.mascot-alert .mascot,
+.alert-warning.mascot-alert .mascot { filter: saturate(0.95); }
+
+/* ==========================================================================
+   Confirmation / alert dialogs (modal-system.js)
+   The dialog keeps its existing structure; only a small mascot is added to the
+   header. customConfirm() and customAlert() are the two entry points, so this
+   covers every dialog in the app without touching the 32 confirm() call sites.
+   ========================================================================== */
+.custom-modal-container.mascot-dialog {
+  position: relative;
+  overflow: hidden;
+}
+
+.custom-modal-container.mascot-dialog .mascot-dialog-art {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 3.25rem;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.95;
+}
+
+.custom-modal-container.mascot-dialog .custom-modal-header,
+.custom-modal-container.mascot-dialog .custom-modal-body,
+.custom-modal-container.mascot-dialog .custom-modal-footer {
+  position: relative;
+  z-index: 1;
+}
+
+.custom-modal-container.mascot-dialog .custom-modal-body {
+  padding-right: 5.5rem;
+}
+
+.custom-modal-container.mascot-dialog.mascot-dialog--confirm .mascot-dialog-art { --mascot-size: var(--mascot-md); }
+.custom-modal-container.mascot-dialog.mascot-dialog--alert .mascot-dialog-art { --mascot-size: var(--mascot-md); }
+
+/* ==========================================================================
+   Page placements
+   ========================================================================== */
+
+/* --- Login card ---------------------------------------------------------- */
+.mascot-login {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.25rem;
+  --mascot-size: 150px;
+}
+
+/* --- Welcome / greeting -------------------------------------------------- */
+.mascot-welcome {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.mascot-welcome__text { min-width: 0; }
+
+/* --- Empty states (admin/partials/empty_state.php) ----------------------- */
+.admin-empty .mascot,
+.mascot-empty {
+  display: block;
+  margin: 0 auto 0.5rem;
+  --mascot-size: 132px;
+}
+
+.admin-empty .mascot img,
+.mascot-empty img { object-position: center; }
+
+/* --- Grades achievement banner -------------------------------------------- */
+.mascot-achievement {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-lg, 0.75rem);
+  background: linear-gradient(100deg, rgba(251, 191, 36, 0.14), rgba(59, 130, 246, 0.12));
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  margin-bottom: 1rem;
+}
+
+.mascot-achievement .mascot { --mascot-size: var(--mascot-lg); }
+.mascot-achievement .mascot img { object-position: center; }
+.mascot-achievement__title { font-weight: 700; color: var(--color-heading, #0f172a); }
+.mascot-achievement__text { font-size: var(--fs-sm, 0.875rem); color: var(--color-text-muted, #64748b); }
+
+/* --- About / landing hero -------------------------------------------------- */
+.mascot-hero-art {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  margin-bottom: 1rem;
+  --mascot-size: var(--mascot-hero);
+}
+
+.mascot-hero-sticker {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  --mascot-size: 72px;
+}
+
+/* --- Tip callout ---------------------------------------------------------- */
+.mascot-tip {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: var(--radius-md, 0.5rem);
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.22);
+  font-size: var(--fs-sm, 0.875rem);
+  color: var(--color-text, #1e293b);
+  margin-bottom: 1rem;
+}
+
+.mascot-tip .mascot { --mascot-size: 42px; }
+.mascot-tip .mascot img { object-position: center; }
+
+/* --- Upload complete ------------------------------------------------------ */
+.mascot-upload-done {
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem 0;
+  --mascot-size: 96px;
+}
+
+/* ==========================================================================
+   Speech bubble - mascot_say() in app/Helpers/mascot_helper.php
+   Used on the sign-in page, the About hero and the dashboard hero, i.e.
+   everywhere the floating dock deliberately is not.
+
+   The bubble has a tail that points back at the character. Without it the text
+   reads as an unrelated tooltip; with it, the character is visibly the one
+   saying it.
+   ========================================================================== */
+.mascot-say {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  max-width: 30rem;
+}
+
+.mascot-say--right { flex-direction: row; }
+.mascot-say--left { flex-direction: row-reverse; }
+
+.mascot-say__bubble {
+  position: relative;
+  flex: 1 1 auto;
+  padding: 0.9rem 1.05rem 1rem;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 1rem;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.14);
+  animation: mascot-say-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.mascot-say__title {
+  margin: 0 0 0.2rem;
+  font-size: var(--fs-base, 1rem);
+  font-weight: 700;
+  color: var(--color-heading, #0f172a);
+}
+
+.mascot-say__text {
+  margin: 0;
+  font-size: var(--fs-sm, 0.875rem);
+  line-height: 1.5;
+  color: var(--color-text-muted, #64748b);
+}
+
+/* The tail, drawn as a rotated square so it picks up the bubble's border. */
+.mascot-say--right .mascot-say__bubble::after,
+.mascot-say--left .mascot-say__bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -7px;
+  width: 13px;
+  height: 13px;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  transform: rotate(45deg);
+}
+
+.mascot-say--right .mascot-say__bubble::after {
+  right: 1.5rem;
+  border-top: 0;
+  border-left: 0;
+}
+
+.mascot-say--left .mascot-say__bubble::after {
+  left: 1.5rem;
+  border-top: 0;
+  border-left: 0;
+}
+
+.mascot-say__art {
+  --mascot-size: var(--mascot-xl);
+  animation: mascot-breathe 4s ease-in-out infinite;
+}
+
+.mascot-say__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.mascot-say__action {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  font-size: var(--fs-xs, 0.75rem);
+  font-weight: 700;
+  cursor: pointer;
+  color: #ffffff;
+  background: var(--mascot-blue);
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.mascot-say__action:hover,
+.mascot-say__action:focus-visible {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.mascot-say__action + .mascot-say__action {
+  color: var(--color-text-muted, #64748b);
+  background: rgba(15, 23, 42, 0.06);
+}
+
+/* A caret shown only while the typewriter is still revealing the line. */
+.mascot-say__text[data-mascot-typing="1"]::after {
+  content: '\2588';
+  margin-left: 1px;
+  color: var(--mascot-sky);
+  animation: mascot-caret 1.4s ease-in-out infinite;
+}
+
+/* ==========================================================================
+   Motion
+   Deliberately small: Tappy should feel alive, never busy. Everything here is
+   an opacity/transform animation, so nothing triggers layout, and all of it is
+   switched off again by the reduced-motion block at the foot of this file.
+   ========================================================================== */
+@keyframes mascot-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%      { transform: translateY(-1.5%) scale(1.015); }
+}
+
+@keyframes mascot-say-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* A pose changing (the dock swapping poses, a tour step advancing) reads as a
+   small pop rather than a hard cut. */
+@keyframes mascot-pop {
+  0%   { transform: scale(0.92); }
+  55%  { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+
+.mascot--pop { animation: mascot-pop 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Typing caret: functional, but a slow soft pulse rather than a hard blink. */
+@keyframes mascot-caret {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.25; }
+}
+
+/* Scroll reveal, applied by mascot.js through an IntersectionObserver. Without
+   JS the class is never added, so the artwork is simply visible. */
+.mascot--reveal {
+  opacity: 0;
+  transform: translateY(12px) scale(0.97);
+  transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mascot--reveal.mascot--visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+/* Celebration: pure-CSS sparks, no new assets to ship. */
+.mascot--sparkle { position: relative; }
+
+.mascot--sparkle::before,
+.mascot--sparkle::after {
+  content: '\2726';
+  position: absolute;
+  color: var(--mascot-amber);
+  font-size: 1.1em;
+  line-height: 1;
+  animation: mascot-spark 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.mascot--sparkle::before { top: 12%; left: -14%; }
+.mascot--sparkle::after  { top: 26%; right: -12%; animation-delay: 0.5s; }
+
+@keyframes mascot-spark {
+  0%, 100% { opacity: 0; transform: scale(0.6) rotate(-12deg); }
+  50%      { opacity: 1; transform: scale(1.1) rotate(8deg); }
+}
+
+/* ==========================================================================
+   Floating dock (partials/mascot_dock.php)
+   Tappy sits in the bottom-right corner, in front of the page. He is a guide,
+   not a chatbot: a greeting that appears once and then gets out of the way.
+
+   z-index 1050 puts him above the sticky top bar (1045) but below the guided
+   tour (1080) and the Bootstrap modal layer, so he can never sit on top of a
+   dialog the user has to read.
+
+   The whole dock is `hidden` in the markup and is only revealed by mascot.js
+   once the image has loaded — a missing PNG must not leave an empty bubble
+   floating over the page.
+   ========================================================================== */
+.mascot-dock {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1rem;
+  z-index: 1050;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+  max-width: min(22rem, calc(100vw - 2rem));
+  /* The wrapper must never intercept clicks meant for the page underneath.
+     The trigger and the panel opt back in individually. */
+  pointer-events: none;
+  font-family: inherit;
+}
+
+.mascot-dock[hidden] { display: none !important; }
+
+/* A Bootstrap modal owns the screen while it is open; Tappy waits. The restore
+   button is a sibling of the dock, not a child, so it needs the same rule here or
+   a stray pill would sit on top of an open dialog. */
+body.modal-open .mascot-dock,
+body.modal-open .mascot-restore { visibility: hidden; }
+
+/* --- The restore button -----------------------------------------------------
+   Shown only when the person has sent Tappy away, so there is always exactly one
+   way to bring him back. A real <button> for the same reason the dock artwork is
+   one: it has to be reachable by keyboard and announced properly. */
+.mascot-restore {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1rem;
+  z-index: 1050;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem 0.35rem 0.4rem;
+  border: 1px solid rgba(147, 197, 253, 0.35);
+  border-radius: 999px;
+  background: var(--color-surface, #ffffff);
+  color: var(--color-heading, #0f172a);
+  font-family: var(--font-serif);
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.18);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;
+}
+
+.mascot-restore[hidden] { display: none !important; }
+
+.mascot-restore:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.24);
+}
+
+.mascot-restore:focus-visible {
+  outline: 3px solid var(--mascot-sky, #7dd3fc);
+  outline-offset: 3px;
+}
+
+/* The label is decoration for a sighted mouse user; the accessible name comes
+   from aria-label on the button, and the artwork is decorative. */
+.mascot-restore__label {
+  white-space: nowrap;
+}
+
+.mascot-restore .mascot {
+  --mascot-size: 32px;
+  pointer-events: none;
+}
+
+@media (max-width: 575.98px) {
+  .mascot-restore__label { display: none; }
+  .mascot-restore { padding: 0.35rem; }
+}
+
+/* --- The trigger --------------------------------------------------------
+   Tappy himself is the way back into the guided tour, which is why the
+   "Take a tour" button was removed from the top bar. A real <button> so he is
+   reachable by keyboard and announced properly; a clickable <div> would not be.
+   ------------------------------------------------------------------------- */
+.mascot-dock__trigger {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto;
+  position: relative;
+  border-radius: 1rem;
+  /* Widen the hit area past the artwork's transparent margins, otherwise the
+     narrow part of a tall pose is a frustrating target. */
+  padding-inline: 0.75rem;
+}
+
+.mascot-dock__trigger:focus-visible {
+  outline: 3px solid var(--mascot-sky);
+  outline-offset: 4px;
+}
+
+/* A soft halo so he reads as present and clickable rather than as a sticker
+   somebody forgot to remove. */
+.mascot-dock__trigger::before {
+  content: '';
+  position: absolute;
+  inset: 6% -4% 2%;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at 50% 80%,
+    rgba(59, 130, 246, 0.22),
+    rgba(59, 130, 246, 0) 70%
+  );
+  opacity: 0.75;
+  /* The halo is a static glow. It used to pulse every 4.5 seconds, which read
+     as decoration rather than as a cue. */
+  pointer-events: none;
+}
+
+.mascot-dock__art {
+  --mascot-size: var(--mascot-dock);
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+  filter: drop-shadow(0 10px 18px rgba(15, 23, 42, 0.22));
+  transform-origin: bottom center;
+  animation: mascot-dock-bob 7s ease-in-out infinite;
+}
+
+/* Idle: a shallow, slow drift. The old version bobbed 6px every 4.5s, which
+   pulled the eye off whatever the user was actually reading. */
+@keyframes mascot-dock-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+/* The idle nudge: "I am here, ask me." Hidden until the greeting has been seen
+   so it never competes with the first thing Tappy says. */
+.mascot-dock__hint {
+  pointer-events: auto;
+  margin: 0 0 0.25rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 999px;
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text-muted, #64748b);
+  font-size: var(--fs-xs, 0.75rem);
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+  cursor: pointer;
+  animation: mascot-say-in 0.3s ease both;
+}
+
+.mascot-dock__hint:hover { color: var(--color-heading, #0f172a); }
+.mascot-dock__hint[hidden] { display: none !important; }
+
+.mascot-dock__panel {
+  position: relative;
+  /* Re-enabled on the panel itself: `pointer-events: none` on the wrapper is
+     what keeps Tappy off the page's buttons, and the bubble is the one part
+     that genuinely needs to be clickable. */
+  pointer-events: auto;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: var(--radius-lg, 0.75rem);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+  padding: 0.7rem 0.85rem 0.75rem;
+  animation: mascot-dock-in 0.26s ease both;
+}
+
+.mascot-dock__panel[hidden] { display: none; }
+
+/* Actions inside the bubble: the tour replay that replaced the top-bar button,
+   and a quiet way to send him away. */
+.mascot-dock__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+.mascot-dock__actions[hidden] { display: none; }
+
+.mascot-dock__action {
+  pointer-events: auto;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.32rem 0.75rem;
+  font-family: inherit;
+  font-size: var(--fs-xs, 0.75rem);
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  color: #ffffff;
+  background: var(--mascot-blue);
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+
+.mascot-dock__action:hover,
+.mascot-dock__action:focus-visible {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.mascot-dock__action--quiet {
+  color: var(--color-text-muted, #64748b);
+  background: rgba(15, 23, 42, 0.06);
+}
+
+/* Speech-bubble tail, pointing down at the character. */
+.mascot-dock__panel::after {
+  content: '';
+  position: absolute;
+  right: 1.35rem;
+  bottom: -6px;
+  width: 11px;
+  height: 11px;
+  background: var(--color-surface, #ffffff);
+  border-right: 1px solid var(--color-border, #e2e8f0);
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+  transform: rotate(45deg);
+}
+
+@keyframes mascot-dock-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.mascot-dock__title {
+  margin: 0 0 0.1rem;
+  font-size: var(--fs-sm, 0.875rem);
+  font-weight: 700;
+  color: var(--color-heading, #0f172a);
+  padding-right: 1.25rem;
+}
+
+.mascot-dock__text {
+  margin: 0;
+  font-size: var(--fs-sm, 0.875rem);
+  line-height: 1.45;
+  color: var(--color-text-muted, #64748b);
+}
+
+.mascot-dock__close {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.3rem;
+  border: 0;
+  background: none;
+  color: var(--color-text-muted, #64748b);
+  font-size: 1.15rem;
+  line-height: 1;
+  padding: 0.15rem 0.4rem;
+  border-radius: var(--radius-sm, 0.375rem);
+  cursor: pointer;
+}
+
+.mascot-dock__close:hover,
+.mascot-dock__close:focus-visible {
+  color: var(--color-heading, #0f172a);
+  background: rgba(15, 23, 42, 0.06);
+}
+
+/* ==========================================================================
+   Responsive — never let artwork crush a small screen
+   ========================================================================== */
+@media (max-width: 991.98px) {
+  .mascot-hero-art { --mascot-size: 240px; }
+  .mascot-login { --mascot-size: 200px; }
+  :root { --mascot-dock: 190px; }
+}
+
+@media (max-width: 575.98px) {
+  /* The scale has to come down on a phone or Tappy eats the content, but it
+     never goes below the size that made him legible in the first place. */
+  :root {
+    --mascot-xs: 48px;
+    --mascot-sm: 72px;
+    --mascot-md: 104px;
+    --mascot-lg: 148px;
+    --mascot-xl: 180px;
+    --mascot-hero: 200px;
+    --mascot-dock: 150px;
+    --mascot-tour: 104px;
+  }
+  .mascot-hero-art { --mascot-size: 200px; }
+  .mascot-login { --mascot-size: 160px; }
+  .mascot-achievement { flex-direction: column; text-align: center; }
+  .mascot-achievement .mascot { --mascot-size: 120px; }
+  .mascot-welcome { flex-direction: column; text-align: center; }
+  .mascot-alert { padding-right: 3.25rem; }
+  .mascot-alert .mascot { --mascot-size: 60px; }
+  .custom-modal-container.mascot-dialog .mascot-dialog-art { display: none; }
+  .custom-modal-container.mascot-dialog .custom-modal-body { padding-right: 1.25rem; }
+  .mascot-say { flex-direction: column; align-items: center; text-align: center; max-width: 100%; }
+  .mascot-say__actions { justify-content: center; }
+  .mascot-dock {
+    right: 0.75rem;
+    bottom: 0.75rem;
+    max-width: calc(100vw - 1.5rem);
+  }
+  .mascot-dock__title,
+  .mascot-dock__text { font-size: var(--fs-xs, 0.75rem); }
+}
+
+/* ==========================================================================
+   Accessibility & print
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .mascot,
+  .mascot img,
+  .mascot-say__art,
+  .mascot-chip .mascot,
+  .mascot--sparkle::before,
+  .mascot--sparkle::after,
+  .mascot-dock__art,
+  .mascot-dock__trigger::before,
+  .mascot-dock__panel,
+  .mascot-dock__hint,
+  .mascot-say__bubble,
+  .mascot-say__text[data-mascot-typing="1"]::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  /* The reveal and the pop both animate opacity/scale, so turning the
+     transition off would leave the artwork stuck invisible. Reset it instead. */
+  .mascot--reveal { opacity: 1 !important; transform: none !important; }
+  .mascot--pop { animation: none !important; }
+  .mascot--sparkle::before,
+  .mascot--sparkle::after { display: none; }
+}
+
+@media print {
+  .mascot-alert .mascot,
+  .custom-modal-container .mascot-dialog-art,
+  .mascot-welcome .mascot { display: none !important; }
+  .mascot-alert { padding-right: 1rem; }
+  /* A floating character on a printed report card is noise. */
+  .mascot-dock { display: none !important; }
+}
+
+.custom-modal-container.mascot-dialog.mascot-dialog--error .mascot-dialog-art { --mascot-size: var(--mascot-md); }
+
+/* --- Teacher schedule intro -----------------------------------------------
+   The poster sits beside Tappy's line rather than behind it. The posters are
+   full-frame illustrations with no clear area, so a headline laid over one would
+   be unreadable. Stacks on narrow screens. */
+.schedule-intro {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding: 1.25rem 1.5rem;
+  background: #f8fbff;
+  border: 1px solid rgba(30, 64, 175, 0.14);
+  border-radius: 16px;
+}
+
+/* No poster installed: the line centres on its own instead of leaving a gap. */
+.schedule-intro--solo {
+  justify-content: center;
+}
+
+.schedule-intro__art {
+  flex: 0 0 auto;
+  width: 300px;
+  max-width: 40%;
+}
+
+.schedule-intro__art .mascot-poster-banner {
+  max-width: 300px;
+}
+
+.schedule-intro__art img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.schedule-intro__say {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (max-width: 991px) {
+  .schedule-intro {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .schedule-intro__art {
+    width: 100%;
+    max-width: 320px;
+    margin: 0 auto;
+  }
+}
+
+/* --- "Using the Portal" poster grid ----------------------------------------
+   Four poster slots in place of the old numbered step cards. Each card is
+   artwork above a caption; text is never laid over the poster, because these
+   are full-frame illustrations with no clear area to set type in.
+
+   mascot_poster_for() returns a bare <img class="mascot-poster-art"> with no
+   wrapper, so unlike mascot_poster_banner() it carries no sizing of its own and
+   needs it set here. */
+.portal-poster-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* Tighter than a normal card gap: every column of the grid is handed straight
+     to the artwork, and at a quarter of a wide viewport the character was
+     reading small. */
+  gap: 0.9rem;
+}
+
+.portal-poster-card {
+  position: relative;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+}
+
+/* The step number, sitting inside the artwork area rather than hanging off the
+   card: the card clips its overflow, so a badge on the corner would be cut in
+   half. */
+.portal-poster-card__number {
+  position: absolute;
+  top: 0.7rem;
+  left: 0.7rem;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  background: #1e3a8a;
+  color: #fbbf24;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.35);
+}
+
+.portal-poster-card .mascot-poster-art {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* Square, and cover rather than contain. A square box is taller than a 4:3
+     frame, so cover fills it and trims a little width off the sides - with the
+     character centred that makes it read noticeably larger than a letterboxed
+     4:3 fit, which is the point of the change. */
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  object-position: center;
+  background: #f8fafc;
+}
+
+/* The caption is a speech bubble: the character is talking, and the tail points
+   back up at it. */
+.portal-poster-card__bubble {
+  position: relative;
+  margin: 0.85rem 0.8rem 0.8rem;
+  padding: 0.85rem 0.95rem 0.9rem;
+  background: #eff6ff;
+  border: var(--hairline);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Tail. A rotated square, with borders only on the two edges that end up
+   outside the bubble, so the join is invisible. */
+.portal-poster-card__bubble::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 30px;
+  width: 13px;
+  height: 13px;
+  background: #eff6ff;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  transform: rotate(45deg);
+}
+
+.portal-poster-card__title {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #1e3a8a;
+  margin: 0 0 0.35rem;
+}
+
+.portal-poster-card__text {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: #334155;
+  margin: 0;
+}
+
+/* Shown only while a slot has no artwork. It names the file to drop in and
+   disappears by itself once that file exists, so nothing needs switching off. */
+.portal-poster-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  aspect-ratio: 1 / 1;
+  padding: 1rem;
+  background: #f8fafc;
+  border: 2px dashed rgba(100, 116, 139, 0.45);
+  color: #64748b;
+  text-align: center;
+}
+
+.portal-poster-slot i {
+  font-size: 1.75rem;
+  opacity: 0.6;
+}
+
+.portal-poster-slot code {
+  font-size: 0.7rem;
+  word-break: break-all;
+  color: #475569;
+}
+
+@media (max-width: 991px) {
+  .portal-poster-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 575px) {
+  .portal-poster-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+

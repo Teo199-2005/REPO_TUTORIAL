@@ -51,7 +51,7 @@ class ProgramsProjects extends BaseController
         }
 
         return view('programs_projects', [
-            'title'     => programs_projects_tab_label($tab) . ' — CSCS SMS',
+            'title'     => programs_projects_tab_label($tab) . ' — CSCS Tap n Track',
             'tab'       => $tab,
             'hero'      => $hero,
             'sections'  => $sectionData,

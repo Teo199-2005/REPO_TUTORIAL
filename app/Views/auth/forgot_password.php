@@ -45,11 +45,11 @@
 }
 
 .login-title {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Times New Roman', Times, 'Liberation Serif', 'DejaVu Serif', serif;
   font-size: 2.25rem;
-  font-weight: 800;
+  font-weight: 700;
   margin-bottom: 0.75rem;
-  letter-spacing: -0.025em;
+  letter-spacing: 0;
   line-height: 1.2;
   background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #ffffff 100%);
   -webkit-background-clip: text;
@@ -61,7 +61,7 @@
 .login-subtitle {
   color: rgba(255, 255, 255, 0.9);
   font-size: 1rem;
-  font-weight: 500;
+  font-weight: 400;
   margin: 0;
 }
 
@@ -70,13 +70,13 @@
 }
 
 .form-control {
-  border: 2px solid #e2e8f0;
+  border: var(--hairline);
   border-radius: 14px;
   padding: 1.25rem 1rem;
   font-size: 1rem;
   background: #f8fafc;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  font-weight: 500;
+  font-weight: 400;
   height: auto;
 }
 
@@ -126,7 +126,7 @@
 .register-text {
   color: rgba(255, 255, 255, 0.8);
   font-size: 0.95rem;
-  font-weight: 500;
+  font-weight: 400;
   margin: 0;
 }
 
@@ -154,13 +154,11 @@
 .alert-danger {
   background: #fef2f2;
   color: #dc2626;
-  border-left: 4px solid #dc2626;
 }
 
 .alert-success {
   background: #f0fdf4;
   color: #16a34a;
-  border-left: 4px solid #16a34a;
 }
 
 /* ===== MOBILE RESPONSIVE STYLES ===== */
@@ -366,7 +364,7 @@
   }
   
   .login-subtitle {
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
   }
   
   .login-form {
@@ -398,6 +396,17 @@
     <div class="login-header">
       <h1 class="login-title">Cauayan South Central School</h1>
       <p class="login-subtitle">Reset Password</p>
+      <div class="mascot-chip mascot-chip--center" style="margin-top: 0.5rem;">
+        <?php /* A padlock reads "this account is protected" faster than the
+                   sentence underneath it. Decorative: the subtitle already says
+                   what the page is. */ ?>
+        <?= mascot_sticker_for('locked', ['loading' => 'eager']) ?>
+      </div>
+      <?php /* The envelope tells the second half of the story: prove who you are,
+                 and the reset link arrives in your inbox. */ ?>
+      <div class="mascot-chip mascot-chip--center" style="margin-top: 0.5rem;">
+        <?= mascot_img(['name' => 'envelope', 'alt' => '', 'size' => 96, 'loading' => 'eager']) ?>
+      </div>
       <p style="color: rgba(255, 255, 255, 0.7); font-size: 0.8rem; margin: 0.5rem 0 0 0;">Enter your PRC License Number (teachers) or LRN (students) to verify your identity.</p>
     </div>
 

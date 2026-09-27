@@ -104,7 +104,7 @@ if (! function_exists('hero_banner_url')) {
 
 if (! function_exists('about_poster_url')) {
     /**
-     * About section TAP n TRACK poster (public/poster2.png).
+     * About section Tap n Track poster (public/poster2.png).
      */
     function about_poster_url(): string
     {

@@ -33,6 +33,21 @@ class SystemSettingModel extends Model
         }
     }
 
+    /**
+     * Remove a setting row entirely.
+     *
+     * The counterpart to setSetting(), for the "go back to the default" case.
+     * Writing an empty string would leave a row that looks configured but means
+     * nothing, which is exactly the kind of half-set state that is hard to
+     * diagnose later.
+     *
+     * @return bool True when a row was removed, false when there was nothing to remove.
+     */
+    public function deleteSetting($key)
+    {
+        return (bool) $this->where('setting_key', $key)->delete();
+    }
+
     public function getCurrentTerm()
     {
         return (int) $this->getSetting('current_term', 1);

@@ -1,0 +1,803 @@
+﻿/* ==========================================================================
+   CSCS Tap n Track — UI DEPTH LAYER
+   --------------------------------------------------------------------------
+   The surface-quality pass for the whole platform. Loaded LAST from both
+   layout.php (public site) and dashboard_layout.php (admin / teacher /
+   student), after app.css, dashboard.css, responsive.css and admin-ui.css.
+
+   Why a separate file rather than more edits to app.css
+   -----------------------------------------------------
+   dashboard.css overrides several components with `!important` — a flat white
+   on every `.card`, `#f9fafb` table stripes (a ~1% contrast tint that is
+   effectively invisible), and one black `box-shadow` applied to every single
+   `.btn`. Those are the direct cause of the "flat" look. Beating them from
+   inside app.css would mean deleting or rewriting them there; being the last
+   stylesheet means this file simply wins the cascade instead, and the legacy
+   file stays untouched and still correct for anything not covered here.
+
+   The three problems this file solves
+   ----------------------------------
+   1. FLAT CONTAINERS — a white card on a near-white page has no edge. Every
+      glass surface here gets a white-to-cool gradient, a hairline edge, an
+      inset top sheen and a three-layer shadow whose widest layer is BLUE.
+      That combination is what reads as glass rather than as a white box.
+
+   2. CONFUSING TABLES — only 6 of the 95 <table> elements in the views carry
+      Bootstrap's `table-striped`, and its tint is too faint to see. Striping
+      is therefore applied here structurally, to every table body row, so it
+      does not depend on markup: white / soft blue-gray / white. This is the
+      main legibility win on the platform.
+
+   3. FLAT BUTTONS — one black drop on every button ignores what the button
+      actually is. Here each variant casts a shadow in its OWN colour, so the
+      green "Grading Open" / "Registration Open" toggles cast green. White and
+      neutral buttons get a faint blue halo, which is the subtle blue accent
+      they need to stop looking like unstyled boxes.
+
+   Performance note
+   ----------------
+   `backdrop-filter: blur()` is used only on a handful of large sticky/chrome
+   surfaces, never on table cells. The glass read on small components comes
+   from gradients + inset shadows, which is visually equivalent here and costs
+   nothing while scrolling. Blurring every cell of 95 tables is not an option.
+
+   All values resolve from the tokens in app.css :root. Colours are never
+   hard-coded here except inside those token definitions.
+   ========================================================================== */
+
+
+/* ==========================================================================
+   1. GLASS SURFACES — the shared widget recipe
+   Every panel on the platform, in one selector list. The `.card:not(...)`
+   chain deliberately mirrors the one in dashboard.css so the two rules carry
+   identical specificity; because this file loads later, this one wins.
+   ========================================================================== */
+.card,
+.kpi-card,
+.stat-tile,
+.stats-card,
+.widget,
+.stat-widget,
+.chart-widget,
+.widget-surface,
+.chart-card,
+.feature-card,
+.profile-card,
+.admin-filter-bar,
+.sched-table-card,
+.table-card {
+  background: var(--glass-bg);
+  background-color: transparent;
+  border: var(--glass-edge);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--glass-shadow);
+  position: relative;
+  /* The lit top edge. This single inset line is what makes the surface read as
+     a physical panel catching light from above. */
+  transition: box-shadow var(--motion-base) var(--ease-out-soft),
+              transform var(--motion-base) var(--ease-out-soft),
+              border-color var(--motion-base) var(--ease-out-soft);
+}
+
+.card:not(.bg-primary):not(.bg-success):not(.bg-warning):not(.bg-info):not(.bg-danger):not(.bg-secondary):not(.bg-dark):not(.text-white) {
+  background: var(--glass-bg) !important;
+  background-color: transparent !important;
+  border: var(--glass-edge) !important;
+  box-shadow: var(--glass-shadow), var(--glass-sheen) !important;
+}
+
+/* Stat cards that carry a Bootstrap colour class. dashboard.css already
+   de-saturated these to --surface-tint; here they take the full glass recipe
+   so an eight-across stat row reads as one system instead of eight white
+   rectangles. */
+.card.bg-primary,
+.card.text-white,
+.card.bg-success,
+.card.bg-warning,
+.card.bg-info,
+.card.bg-danger,
+.card.bg-secondary {
+  background: var(--glass-bg) !important;
+  background-color: transparent !important;
+  border: var(--glass-edge) !important;
+  box-shadow: var(--glass-shadow), var(--glass-sheen) !important;
+}
+
+/* Nested surfaces sit one elevation level down instead of being boxed twice —
+   double-shadowing a card inside a card is what reads as a flat template. */
+.card .card,
+.card .widget-surface,
+.modal-body .card {
+  background: var(--gray-25) !important;
+  background-color: transparent !important;
+  border: 1px solid var(--gray-200) !important;
+  box-shadow: var(--glass-shadow-sm) !important;
+}
+
+/* Card headers and footers are inset regions, not a second elevation: a glass
+   gradient stacked on a glass gradient just muddies both. */
+.card-header,
+.card-footer {
+  background: linear-gradient(180deg, var(--gray-50) 0%, var(--gray-100) 100%) !important;
+  background-color: var(--gray-50);
+  border-color: var(--gray-200) !important;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.6);
+}
+.card-footer {
+  background: linear-gradient(180deg, var(--gray-100) 0%, var(--gray-50) 100%) !important;
+}
+
+/* Lifted state. The blue halo widens, which reads as the panel rising off the
+   canvas without needing a large translate. */
+@media (hover: hover) {
+  .card:hover,
+  .kpi-card:hover,
+  .stat-tile:hover,
+  .stats-card:hover,
+  .widget:hover,
+  .stat-widget:hover,
+  .chart-widget:hover,
+  .widget-surface:hover,
+  .chart-card:hover,
+  .feature-card:hover,
+  .admin-filter-bar:hover {
+    border-color: var(--gray-300) !important;
+    box-shadow: var(--glass-shadow-lift), var(--glass-sheen) !important;
+    transform: translateY(-2px);
+  }
+}
+
+/* ---- Icon tiles: the small glass chip inside a widget -------------------
+   A miniature glass panel rather than a flat neutral square, so the tile
+   speaks the same lit-edge language as the card that holds it. */
+.icon-tile,
+.dashboard-app .dash-icon-tile,
+.kpi-card .kpi-icon,
+.dashboard-app .sections-summary-stats .stat-tile__icon {
+  background: linear-gradient(180deg, #ffffff 0%, var(--gray-50) 100%) !important;
+  background-color: transparent;
+  border: 1px solid var(--gray-200) !important;
+  box-shadow: var(--glass-shadow-sm), var(--glass-sheen) !important;
+}
+
+
+/* ==========================================================================
+   2. TABLES — white / gray / white / gray
+   --------------------------------------------------------------------------
+   Applied structurally to every table on the platform rather than through
+   Bootstrap's `.table-striped` utility, for two reasons: only 6 of the 95
+   tables in the views use that class, and its `#f9fafb` tint on `#ffffff` is
+   roughly a 1% luminance difference — invisible in practice.
+
+   Scoped to `min-width: 769px` deliberately. Below that, responsive.css
+   converts every table into a stack of individual cards and force-sets
+   `#ffffff` on each row and `#f8fafc` on each cell; a stripe rule here would
+   fight that and produce half-tinted card rows.
+   ========================================================================== */
+@media (min-width: 769px) {
+
+  /* The table itself is transparent so the glass wrapper behind it shows
+     through, and it inherits the gray body ink rather than near-black. */
+  .table,
+  table.table {
+    --bs-table-bg: transparent;
+    --bs-table-color: var(--gray-700);
+    border: var(--table-edge) !important;
+    border-collapse: separate !important;
+    border-spacing: 0;
+    background: transparent;
+    color: var(--gray-700);
+  }
+
+  /* ---- Header row -------------------------------------------------------
+     A shallow vertical gradient plus a stronger bottom rule. The previous
+     flat `#f8fafc` gave the header almost no separation from the body. */
+  .table thead th,
+  .table thead td,
+  .table th.table-head,
+  .table thead th.table-head {
+    background: linear-gradient(180deg, var(--thead-top) 0%, var(--thead-bot) 100%) !important;
+    background-color: var(--thead-top);
+    color: var(--thead-ink) !important;
+    font-weight: 700;
+    letter-spacing: var(--letter-spacing-ui);
+    border-bottom: 1px solid var(--gray-300) !important;
+    box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.7);
+  }
+
+  /* A <th> inside <tbody> is a row header, not part of the header band, so
+     it is excluded from the rule above and styled here instead. */
+  .table tbody th {
+    background: var(--gray-50) !important;
+    color: var(--thead-ink);
+    font-weight: 700;
+    border-bottom: var(--row-rule) !important;
+  }
+
+  /* ---- Body cells ------------------------------------------------------ */
+  .table td,
+  .table tbody td {
+    border-bottom: var(--row-rule) !important;
+    border-top: none;
+    padding: 0.7rem 0.75rem;
+    vertical-align: middle;
+    color: var(--gray-700);
+  }
+
+  /* ---- THE ZEBRA -------------------------------------------------------
+     Two explicit passes, and the odd-row pass is NOT redundant. Bootstrap's
+     `.table-striped > tbody > tr:nth-of-type(odd) > td` also targets the odd
+     row with `#f9fafb !important`; at equal specificity, loading later is what
+     lets the rule below override that back to a true white. Without it, the
+     six striped tables would keep their near-invisible tint and the rhythm
+     would be uneven. */
+  .table > tbody > tr:nth-of-type(odd) > td,
+  .table > tbody > tr:nth-of-type(odd) > th,
+  .table-striped > tbody > tr:nth-of-type(odd) > td,
+  .table > tbody > tr:nth-of-type(odd):hover > td {
+    background-color: var(--row-odd);
+  }
+
+  .table > tbody > tr:nth-of-type(even) > td,
+  .table > tbody > tr:nth-of-type(even) > th,
+  .table-striped > tbody > tr:nth-of-type(even) > td,
+  .table-striped > tbody > tr:nth-of-type(even) > th {
+    background-color: var(--row-even);
+  }
+
+  /* `.table-bordered` draws its own verticals; the zebra still applies, but
+     the frame is softened so the grid does not fight the glass edge. */
+  .table-bordered,
+  .table-bordered > thead > tr > th,
+  .table-bordered > tbody > tr > td {
+    border-color: var(--gray-200) !important;
+  }
+  .table-bordered > thead > tr > th {
+    border-bottom: 1px solid var(--gray-300) !important;
+  }
+
+  /* ---- Hover -----------------------------------------------------------
+     A cool tint rather than the previous `#eff6ff` blue wash, so a hovered
+     row still reads as part of the gray/white rhythm instead of going blue. */
+  .table-hover > tbody > tr:hover > td,
+  .table > tbody > tr:hover > td,
+  .table > tbody > tr:hover > th {
+    background-color: var(--row-hover) !important;
+    color: var(--gray-900);
+  }
+
+  /* ---- Footers --------------------------------------------------------- */
+  .table tfoot > tr > td,
+  .table tfoot > tr > th {
+    background: var(--gray-50) !important;
+    border-top: 1px solid var(--gray-300) !important;
+    font-weight: 700;
+    color: var(--thead-ink);
+  }
+
+  /* ---- Last row: no dangling rule against the panel edge --------------- */
+  .table > tbody > tr:last-child > td,
+  .table > tbody > tr:last-child > th {
+    border-bottom: none;
+  }
+
+  /* ---- Sorted / interactive header cells ------------------------------- */
+  .admin-table-enhanced th.sortable:hover {
+    background: var(--row-hover) !important;
+    color: var(--gray-900);
+  }
+  .admin-table-enhanced .sort-indicator {
+    color: var(--gray-500);
+  }
+
+  /* ---- The shared admin table class ------------------------------------ */
+  .dashboard-app .admin-table thead th {
+    background: linear-gradient(180deg, var(--thead-top) 0%, var(--thead-bot) 100%) !important;
+    color: var(--thead-ink) !important;
+    border-bottom: 1px solid var(--gray-300) !important;
+  }
+  .dashboard-app .admin-table tbody td {
+    border-bottom: var(--row-rule) !important;
+  }
+  .dashboard-app .admin-table tbody tr:hover > * {
+    background-color: var(--row-hover) !important;
+  }
+
+  /* ---- The grid sits in a glass panel ----------------------------------
+     `.table-responsive` is the wrapper nearly every table uses, so the data
+     grid gains a defined edge, rounded corners and depth instead of floating
+     on the canvas. `overflow: hidden` clips the header to the panel radius. */
+  .table-responsive {
+    background: var(--glass-bg);
+    background-color: transparent;
+    border: var(--table-edge);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--table-shadow);
+    overflow: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table-responsive > .table {
+    margin-bottom: 0;
+  }
+}
+
+
+/* ==========================================================================
+   3. BUTTONS — a shadow in each button's own colour
+   --------------------------------------------------------------------------
+   dashboard.css line ~1352 applies one black drop to every `.btn` with
+   `!important`, which is why a row of buttons looks unfinished regardless of
+   what the buttons mean. Here that blanket rule is replaced per variant:
+
+     green  (.btn-success)  -> green shadow   <- the "Grading Open" toggle
+     amber (.btn-primary)  -> amber shadow  <- the filled primary is the brand
+                                                            amber in this codebase, not blue
+     blue   (.btn-outline-primary) -> blue shadow
+     red    (.btn-danger)   -> red shadow
+     amber  (.btn-warning)  -> amber shadow
+     cyan   (.btn-info)     -> cyan shadow
+     white / neutral        -> the faint blue halo, not a black drop
+
+   Each coloured face also gets a lit top edge (--btn-sheen) so a solid fill
+   reads as a slightly domed control rather than a flat swatch.
+   ========================================================================== */
+.btn {
+  border-width: 1px !important;
+  transition: transform var(--motion-fast) var(--ease-out-soft),
+              box-shadow var(--motion-fast) var(--ease-out-soft),
+              background-color var(--motion-fast) var(--ease-out-soft),
+              border-color var(--motion-fast) var(--ease-out-soft);
+}
+
+.btn:focus-visible {
+  box-shadow: var(--shadow-focus) !important;
+}
+
+/* ---- Green: publish, save, approve, and the Open/Closed toggles -------- */
+.btn-success {
+  box-shadow: var(--btn-shadow-success), var(--btn-sheen) !important;
+}
+.btn-success:hover,
+.btn-success:focus,
+.btn-success:active {
+  box-shadow: var(--btn-shadow-success-hover), var(--btn-sheen) !important;
+}
+
+/* ---- The main call-to-action ------------------------------------------
+   NOTE ON `.btn-primary` SPECIFICALLY. In this codebase the FILLED
+   `.btn-primary` is not blue: app.css sets it to `var(--color-accent)`, the
+   brand amber (#f59e0b), and it is the primary CTA across the public pages.
+   Its shadow therefore has to be amber to match its own face - that is the
+   whole point of tinting a shadow per variant. It borrows the accent token
+   rather than the primary one for exactly that reason.
+
+   The OUTLINE `.btn-outline-primary` genuinely is blue (Bootstrap's #0d6efd
+   border) and correctly keeps the blue shadow declared further down. */
+.btn-primary {
+  box-shadow: var(--btn-shadow-accent), var(--btn-sheen) !important;
+}
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active {
+  box-shadow: var(--btn-shadow-accent-hover), var(--btn-sheen) !important;
+}
+
+/* ---- Red: destructive -------------------------------------------------- */
+.btn-danger {
+  box-shadow: var(--btn-shadow-danger), var(--btn-sheen) !important;
+}
+.btn-danger:hover,
+.btn-danger:focus,
+.btn-danger:active {
+  box-shadow: var(--btn-shadow-danger-hover), var(--btn-sheen) !important;
+}
+
+/* ---- Amber: caution, cancel, reset ------------------------------------- */
+.btn-warning {
+  box-shadow: var(--btn-shadow-warning), var(--btn-sheen) !important;
+}
+.btn-warning:hover,
+.btn-warning:focus,
+.btn-warning:active {
+  box-shadow: var(--btn-shadow-warning-hover), var(--btn-sheen) !important;
+}
+
+/* ---- Cyan: informational ---------------------------------------------- */
+.btn-info {
+  box-shadow: var(--btn-shadow-info), var(--btn-sheen) !important;
+}
+.btn-info:hover,
+.btn-info:focus,
+.btn-info:active {
+  box-shadow: var(--btn-shadow-info-hover), var(--btn-sheen) !important;
+}
+
+/* ---- White / neutral: the "hint of subtle blue" -------------------------
+   A white or grey button has no hue to borrow, so instead of the old black
+   drop it gets the faint blue halo. This is the accent that keeps light
+   buttons from reading as unstyled boxes, and it stays subtle enough that it
+   never looks like a coloured glow. The face itself gets a glass gradient and
+   a lit top edge, so it reads as a physical control. */
+.btn-secondary,
+.btn-light,
+.btn-white {
+  background: linear-gradient(180deg, #ffffff 0%, var(--gray-50) 100%) !important;
+  background-color: var(--gray-50);
+  color: var(--gray-700) !important;
+  border: 1px solid var(--gray-200) !important;
+  box-shadow: var(--btn-shadow-neutral), var(--glass-sheen) !important;
+}
+.btn-secondary:hover,
+.btn-secondary:focus,
+.btn-secondary:active,
+.btn-light:hover,
+.btn-light:focus,
+.btn-light:active,
+.btn-white:hover,
+.btn-white:focus,
+.btn-white:active {
+  background: linear-gradient(180deg, #ffffff 0%, var(--gray-100) 100%) !important;
+  color: var(--gray-900) !important;
+  border-color: var(--gray-300) !important;
+  box-shadow: var(--btn-shadow-neutral-hover), var(--glass-sheen) !important;
+}
+
+/* Bootstrap's solid .btn-dark / .btn-secondary on a coloured surface */
+.btn-dark {
+  box-shadow: 0 1px 1px rgba(26, 34, 51, 0.20), 0 5px 12px -4px rgba(26, 34, 51, 0.34), var(--btn-sheen) !important;
+}
+.btn-dark:hover {
+  box-shadow: 0 2px 4px rgba(26, 34, 51, 0.24), 0 10px 20px -6px rgba(26, 34, 51, 0.44), var(--btn-sheen) !important;
+}
+
+/* ---- Outline variants --------------------------------------------------
+   A transparent face still needs an edge and a shadow to sit on the page.
+   Each outline variant borrows its own hue for the halo, matching the filled
+   versions above. */
+.btn-outline-primary {
+  box-shadow: var(--btn-shadow-primary) !important;
+}
+.btn-outline-success {
+  box-shadow: var(--btn-shadow-success) !important;
+}
+.btn-outline-danger {
+  box-shadow: var(--btn-shadow-danger) !important;
+}
+.btn-outline-warning {
+  box-shadow: var(--btn-shadow-warning) !important;
+}
+.btn-outline-info {
+  box-shadow: var(--btn-shadow-info) !important;
+}
+.btn-outline-secondary,
+.btn-outline-light,
+.btn-outline-dark {
+  box-shadow: var(--btn-shadow-neutral) !important;
+}
+
+/* ---- Hover lift, shared ----------------------------------------------- */
+@media (hover: hover) {
+  .btn:hover {
+    transform: translateY(-1px);
+  }
+  .btn:active {
+    transform: translateY(0);
+  }
+}
+
+/* ---- Disabled / loading: the shadow must go, or the button looks broken
+   A greyed-out control that still casts a coloured halo reads as clickable. */
+.btn:disabled,
+.btn.disabled,
+.btn[aria-disabled="true"] {
+  box-shadow: 0 1px 1px rgba(26, 34, 51, 0.04) !important;
+}
+
+
+/* ==========================================================================
+   4. CONTAINERS — the page-level panels
+   dashboard.css gives every desktop `.container` a flat `background: #ffffff`,
+   which is a large unbroken white sheet. These take the same glass recipe as
+   the widgets so the page structure has depth, not just the widgets on it.
+   ========================================================================== */
+@media (min-width: 992px) {
+  body.dashboard-app .main-content .container,
+  body.dashboard-app .main-content .container-fluid,
+  body.dashboard-app .dashboard-page-container {
+    background: var(--glass-bg) !important;
+    background-color: transparent !important;
+    border: var(--glass-edge) !important;
+    border-radius: var(--radius-lg) !important;
+    box-shadow: var(--glass-shadow), var(--glass-sheen) !important;
+  }
+}
+
+/* ---- Modals and dropdowns: elevated glass ----------------------------- */
+.modal-content,
+.custom-modal-container {
+  background: var(--glass-bg) !important;
+  background-color: transparent !important;
+  border: var(--glass-edge) !important;
+  box-shadow: var(--glass-shadow-lift), var(--glass-sheen) !important;
+}
+.custom-modal-header {
+  background: linear-gradient(180deg, var(--gray-50) 0%, var(--gray-100) 100%) !important;
+  background-color: var(--gray-50);
+  border-bottom-color: var(--gray-200) !important;
+}
+.custom-modal-footer {
+  background: var(--gray-50) !important;
+  border-top-color: var(--gray-200) !important;
+}
+
+.dropdown-menu {
+  background: var(--glass-bg) !important;
+  background-color: transparent !important;
+  border: 1px solid var(--gray-200) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--glass-shadow-lift), var(--glass-sheen) !important;
+  backdrop-filter: blur(12px) saturate(140%);
+}
+.dropdown-item {
+  color: var(--gray-700);
+}
+.dropdown-item:hover,
+.dropdown-item:focus {
+  background: var(--row-hover) !important;
+  color: var(--gray-900) !important;
+}
+
+
+/* ==========================================================================
+   5. FORM CONTROLS
+   A pure-white input on a white card has no edge either. Inputs get a very
+   shallow top-down gradient plus a tight shadow, so they read as slightly
+   recessed into the glass panel they sit on.
+   ========================================================================== */
+.form-control,
+.form-select,
+.input-group-text {
+  background: linear-gradient(180deg, #ffffff 0%, var(--gray-25) 100%) !important;
+  background-color: #ffffff;
+  border-color: var(--gray-200) !important;
+  color: var(--gray-700);
+  box-shadow: inset 0 1px 2px rgba(26, 34, 51, 0.035);
+}
+.form-control:focus,
+.form-select:focus {
+  background: #ffffff !important;
+  border-color: var(--color-primary-light) !important;
+  box-shadow: 0 0 0 0.2rem rgba(30, 64, 175, 0.12), inset 0 1px 2px rgba(26, 34, 51, 0.03) !important;
+}
+.form-control::placeholder {
+  color: var(--gray-500);
+}
+.form-check-input {
+  border-color: var(--gray-300);
+}
+.form-check-input:checked {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+
+/* ==========================================================================
+   6. BADGES, PILLS AND SMALL STATUS CHIPS
+   A flat chip on glass needs a hairline so it does not bleed into the panel.
+   ========================================================================== */
+.badge {
+  border: 1px solid transparent;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+.badge.bg-success,
+.badge.bg-primary,
+.badge.bg-danger,
+.badge.bg-warning,
+.badge.bg-info {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+
+/* ==========================================================================
+   7. GUARDS
+   ========================================================================== */
+
+/* ---- Print: strip every trace of the glass layer ----------------------
+   app.css already nulls backgrounds, colours and shadows under @media print.
+   These rules neutralise the three things that survive it: the zebra (which
+   would otherwise print as alternating bands and waste toner), the sticky
+   positioning, and the `!important` box-shadows this file introduced. */
+@media print {
+  /* The zebra is the one thing that genuinely costs toner and buys nothing on
+     paper, so it is the first thing removed. */
+  .table > tbody > tr:nth-of-type(odd) > td,
+  .table > tbody > tr:nth-of-type(even) > td,
+  .table-striped > tbody > tr > td,
+  .table > tbody > tr:hover > td {
+    background: transparent !important;
+  }
+
+  /* app.css resets print with `* { ... !important }`, but every rule in this
+     file also carries !important at a HIGHER specificity, so a bare `.card`
+     here would lose the cascade and the glass would print. Each list below
+     therefore mirrors the exact selector used on screen. */
+  .card,
+  .kpi-card,
+  .stat-tile,
+  .stats-card,
+  .widget,
+  .stat-widget,
+  .chart-widget,
+  .widget-surface,
+  .chart-card,
+  .feature-card,
+  .profile-card,
+  .admin-filter-bar,
+  .table-responsive,
+  .modal-content,
+  .custom-modal-container,
+  .dropdown-menu,
+  .card-header,
+  .card-footer,
+  .icon-tile,
+  .dashboard-app .dash-icon-tile,
+  .kpi-card .kpi-icon,
+  .dashboard-app .sections-summary-stats .stat-tile,
+  .dashboard-app .sections-summary-stats .stat-tile__icon,
+  .form-control,
+  .form-select,
+  .input-group-text {
+    box-shadow: none !important;
+    background: transparent !important;
+    background-image: none !important;
+  }
+
+  .card:not(.bg-primary):not(.bg-success):not(.bg-warning):not(.bg-info):not(.bg-danger):not(.bg-secondary):not(.bg-dark):not(.text-white),
+  .card.bg-primary,
+  .card.text-white,
+  .card.bg-success,
+  .card.bg-warning,
+  .card.bg-info,
+  .card.bg-danger,
+  .card.bg-secondary,
+  .card .card,
+  .card .widget-surface,
+  .modal-body .card {
+    box-shadow: none !important;
+    background: transparent !important;
+    background-image: none !important;
+    border-color: #000 !important;
+  }
+
+  /* Every button variant, plus the unvariant :not() chain, at the same
+     specificity it has on screen. */
+  .btn,
+  .btn-primary, .btn-secondary, .btn-success, .btn-danger,
+  .btn-warning, .btn-info, .btn-light, .btn-dark,
+  .btn-outline-primary, .btn-outline-secondary, .btn-outline-success,
+  .btn-outline-danger, .btn-outline-warning, .btn-outline-info,
+  .btn-outline-light, .btn-outline-dark,
+  .btn:not([class*="btn-primary"]):not([class*="btn-secondary"]):not([class*="btn-success"]):not([class*="btn-danger"]):not([class*="btn-warning"]):not([class*="btn-info"]):not([class*="btn-light"]):not([class*="btn-dark"]):not([class*="btn-outline"]):not(.btn-link) {
+    box-shadow: none !important;
+    background: transparent !important;
+    background-image: none !important;
+  }
+
+  .table thead th,
+  .table thead td,
+  .table th.table-head,
+  .table tfoot > tr > td,
+  .table tfoot > tr > th {
+    background: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    border-bottom: 1px solid #000 !important;
+  }
+}
+
+/* ---- Reduced motion ----------------------------------------------------
+   The hover lift and the button rise are decorative. Honour the preference
+   rather than relying on app.css's global duration override, which does not
+   cancel `transform`. */
+@media (prefers-reduced-motion: reduce) {
+  .card:hover,
+  .kpi-card:hover,
+  .stat-tile:hover,
+  .widget:hover,
+  .stat-widget:hover,
+  .chart-widget:hover,
+  .widget-surface:hover,
+  .chart-card:hover,
+  .feature-card:hover,
+  .admin-filter-bar:hover,
+  .btn:hover {
+    transform: none !important;
+  }
+}
+
+/* ---- Narrow viewports --------------------------------------------------
+   Below the table card-mode breakpoint the zebra is already switched off by
+   the `min-width: 769px` guard. This only has to stop the glass shadow stack
+   from stacking up too aggressively on a single-column phone layout. */
+@media (max-width: 575.98px) {
+  .card,
+  .kpi-card,
+  .widget,
+  .table-responsive {
+    box-shadow: var(--glass-shadow-sm), var(--glass-sheen) !important;
+  }
+  .btn {
+    box-shadow: none !important;
+  }
+  .btn-success { box-shadow: 0 1px 2px rgba(4, 120, 87, 0.28) !important; }
+  .btn-primary { box-shadow: 0 1px 2px rgba(217, 119, 6, 0.30) !important; }
+  .btn-danger  { box-shadow: 0 1px 2px rgba(185, 28, 28, 0.28) !important; }
+  .btn-warning { box-shadow: 0 1px 2px rgba(180, 83, 9, 0.28) !important; }
+  .btn-info    { box-shadow: 0 1px 2px rgba(14, 116, 144, 0.28) !important; }
+}
+
+/* ---- Sections summary stat tiles ---------------------------------------
+   dashboard.css scopes these as `.dashboard-app .sections-summary-stats
+   .stat-tile` — three classes, which outranks the single-class `.stat-tile`
+   rule in section 1 regardless of load order. The glass recipe is repeated
+   here at matching specificity so the four KPI tiles on this page get the
+   same depth as every other widget. */
+.dashboard-app .sections-summary-stats .stat-tile {
+  background: var(--glass-bg) !important;
+  background-color: transparent !important;
+  border: var(--glass-edge) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--glass-shadow), var(--glass-sheen) !important;
+}
+
+@media (hover: hover) {
+  .dashboard-app .sections-summary-stats .stat-tile:hover {
+    border-color: var(--gray-300) !important;
+    box-shadow: var(--glass-shadow-lift), var(--glass-sheen) !important;
+  }
+}
+
+/* ---- Unvariant buttons: the base case ----------------------------------
+   Everything above is per-colour. These are the buttons that carry no colour
+   class at all — `.btn`, `.btn-sm`, and the small row-action buttons used all
+   over the admin tables. Without this they would keep dashboard.css's blanket
+   black drop, which is the exact flatness this layer exists to remove, so the
+   default is the neutral blue halo: a white/gray face gets a hint of blue
+   rather than a black smudge.
+
+   The `:not([class*="btn-outline"])` guard is essential, not decorative:
+   `[class*="btn-secondary"]` does NOT substring-match "btn-outline-secondary",
+   so without it every outline button would fall through to this rule and be
+   given an opaque white face — destroying the transparent, coloured-border
+   look the outline variants exist for. */
+.btn:not([class*="btn-primary"]):not([class*="btn-secondary"]):not([class*="btn-success"]):not([class*="btn-danger"]):not([class*="btn-warning"]):not([class*="btn-info"]):not([class*="btn-light"]):not([class*="btn-dark"]):not([class*="btn-outline"]):not(.btn-link) {
+  background: linear-gradient(180deg, #ffffff 0%, var(--gray-50) 100%) !important;
+  background-color: var(--gray-50);
+  border-color: var(--gray-200) !important;
+  color: var(--gray-700) !important;
+  box-shadow: var(--btn-shadow-neutral), var(--glass-sheen) !important;
+}
+.btn:not([class*="btn-primary"]):not([class*="btn-secondary"]):not([class*="btn-success"]):not([class*="btn-danger"]):not([class*="btn-warning"]):not([class*="btn-info"]):not([class*="btn-light"]):not([class*="btn-dark"]):not([class*="btn-outline"]):not(.btn-link):hover {
+  border-color: var(--gray-300) !important;
+  color: var(--gray-900) !important;
+  box-shadow: var(--btn-shadow-neutral-hover), var(--glass-sheen) !important;
+}
+
+/* ---- Link buttons: no shadow at all ------------------------------------
+   `.btn-link` is a text control, not a raised one. A drop shadow on it makes
+   the text look embossed and slightly dirty, so it is flattened completely
+   and given a colour shift on hover instead. */
+.btn-link,
+.btn-link:focus,
+.btn-link:active {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.btn-link:hover {
+  background: transparent !important;
+  box-shadow: none !important;
+}

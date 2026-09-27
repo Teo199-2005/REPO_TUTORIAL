@@ -1,15 +1,67 @@
 <?= $this->extend('dashboard_layout') ?>
 <?= $this->section('content') ?>
 
-<div class="dashboard-header mb-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-      <h1 class="h3 fw-bold text-primary mb-1">Password Reset Requests</h1>
-      <p class="text-muted mb-0 small">Manage password reset requests from teachers and students</p>
-    </div>
-  </div>
-  <div class="blue-divider"></div>
-</div>
+<?= view('admin/partials/page_header', ['pageHeader' => [
+  'icon'     => 'bi-shield-lock',
+  'title'    => 'Password reset requests',
+  'subtitle' => 'Manage password reset requests from teachers and students',
+]]) ?>
+
+<!-- Filters -->
+<!-- Filters — shared admin standard -->
+<?php
+  $prFilterValues = [
+    'status'   => $filter_status ?? '',
+    'q'        => $filter_q ?? '',
+    'per_page' => (string) ($per_page ?? 15),
+  ];
+
+  $prActive = admin_filter_count_active(
+    $prFilterValues,
+    ['status', 'q', 'per_page'],
+    ['', '15'] // "15 rows" is the default, so it is not a filter
+  );
+
+  echo view('admin/partials/filter_bar', ['filterBar' => [
+    'action'      => base_url('admin/password-resets'),
+    'id'          => 'passwordResetFilter',
+    'label'       => 'Filter password reset requests',
+    'resetUrl'    => base_url('admin/password-resets'),
+    'activeCount' => $prActive['total'],
+    'totalCount'  => $prActive['total'],
+    'primary'     => [
+      [
+        'name' => 'q', 'label' => 'Search', 'icon' => 'bi-search', 'type' => 'search',
+        'value'       => admin_filter_value($prFilterValues, 'q'),
+        'placeholder' => 'Email, student name, or LRN',
+      ],
+      [
+        'name' => 'status', 'label' => 'Status', 'icon' => 'bi-check2-circle',
+        'value'   => admin_filter_value($prFilterValues, 'status'),
+        'options' => [
+          admin_filter_option('', 'All statuses'),
+          admin_filter_option('pending', 'Pending'),
+          admin_filter_option('approved', 'Approved'),
+          admin_filter_option('rejected', 'Rejected'),
+          admin_filter_option('used', 'Used'),
+          admin_filter_option('expired', 'Expired'),
+        ],
+      ],
+      [
+        'name' => 'per_page', 'label' => 'Rows per page', 'icon' => 'bi-list-ul',
+        'value'   => admin_filter_value($prFilterValues, 'per_page', '15'),
+        'options' => [
+          admin_filter_option('15', '15'),
+          admin_filter_option('25', '25'),
+          admin_filter_option('50', '50'),
+        ],
+      ],
+    ],
+    // Only three controls on this page, so all of them stay visible and the
+    // "More filters" toggle is not rendered.
+    'advanced' => [],
+  ]]);
+?>
 
 <?php if (session()->getFlashdata('success')): ?>
   <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -37,15 +89,15 @@
       </button>
     </div>
     <div class="table-responsive">
-      <table class="table table-hover mb-0">
+      <table class="table table-hover align-middle mb-0 admin-table">
         <thead class="table-light">
           <tr>
             <th class="border-0 fw-medium" style="width: 40px;"></th>
-            <th class="border-0 fw-medium">User</th>
-            <th class="border-0 fw-medium">Identifier</th>
-            <th class="border-0 fw-medium">Requested</th>
-            <th class="border-0 fw-medium">Status</th>
-            <th class="border-0 fw-medium text-center">Actions</th>
+            <th class="border-0 fw-medium"><i class="bi bi-person me-1 text-muted"></i>User</th>
+            <th class="border-0 fw-medium"><i class="bi bi-hash me-1 text-muted"></i>Identifier</th>
+            <th class="border-0 fw-medium"><i class="bi bi-calendar3 me-1 text-muted"></i>Requested</th>
+            <th class="border-0 fw-medium"><i class="bi bi-activity me-1 text-muted"></i>Status</th>
+            <th class="border-0 fw-medium text-center"><i class="bi bi-gear me-1 text-muted"></i>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -104,13 +156,39 @@
             <tr>
               <td colspan="6" class="text-center py-5 text-muted">
                 <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                No pending password reset requests
+                No password reset requests match the current filters.
               </td>
             </tr>
           <?php endif; ?>
         </tbody>
       </table>
     </div>
+  </div>
+  <div class="card-footer bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div class="text-muted small">
+      <?php if (($total ?? 0) > 0): ?>
+        Showing <?= (int) $showing_from ?>–<?= (int) $showing_to ?> of <?= (int) $total ?> requests
+      <?php else: ?>
+        No requests found
+      <?php endif; ?>
+    </div>
+    <?php if (($total_pages ?? 1) > 1): ?>
+      <nav aria-label="Password reset requests pagination">
+        <ul class="pagination pagination-sm mb-0">
+          <li class="page-item <?= ($current_page ?? 1) <= 1 ? 'disabled' : '' ?>">
+            <a class="page-link" href="?<?= http_build_query(array_merge($_GET, ['page' => ($current_page ?? 1) - 1])) ?>"><i class="bi bi-chevron-left"></i></a>
+          </li>
+          <?php for ($p = 1; $p <= $total_pages; $p++): ?>
+            <li class="page-item <?= $p === (int) $current_page ? 'active' : '' ?>">
+              <a class="page-link" href="?<?= http_build_query(array_merge($_GET, ['page' => $p])) ?>"><?= $p ?></a>
+            </li>
+          <?php endfor; ?>
+          <li class="page-item <?= ($current_page ?? 1) >= $total_pages ? 'disabled' : '' ?>">
+            <a class="page-link" href="?<?= http_build_query(array_merge($_GET, ['page' => ($current_page ?? 1) + 1])) ?>"><i class="bi bi-chevron-right"></i></a>
+          </li>
+        </ul>
+      </nav>
+    <?php endif; ?>
   </div>
 </div>
 

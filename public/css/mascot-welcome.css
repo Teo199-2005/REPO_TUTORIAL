@@ -1,0 +1,257 @@
+/* ==========================================================================
+   Tappy — first-login welcome modal
+   --------------------------------------------------------------------------
+   The branded greeting shown once per role on a role's first dashboard visit.
+   It sits above the dock (1050) and above the tour (1080) so it is unambiguously
+   the first thing on screen, and it is what decides when the tour starts
+   (mascot-tour.js waits for data-mascot-welcome-dismissed).
+
+   The branding is deliberate but quiet: the school logo and the school name sit
+   in the header, and the backdrop is the same plain scrim the rest of the app's
+   modals use. A repeating logo watermark behind a dialog is noise, not branding.
+   ========================================================================== */
+.mascot-welcome {
+  position: fixed;
+  inset: 0;
+  z-index: 1090;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+
+  /* Every size in this dialog comes from here, never from an inline style on
+     the markup: an inline --mascot-size outranks these rules, so the two would
+     silently disagree. One token for the hero artwork, smaller steps for
+     everything the hero is quoting. */
+  --mascot-welcome-art: 220px;    /* hero pose and the farewell pose */
+  --mascot-welcome-say: 110px;    /* Tappy beside a speech bubble */
+  --mascot-welcome-bullet: 40px;  /* the thumbs-up on each list row */
+}
+
+.mascot-welcome[hidden] { display: none !important; }
+
+/* Plain scrim, matching .custom-modal-overlay in modal-system.css. Pointer
+   events off so the dialog is the only interactive thing on screen. */
+.mascot-welcome__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  animation: mascot-welcome-fade 0.3s ease both;
+}
+
+@keyframes mascot-welcome-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.mascot-welcome__dialog {
+  position: relative;
+  z-index: 1;
+  width: min(560px, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  background: var(--color-surface, #ffffff);
+  border-radius: 1.1rem;
+  box-shadow: 0 30px 70px rgba(15, 23, 42, 0.4);
+  animation: mascot-welcome-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes mascot-welcome-in {
+  from { opacity: 0; transform: translateY(22px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.mascot-welcome__head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  background: rgba(30, 64, 175, 0.95);
+  border-radius: 1.05rem 1.05rem 0 0;
+}
+
+.mascot-welcome__logo {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
+.mascot-welcome__school {
+  margin: 0;
+  font-size: var(--fs-sm, 0.875rem);
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.25;
+}
+
+.mascot-welcome__eyebrow {
+  margin: 0;
+  font-size: var(--fs-xs, 0.75rem);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.mascot-welcome__body {
+  padding: 1.25rem 1.25rem 0.5rem;
+  min-height: 15rem;
+}
+
+.mascot-welcome__slide { text-align: center; }
+.mascot-welcome__slide[hidden] { display: none !important; }
+
+.mascot-welcome__art {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+}
+
+.mascot-welcome__art .mascot {
+  --mascot-size: var(--mascot-welcome-art);
+  animation: mascot-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.mascot-welcome__title {
+  margin: 0 0 0.4rem;
+  font-size: var(--fs-lg, 1.25rem);
+  font-weight: 700;
+  color: var(--color-heading, #0f172a);
+}
+
+.mascot-welcome__text {
+  margin: 0 auto;
+  max-width: 34rem;
+  font-size: var(--fs-sm, 0.875rem);
+  line-height: 1.55;
+  color: var(--color-text-muted, #64748b);
+}
+
+.mascot-welcome__list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+  text-align: left;
+}
+
+.mascot-welcome__bullet {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 0.7rem;
+  font-size: var(--fs-sm, 0.875rem);
+  color: var(--color-text, #1e293b);
+}
+
+.mascot-welcome__bullet .mascot {
+  --mascot-size: var(--mascot-welcome-bullet);
+  flex: 0 0 auto;
+}
+
+.mascot-welcome__say {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.75rem 0 0;
+  padding: 0.85rem 1rem;
+  border-radius: 0.9rem;
+  background: rgba(59, 130, 246, 0.07);
+  text-align: left;
+}
+
+.mascot-welcome__say .mascot {
+  --mascot-size: var(--mascot-welcome-say);
+  flex: 0 0 auto;
+}
+
+.mascot-welcome__dialogue {
+  margin: 0;
+  font-size: var(--fs-sm, 0.875rem);
+  line-height: 1.5;
+  color: var(--color-text, #1e293b);
+}
+
+.mascot-welcome__poster {
+  display: block;
+  max-width: 100%;
+  max-height: 11rem;
+  margin: 0.9rem auto 0;
+  border-radius: 0.7rem;
+  border: 1px solid var(--color-border, #e2e8f0);
+}
+
+/* The farewell slide reuses .mascot-welcome__art, so it is sized by the same
+   shared token as the opening slide. There is deliberately no second, slide
+   specific size rule here: that is what let the two slides drift apart. */
+
+
+.mascot-welcome__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.85rem 1.25rem;
+  border-top: 1px solid var(--color-border, #e2e8f0);
+}
+
+.mascot-welcome__skip-again {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: var(--fs-xs, 0.75rem);
+  color: var(--color-text-muted, #64748b);
+  cursor: pointer;
+}
+
+.mascot-welcome__controls {
+  display: flex;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+.mascot-welcome__dots {
+  display: flex;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0 1.25rem 1rem;
+}
+
+.mascot-welcome__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.18);
+  transition: width 0.25s ease, background 0.25s ease;
+}
+
+.mascot-welcome__dot.is-current {
+  width: 20px;
+  border-radius: 999px;
+  background: var(--mascot-blue);
+}
+
+@media (max-width: 575.98px) {
+  .mascot-welcome { --mascot-welcome-art: 150px; }
+  .mascot-welcome__body { min-height: 12rem; }
+  .mascot-welcome__say { flex-direction: column; text-align: center; }
+  .mascot-welcome__foot { flex-direction: column; align-items: stretch; }
+  .mascot-welcome__controls { margin-left: 0; justify-content: flex-end; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mascot-welcome__backdrop,
+  .mascot-welcome__dialog,
+  .mascot-welcome__art .mascot { animation: none; }
+  .mascot-welcome__dot { transition: none; }
+}
+
+@media print {
+  .mascot-welcome { display: none !important; }
+}
+

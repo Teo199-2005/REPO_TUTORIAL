@@ -18,16 +18,15 @@ class Dashboard extends BaseController
         $announcementModel = new AnnouncementModel();
         
         $selectedYear = $this->request->getGet('year') ?? date('Y');
-        // Get current term from system settings, fallback to session, then default to 1
-        try {
-            $systemSettingModel = new \App\Models\SystemSettingModel();
-            $currentTerm = $systemSettingModel->getCurrentTerm();
-            if (!$currentTerm) {
-                $currentTerm = session()->get('current_term') ?? 1;
-            }
-        } catch (\Exception $e) {
-            $currentTerm = session()->get('current_term') ?? 1;
-        }
+        // Get current term from system settings (single source of truth).
+        // The school year is already read from the database via
+        // get_current_school_year(); the term must behave the same way so an
+        // administrator's change on the Settings page (which writes to the DB
+        // only) is reflected immediately everywhere. A per-browser session
+        // value goes stale as soon as any other browser/device updates the
+        // setting, so it is never used as a term source.
+        helper('school_year');
+        $currentTerm = get_current_term();
         
         // Get enrollment by grade for selected school year.
         // Use the same school year format as the sections page for consistency.
@@ -55,6 +54,53 @@ class Dashboard extends BaseController
 
             $enrollmentByGrade[$grade] = (int) ($row->total ?? 0);
         }
+
+        // Enrollment widget statistics (KPIs, growth, freshness)
+        $enrollmentTotal = array_sum($enrollmentByGrade);
+        $enrollmentActiveGrades = count(array_filter($enrollmentByGrade));
+
+        $enrollmentTopGrade = null;
+        $enrollmentLowGrade = null;
+        foreach ($enrollmentByGrade as $grade => $count) {
+            if ($count <= 0) {
+                continue;
+            }
+            $gradeLabel = grade_level_label((int) $grade);
+            if ($enrollmentTopGrade === null || $count > $enrollmentTopGrade['count']) {
+                $enrollmentTopGrade = ['grade' => $grade, 'label' => $gradeLabel, 'count' => $count];
+            }
+            if ($enrollmentLowGrade === null || $count < $enrollmentLowGrade['count']) {
+                $enrollmentLowGrade = ['grade' => $grade, 'label' => $gradeLabel, 'count' => $count];
+            }
+        }
+
+        // Growth vs previous school year (same enrollment scope as the grade query)
+        $syParts = explode('-', $schoolYear);
+        $prevSchoolYear = (count($syParts) === 2 && is_numeric($syParts[0]) && is_numeric($syParts[1]))
+            ? ((int) $syParts[0] - 1) . '-' . ((int) $syParts[1] - 1)
+            : null;
+        $currentYearTotal = $this->enrollmentTotalForYear($schoolYear, (int) $selectedYear);
+        $prevYearTotal = $prevSchoolYear !== null ? $this->enrollmentTotalForYear($prevSchoolYear, (int) $selectedYear - 1) : 0;
+        $enrollmentGrowth = $prevYearTotal > 0
+            ? round((($currentYearTotal - $prevYearTotal) / $prevYearTotal) * 100, 1)
+            : null;
+
+        // Last data refresh (newest enrolled student record in the same scope)
+        $lastUpdatedRow = $db->query("
+            SELECT MAX(st.created_at) AS last_at
+            FROM students st
+            LEFT JOIN sections s ON s.id = st.section_id
+            WHERE st.enrollment_status = 'enrolled'
+              AND st.deleted_at IS NULL
+              AND (
+                    (st.section_id IS NOT NULL AND s.school_year = ?)
+                    OR
+                    (st.section_id IS NULL AND st.school_year = ?)
+                    OR
+                    (st.section_id IS NULL AND (st.school_year IS NULL OR st.school_year = '') AND YEAR(st.created_at) = ?)
+              )
+        ", [$schoolYear, $schoolYear, $selectedYear])->getRow();
+        $enrollmentLastUpdated = $lastUpdatedRow->last_at ?? null;
 
         $enrollmentChartLabels = grade_level_chart_labels();
         $enrollmentChartValues = array_map(
@@ -105,17 +151,24 @@ class Dashboard extends BaseController
         }
         
         $data = [
-            'title' => 'Admin Dashboard - CSCS SMS',
+            'title' => 'Admin Dashboard - CSCS Tap n Track',
             'total_students' => $studentModel->where('enrollment_status', 'enrolled')->countAllResults(),
             'total_teachers' => $teacherModel->countAll(),
             'total_users' => 0, // $userModel->countAll(),
             'pending_enrollments' => $studentModel->where('enrollment_status', 'pending')->countAllResults(),
             'currentTerm' => $currentTerm,
+            'schoolYear' => $schoolYear,
             'selectedYear' => $selectedYear,
             'availableYears' => $availableYears,
             'enrollmentByGrade' => $enrollmentByGrade,
             'enrollmentChartLabels' => $enrollmentChartLabels,
             'enrollmentChartValues' => $enrollmentChartValues,
+            'enrollmentTotal' => $enrollmentTotal,
+            'enrollmentActiveGrades' => $enrollmentActiveGrades,
+            'enrollmentTopGrade' => $enrollmentTopGrade,
+            'enrollmentLowGrade' => $enrollmentLowGrade,
+            'enrollmentGrowth' => $enrollmentGrowth,
+            'enrollmentLastUpdated' => $enrollmentLastUpdated,
             'recentEnrollments' => $recentEnrollments,
             'recentAnnouncements' => $recentAnnouncements,
             'registrationEnabled' => $registrationEnabled,
@@ -150,6 +203,12 @@ class Dashboard extends BaseController
 
         if (empty($email) || empty($firstName) || empty($lastName) || empty($password)) {
             return $this->response->setJSON(['success' => false, 'message' => 'All fields are required']);
+        }
+
+        // Shared password policy: length AND at least one digit.
+        $policyError = password_meets_policy($password);
+        if ($policyError !== null) {
+            return $this->response->setJSON(['success' => false, 'message' => $policyError]);
         }
 
         if (! in_array($accountType, ['master', 'staff'], true)) {
@@ -198,7 +257,8 @@ class Dashboard extends BaseController
                 'user_id' => $userId,
                 'type' => 'email_password',
                 'name' => $email,
-                'secret' => password_hash($password, PASSWORD_DEFAULT),
+                'secret' => $email,
+                'secret2' => password_hash($password, PASSWORD_DEFAULT),
                 'created_at' => date('Y-m-d H:i:s'),
                 'updated_at' => date('Y-m-d H:i:s'),
             ];
@@ -220,6 +280,23 @@ class Dashboard extends BaseController
         }
 
         $label = $group === 'admin_staff' ? 'Admin staff account' : 'Master admin account';
+
+        audit_event('role.account_created', [
+            'category'      => 'role',
+            'status'        => 'success',
+            'resource_type' => 'user',
+            'resource_id'   => (string) $userId,
+            'description'   => $label . ' created',
+            'after'         => [
+                'email' => $email,
+                'name'  => trim($firstName . ' ' . $lastName),
+                'role'  => $group,
+            ],
+            'metadata'      => [
+                'role'  => $group,
+                'pages' => $group === 'admin_staff' ? ($pageList ?? []) : [],
+            ],
+        ]);
 
         return $this->response->setJSON(['success' => true, 'message' => $label . ' created successfully']);
     }
@@ -252,6 +329,15 @@ class Dashboard extends BaseController
                     log_message('error', 'System settings update failed: ' . $e->getMessage());
                 }
 
+                audit_event('settings.term_updated', [
+                    'category'      => 'settings',
+                    'status'        => 'success',
+                    'resource_type' => 'setting',
+                    'resource_id'   => 'current_term',
+                    'description'   => 'Active grading term changed to Term ' . $term,
+                    'after'         => ['current_term' => $term],
+                ]);
+
                 return $this->response->setJSON(['success' => true, 'message' => 'Term updated successfully']);
             }
 
@@ -275,7 +361,15 @@ class Dashboard extends BaseController
             // Write the new key; also write the old one for backward compatibility with any untouched pages
             $systemSettingModel->setSetting('registration_enabled', $newStatus ? '1' : '0', 'Enable or disable student registration');
             $systemSettingModel->setSetting('enrollment_enabled', $newStatus ? '1' : '0', 'Enable or disable student enrollment');
-            
+
+            audit_event('settings.registration_toggled', [
+                'category'      => 'settings',
+                'status'        => 'success',
+                'resource_type' => 'setting',
+                'resource_id'   => 'registration_enabled',
+                'description'   => 'Student registration ' . ($newStatus ? 'enabled' : 'disabled'),
+            ] + audit_diff(['registration_enabled' => $currentStatus ? '1' : '0'], ['registration_enabled' => $newStatus ? '1' : '0'], ['registration_enabled']));
+
             return $this->response->setJSON([
                 'success' => true,
                 'message' => 'Registration ' . ($newStatus ? 'enabled' : 'disabled') . ' successfully',
@@ -294,7 +388,15 @@ class Dashboard extends BaseController
             $newStatus = !$currentStatus;
             
             $systemSettingModel->setSetting('grading_enabled', $newStatus ? '1' : '0', 'Enable or disable grade input for teachers');
-            
+
+            audit_event('settings.grading_toggled', [
+                'category'      => 'settings',
+                'status'        => 'success',
+                'resource_type' => 'setting',
+                'resource_id'   => 'grading_enabled',
+                'description'   => 'Grade input ' . ($newStatus ? 'enabled' : 'disabled'),
+            ] + audit_diff(['grading_enabled' => $currentStatus ? '1' : '0'], ['grading_enabled' => $newStatus ? '1' : '0'], ['grading_enabled']));
+
             return $this->response->setJSON([
                 'success' => true,
                 'message' => 'Grading ' . ($newStatus ? 'enabled' : 'disabled') . ' successfully',
@@ -351,7 +453,7 @@ class Dashboard extends BaseController
             ->findAll();
 
         return view('admin/sections', [
-            'title' => 'Manage Sections - CSCS SMS',
+            'title' => 'Manage Sections - CSCS Tap n Track',
             'sections' => $sections,
             'availableTeachers' => $availableTeachers,
             'gradeFilter' => $gradeFilter,
@@ -418,19 +520,36 @@ class Dashboard extends BaseController
             ->where('s.id', $sectionId)
             ->get()->getRow();
         
-        // Get subject teachers (including placeholder assignments)
-        $subjectTeachers = $db->table('teacher_schedules ts')
-            ->select('t.id, t.first_name, t.last_name, t.email, sub.subject_name, ts.day_of_week, ts.start_time, ts.end_time, ts.id as schedule_id')
-            ->join('teachers t', 't.id = ts.teacher_id')
-            ->join('subjects sub', 'sub.id = ts.subject_id', 'left')
-            ->where('ts.section_id', $sectionId)
-            ->groupBy('t.id, sub.id, ts.id')
-            ->get()->getResultArray();
+        // Get subject teachers (including placeholder assignments). For
+        // non-numerical sections teachers are assigned to developmental
+        // domains stored in teacher_schedules.domain_id — joining subjects
+        // there would return nothing, so read the domain name instead.
+        $section = $db->table('sections')->select('grading_type')->where('id', $sectionId)->get()->getRow();
+        $isDomainMode = $section && ($section->grading_type ?? '') === 'non_numerical' && schedule_domain_column_ready();
+
+        if ($isDomainMode) {
+            $subjectTeachers = $db->table('teacher_schedules ts')
+                ->select('t.id, t.first_name, t.last_name, t.email, sc.name as subject_name, ts.day_of_week, ts.start_time, ts.end_time, ts.id as schedule_id')
+                ->join('teachers t', 't.id = ts.teacher_id')
+                ->join('sned_categories sc', 'sc.id = ts.domain_id', 'left')
+                ->where('ts.section_id', $sectionId)
+                ->groupBy('t.id, sc.id, ts.id')
+                ->get()->getResultArray();
+        } else {
+            $subjectTeachers = $db->table('teacher_schedules ts')
+                ->select('t.id, t.first_name, t.last_name, t.email, sub.subject_name, ts.day_of_week, ts.start_time, ts.end_time, ts.id as schedule_id')
+                ->join('teachers t', 't.id = ts.teacher_id')
+                ->join('subjects sub', 'sub.id = ts.subject_id', 'left')
+                ->where('ts.section_id', $sectionId)
+                ->groupBy('t.id, sub.id, ts.id')
+                ->get()->getResultArray();
+        }
         
         return $this->response->setJSON([
             'success' => true,
             'adviser' => $adviser,
-            'subjectTeachers' => $subjectTeachers
+            'subjectTeachers' => $subjectTeachers,
+            'domain_mode' => $isDomainMode,
         ]);
     }
 
@@ -441,12 +560,54 @@ class Dashboard extends BaseController
         }
 
         $db = \Config\Database::connect();
-        $result = $db->table('teacher_schedules')->where('id', $scheduleId)->delete();
-        
-        if ($result) {
-            return $this->response->setJSON(['success' => true, 'message' => 'Teacher removed successfully']);
+
+        $row = $db->table('teacher_schedules')
+            ->select('id, teacher_id, section_id, subject_id, domain_id')
+            ->where('id', (int) $scheduleId)
+            ->get()
+            ->getRowArray();
+
+        if (!$row) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Assignment not found (it may have already been removed). Refresh and try again.']);
         }
-        
+
+        // Historical data contains duplicate rows for the same
+        // section + teacher + subject (or domain) pair — older code inserted
+        // one row per assignment click without a unique constraint. The "Assign
+        // Teachers" modal passes all=1 so one Remove click also cleans up every
+        // duplicate row for that assignment; without it the teacher kept
+        // appearing assigned no matter how many times Remove was clicked.
+        // The View Teachers checkbox flow omits all=1 and removes just the one
+        // selected timetable slot, leaving the other slots intact.
+        $deleteAll = $this->request->getGet('all') === '1';
+
+        if ($deleteAll) {
+            $query = $db->table('teacher_schedules')
+                ->where('section_id', $row['section_id'])
+                ->where('teacher_id', $row['teacher_id']);
+
+            if ($row['domain_id'] !== null) {
+                $query->where('domain_id', $row['domain_id']);
+            } else {
+                $query->where('subject_id', $row['subject_id']);
+            }
+
+            $deleted = $query->delete();
+            $count   = $db->affectedRows();
+        } else {
+            $deleted = $db->table('teacher_schedules')->where('id', $row['id'])->delete();
+            $count   = 1;
+        }
+
+        if ($deleted) {
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => $count > 1
+                    ? "Teacher removed successfully ({$count} duplicate schedule rows cleaned up)"
+                    : 'Teacher removed successfully',
+            ]);
+        }
+
         return $this->response->setJSON(['success' => false, 'message' => 'Failed to remove teacher']);
     }
 
@@ -503,7 +664,47 @@ class Dashboard extends BaseController
         }
 
         $db = \Config\Database::connect();
-        
+
+        // Non-numerical sections are assessed with developmental domains, not
+        // subjects, so section_subjects is legitimately empty for them. Those
+        // sections must report the domains the admin ticked on the Sections
+        // page (falling back to every shared domain when never configured).
+        if (is_non_numerical_section($sectionId)) {
+            $section = $db->table('sections')->where('id', (int) $sectionId)->get()->getRowArray();
+            $selectedIds = section_selected_domain_ids((int) $sectionId);
+
+            if ($selectedIds === null) {
+                $domains = (new \App\Models\SnedCategoryModel())
+                    ->getActiveCategories((int) $sectionId, (int) ($section['grade_level'] ?? 0));
+            } elseif ($selectedIds !== []) {
+                $domains = $db->table('sned_categories')
+                    ->whereIn('id', $selectedIds)
+                    ->where('is_active', 1)
+                    ->orderBy('display_order', 'ASC')
+                    ->get()->getResultArray();
+            } else {
+                $domains = [];
+            }
+
+            // Same shape the subject branch returns so the modal's JS is shared.
+            $subjects = [];
+            foreach ($domains as $domain) {
+                $subjects[] = [
+                    'id'           => (int) $domain['id'],
+                    'subject_name' => $domain['name'],
+                    'subject_code' => null,
+                    'is_domain'    => true,
+                ];
+            }
+
+            return $this->response->setJSON([
+                'success'         => true,
+                'subjects'        => $subjects,
+                'is_non_numerical' => true,
+                'domain_mode'     => true,
+            ]);
+        }
+
         // Get section-specific subjects with section-specific is_active status
         $subjects = $db->query(
             "SELECT s.*, ss.is_active, ss.id as section_subject_id FROM subjects s
@@ -555,29 +756,48 @@ class Dashboard extends BaseController
 
         try {
             $db = \Config\Database::connect();
-            
+
+            $subject = $db->table('subjects')->where('id', $id)->get()->getRowArray();
+            if (!$subject) {
+                return $this->response->setJSON(['success' => false, 'error' => 'Subject not found']);
+            }
+
+            $code = trim((string) $this->request->getPost('subject_code'));
+            $name = trim((string) $this->request->getPost('subject_name'));
+
+            if ($code === '' || $name === '') {
+                return $this->response->setJSON(['success' => false, 'error' => 'Subject code and name are required']);
+            }
+
+            // subject_code / subject_name are GLOBAL fields on the subjects table
+            // (shared by every section that offers this subject). They must always
+            // be updated here. The old code skipped this entirely whenever a
+            // section_subject_id was posted, which is why edits reported success
+            // but nothing changed.
+            $result = $db->table('subjects')->where('id', $id)->update([
+                'subject_code' => $code,
+                'subject_name' => $name,
+            ]);
+            if ($result === false) {
+                return $this->response->setJSON(['success' => false, 'error' => 'Failed to update subject']);
+            }
+
+            // is_active is PER-SECTION (section_subjects.is_active). Only touch it
+            // when the request actually posts a value — the Edit Subject modal no
+            // longer sends one, so the per-section status stays untouched.
             $isActiveValue = $this->request->getPost('is_active');
-            $isActiveInt = ($isActiveValue === '1' || $isActiveValue === 1 || $isActiveValue === true || $isActiveValue === 'true') ? 1 : 0;
             $sectionSubjectId = $this->request->getPost('section_subject_id');
-            
-            // Update section_subjects table for section-specific status
-            if ($sectionSubjectId) {
-                $result = $db->table('section_subjects')->where('id', $sectionSubjectId)->update(['is_active' => $isActiveInt]);
-            } else {
-                // Fallback: update subjects table (global)
-                $data = [
-                    'subject_code' => $this->request->getPost('subject_code'),
-                    'subject_name' => $this->request->getPost('subject_name')
-                ];
-                $result = $db->table('subjects')->where('id', $id)->update($data);
+            if ($isActiveValue !== null && $sectionSubjectId) {
+                $isActiveInt = ($isActiveValue === '1' || $isActiveValue === 1 || $isActiveValue === true || $isActiveValue === 'true') ? 1 : 0;
+                $db->table('section_subjects')->where('id', $sectionSubjectId)->update(['is_active' => $isActiveInt]);
             }
-            
-            if ($result !== false) {
-                return $this->response->setJSON(['success' => true, 'message' => 'Subject updated successfully']);
-            }
-            
-            return $this->response->setJSON(['success' => false, 'error' => 'No changes made or subject not found']);
+
+            return $this->response->setJSON(['success' => true, 'message' => 'Subject updated successfully']);
         } catch (\Exception $e) {
+            // subject_code has a UNIQUE index — surface a friendly duplicate message
+            if (strpos($e->getMessage(), 'Duplicate entry') !== false) {
+                return $this->response->setJSON(['success' => false, 'error' => 'That subject code is already used by another subject']);
+            }
             return $this->response->setJSON(['success' => false, 'error' => 'Database error: ' . $e->getMessage()]);
         }
     }
@@ -670,22 +890,6 @@ class Dashboard extends BaseController
         }
     }
     
-    public function debugStudentAssignments()
-    {
-        helper('admin_access');
-        if (! function_exists('is_master_admin') || ! is_master_admin()) {
-            return $this->response->setJSON(['success' => false, 'message' => 'Access denied']);
-        }
-        
-        $db = \Config\Database::connect();
-        
-        // Only expose section-level data, no student PII
-        $sectionCounts = $db->query("SELECT s.id, s.section_name, s.current_enrollment, COUNT(st.id) as actual_count FROM sections s LEFT JOIN students st ON st.section_id = s.id AND st.enrollment_status = 'enrolled' WHERE s.grade_level = 1 GROUP BY s.id")->getResultArray();
-        
-        return $this->response->setJSON([
-            'section_counts' => $sectionCounts
-        ]);
-    }
 
     public function assignStudentsToSection($sectionId)
     {
@@ -860,9 +1064,9 @@ class Dashboard extends BaseController
         $rules = [
             'section_name' => 'required|max_length[100]',
             'grade_level' => 'required|integer|in_list[0,1,2,3,4,5,6,7,99]',
-            'school_year' => 'required|max_length[20]',
+            'school_year' => 'required|max_length[9]|regex_match[/^\d{4}-\d{4}$/]',
             'max_capacity' => 'required|integer|greater_than[0]',
-            'is_active' => 'permit_empty|in_list[0,1]'
+            'grading_type' => 'permit_empty|in_list[numerical,non_numerical,custom]'
         ];
         if (!$this->validate($rules)) {
             if ($this->request->isAJAX()) {
@@ -879,13 +1083,60 @@ class Dashboard extends BaseController
             'grade_level' => (int) $this->request->getPost('grade_level'),
             'school_year' => $this->request->getPost('school_year'),
             'max_capacity' => (int) $this->request->getPost('max_capacity'),
-            'is_active'    => $this->request->getPost('is_active') ? 1 : 0,
         ];
         
-        // Only update grading_type if provided (for bulk edit operations)
+        // Only update grading_type if provided (single edit + bulk edit)
         $gradingType = $this->request->getPost('grading_type');
         if ($gradingType) {
+            $oldType = $section['grading_type'] ?? 'numerical';
             $data['grading_type'] = $gradingType;
+
+            // Non-numerical sections are graded through the SNED
+            // developmental-domains portal — leftover subject links and stale
+            // numeric grades (e.g. symbols typed into numeric fields, stored as
+            // 0.00) must never survive. The cleanup runs on EVERY save of a
+            // non-numerical section, so a section that was converted before
+            // this fix existed is repaired the next time the admin saves it.
+            if ($gradingType === 'non_numerical') {
+                $db = \Config\Database::connect();
+
+                // 1. Remove the section's subject links.
+                $db->table('section_subjects')->where('section_id', $sectionId)->delete();
+
+                // 2. Remove stale numeric grades of the section's students.
+                $db->query(
+                    "DELETE g FROM grades g
+                     JOIN students st ON st.id = g.student_id
+                     WHERE st.section_id = ?",
+                    [$sectionId]
+                );
+
+                // 3. Seed default grading symbols once, on the switch.
+                if ($oldType !== 'non_numerical') {
+                $hasSymbols = $db->table('section_grading_symbols')
+                    ->where('section_id', $sectionId)
+                    ->countAllResults() > 0;
+                if (! $hasSymbols) {
+                    $defaultSymbols = [
+                        ['symbol' => 'P',     'label' => 'Proficient',                   'description' => 'Meets expectations',            'display_order' => 1],
+                        ['symbol' => 'AP',    'label' => 'Approaching Proficiency',      'description' => 'Nearly meets expectations',     'display_order' => 2],
+                        ['symbol' => 'D',     'label' => 'Developing',                   'description' => 'Still developing skills',       'display_order' => 3],
+                        ['symbol' => 'B',     'label' => 'Beginning',                    'description' => 'Beginning to learn',            'display_order' => 4],
+                        ['symbol' => 'NO/NA', 'label' => 'Not Observed / Not Applicable', 'description' => 'Skill not yet observed or not applicable', 'display_order' => 5],
+                    ];
+                    foreach ($defaultSymbols as $sym) {
+                        $db->table('section_grading_symbols')->insert([
+                            'section_id'    => $sectionId,
+                            'symbol'        => $sym['symbol'],
+                            'label'         => $sym['label'],
+                            'description'   => $sym['description'],
+                            'display_order' => $sym['display_order'],
+                            'is_active'     => 1,
+                        ]);
+                    }
+                }
+                }
+            }
         }
 
         if (($section['current_enrollment'] ?? 0) > $data['max_capacity']) {
@@ -911,8 +1162,10 @@ class Dashboard extends BaseController
         }
 
         $sectionModel = new SectionModel();
-        $section = $sectionModel->find($sectionId);
-        
+        // withDeleted() so rows that were only soft-deleted in the past can
+        // still be found and permanently purged.
+        $section = $sectionModel->withDeleted()->find($sectionId);
+
         if (!$section) {
             return $this->response->setJSON(['success' => false, 'message' => 'Section not found']);
         }
@@ -922,24 +1175,49 @@ class Dashboard extends BaseController
         $enrolledCount = $studentModel->where('section_id', $sectionId)
                                      ->where('enrollment_status', 'enrolled')
                                      ->countAllResults();
-        
+
         if ($enrolledCount > 0) {
             return $this->response->setJSON([
-                'success' => false, 
+                'success' => false,
                 'message' => "Cannot delete section. It has {$enrolledCount} enrolled student(s). Please move students to other sections first."
             ]);
         }
 
-        // Use soft delete
-        if ($sectionModel->delete($sectionId)) {
+        $db = \Config\Database::connect();
+        $db->transStart();
+
+        try {
+            // Detach any remaining students (pending/applicants, etc.). students.section_id
+            // has no foreign key, so it must be cleared explicitly or the rows
+            // would point at a section that no longer exists.
+            $db->table('students')
+                ->where('section_id', $sectionId)
+                ->update(['section_id' => null, 'updated_at' => date('Y-m-d H:i:s')]);
+
+            // Permanently remove the section row. The second argument forces a
+            // hard DELETE instead of a soft delete (deleted_at stamp), so the
+            // row is gone from the database. section_subjects /
+            // teacher_schedules / quizzes rows cascade via foreign keys.
+            $sectionModel->delete($sectionId, true);
+
+            $db->transComplete();
+
+            if ($db->transStatus() === false) {
+                return $this->response->setJSON(['success' => false, 'message' => 'Failed to delete section']);
+            }
+
+            log_message('info', 'Section permanently deleted: ID ' . $sectionId . ' by admin.');
+
             return $this->response->setJSON([
                 'success' => true,
                 'message' => 'Section deleted successfully'
             ]);
-        } else {
+        } catch (\Throwable $e) {
+            log_message('error', 'Section delete error: ' . $e->getMessage());
+
             return $this->response->setJSON([
                 'success' => false,
-                'message' => 'Failed to delete section'
+                'message' => 'Failed to delete section: ' . $e->getMessage(),
             ]);
         }
     }
@@ -957,7 +1235,7 @@ class Dashboard extends BaseController
         $rules = [
             'section_name' => 'required|max_length[100]',
             'grade_level' => 'required|integer|' . grade_level_in_list_rule(),
-            'school_year' => 'required|max_length[20]',
+            'school_year' => 'required|max_length[9]|regex_match[/^\d{4}-\d{4}$/]',
             'grading_type' => 'permit_empty|in_list[numerical,non_numerical]',
             'max_capacity' => 'required|integer|greater_than[0]|less_than_equal_to[50]'
         ];
@@ -978,7 +1256,10 @@ class Dashboard extends BaseController
             return redirect()->back()->withInput()->with('error', 'A section with this name already exists for this grade level and school year.');
         }
 
-        $gradingType = $this->request->getPost('grading_type') ?: 'numerical';
+        // Default to the grade level's configured grading type (Settings >
+        // Subject Management > Edit) unless the form explicitly provides one.
+        $gradeLevel = (int) $this->request->getPost('grade_level');
+        $gradingType = $this->request->getPost('grading_type') ?: grade_grading_type($gradeLevel);
 
         $data = [
             'section_name' => $this->request->getPost('section_name'),
@@ -1029,25 +1310,73 @@ class Dashboard extends BaseController
         helper('school_year');
         $currentTerm = get_current_term();
         $schoolYear  = get_current_school_year();
+        // Year filter: past 2 years, current year, plus SY end-year (e.g. SY 2026-2027 -> 2027).
+        $currentCalendarYear = (int) date('Y');
+        $syEndYear = $currentCalendarYear;
+        $yearPartsTmp = explode('-', (string) $schoolYear);
+        if (count($yearPartsTmp) === 2 && is_numeric($yearPartsTmp[1])) {
+            $syEndYear = (int) $yearPartsTmp[1];
+        }
+        $maxYearTmp = max($currentCalendarYear, $syEndYear);
+        $availableYears = [];
+        for ($ayTmp = $maxYearTmp - 2; $ayTmp <= $maxYearTmp; $ayTmp++) {
+            $availableYears[] = $ayTmp;
+        }
+        $selectedYear = (int) ($this->request->getGet('year') ?? $currentCalendarYear);
+        if (! in_array($selectedYear, $availableYears, true)) {
+            $selectedYear = $currentCalendarYear;
+        }
+
 
         $studentModel = new StudentModel();
         $teacherModel = new TeacherModel();
         
-        // Get gender distribution (enrolled students only — consistent with other tiles)
-        $maleCount = $studentModel->where('gender', 'Male')->where('enrollment_status', 'enrolled')->countAllResults();
-        $femaleCount = $studentModel->where('gender', 'Female')->where('enrollment_status', 'enrolled')->countAllResults();
+        // Period filter (mirrors the student analytics page): week | month | term | all
+        $period = (string) ($this->request->getGet('period') ?? 'all');
+        if (! in_array($period, ['week', 'month', 'term', 'all'], true)) {
+            $period = 'all';
+        }
+        $cutoff = null;
+        if ($period === 'week') {
+            $cutoff = date('Y-m-d 00:00:00', strtotime('-6 days'));
+        } elseif ($period === 'month') {
+            $cutoff = date('Y-m-d 00:00:00', strtotime('-29 days'));
+        }
+
+        // Scope a student query to the selected period + selected year.
+        // Year scope: students.school_year LIKE 'selectedYear%' OR YEAR(created_at) = selectedYear,
+        // so filtering by 2026 shows SY 2026-2027 + records created in 2026,
+        // filtering by 2027 shows SY 2026-2027 records with 2027 dates / SY 2027-2028.
+        $applyPeriod = function ($builder) use ($period, $cutoff, $schoolYear, $selectedYear) {
+            if ($period === 'term') {
+                // Term-level date ranges are not tracked in the database,
+                // so the current school year is the closest available scope.
+                $builder->where('school_year', $schoolYear);
+            } elseif ($cutoff !== null) {
+                $builder->where('created_at >=', $cutoff);
+            } else {
+                $builder->groupStart()
+                    ->like('school_year', (string) $selectedYear . '%', 'after')
+                    ->orWhere('YEAR(created_at) =', $selectedYear, false)
+                    ->groupEnd();
+            }
+            return $builder;
+        };
+
+        $maleCount = $applyPeriod($studentModel->where('gender', 'Male')->where('enrollment_status', 'enrolled'))->countAllResults();
+        $femaleCount = $applyPeriod($studentModel->where('gender', 'Female')->where('enrollment_status', 'enrolled'))->countAllResults();
         
         // Get enrollment status distribution
-        $enrolledCount = $studentModel->where('enrollment_status', 'enrolled')->countAllResults();
-        $pendingCount = $studentModel->where('enrollment_status', 'pending')->countAllResults();
-        $approvedCount = $studentModel->where('enrollment_status', 'approved')->countAllResults();
-        $rejectedCount = $studentModel->where('enrollment_status', 'rejected')->countAllResults();
+        $enrolledCount = $applyPeriod($studentModel->where('enrollment_status', 'enrolled'))->countAllResults();
+        $pendingCount = $applyPeriod($studentModel->where('enrollment_status', 'pending'))->countAllResults();
+        $approvedCount = $applyPeriod($studentModel->where('enrollment_status', 'approved'))->countAllResults();
+        $rejectedCount = $applyPeriod($studentModel->where('enrollment_status', 'rejected'))->countAllResults();
         
         // Get enrollment by grade
         $gradeDistribution = [];
         foreach (grade_level_options() as $grade) {
-            $gradeDistribution[$grade] = $studentModel->where('grade_level', $grade)
-                                                   ->where('enrollment_status', 'enrolled')
+            $gradeDistribution[$grade] = $applyPeriod($studentModel->where('grade_level', $grade)
+                                                   ->where('enrollment_status', 'enrolled'))
                                                    ->countAllResults();
         }
         
@@ -1059,13 +1388,14 @@ class Dashboard extends BaseController
             ->countAllResults();
         
         // Get recent enrolled students
-        $recentEnrolled = $studentModel->where('enrollment_status', 'enrolled')
+        $recentEnrolled = $applyPeriod($studentModel->where('enrollment_status', 'enrolled'))
                                       ->orderBy('created_at', 'DESC')
                                       ->limit(5)
                                       ->findAll();
         
         $data = [
-            'title' => 'Analytics Dashboard - CSCS SMS',
+            'title' => 'Analytics Dashboard - CSCS Tap n Track',
+            'period' => $period,
             'currentTerm' => $currentTerm,
             'schoolYear' => $schoolYear,
             'genderDistribution' => [
@@ -1091,10 +1421,33 @@ class Dashboard extends BaseController
                 'approvalRate' => $approvedCount > 0 ? round(($approvedCount / ($enrolledCount + $pendingCount + $approvedCount)) * 100) : 0,
                 'genderBalance' => abs($maleCount - $femaleCount)
             ],
-            'gradeAverages' => $this->getGradeAverages()
+            'gradeAverages' => $this->getGradeAverages(),
+            'selectedYear' => $selectedYear ?? $currentCalendarYear ?? (int) date('Y'),
+            'availableYears' => $availableYears ?? [((int) date('Y')) - 2, ((int) date('Y')) - 1, (int) date('Y')],
         ];
         
         return view('admin/analytics', $data);
+    }
+
+    private function enrollmentTotalForYear(string $schoolYear, int $calendarYear): int
+    {
+        $db = \Config\Database::connect();
+        $row = $db->query("
+            SELECT COUNT(*) AS total
+            FROM students st
+            LEFT JOIN sections s ON s.id = st.section_id
+            WHERE st.enrollment_status = 'enrolled'
+              AND st.deleted_at IS NULL
+              AND (
+                    (st.section_id IS NOT NULL AND s.school_year = ?)
+                    OR
+                    (st.section_id IS NULL AND st.school_year = ?)
+                    OR
+                    (st.section_id IS NULL AND (st.school_year IS NULL OR st.school_year = '') AND YEAR(st.created_at) = ?)
+              )
+        ", [$schoolYear, $schoolYear, $calendarYear])->getRow();
+
+        return (int) ($row->total ?? 0);
     }
 
     private function getGradeAverages()
@@ -1164,7 +1517,7 @@ class Dashboard extends BaseController
         if (empty($students)) {
             return $this->response->setJSON([
                 'success' => false,
-                'message' => 'No unassigned students found for Grade ' . $gradeLevel
+                'message' => 'No unassigned students found for ' . grade_level_label((int) $gradeLevel)
             ]);
         }
 
@@ -1176,7 +1529,7 @@ class Dashboard extends BaseController
         if (empty($sections)) {
             return $this->response->setJSON([
                 'success' => false,
-                'message' => 'No active sections found for Grade ' . $gradeLevel
+                'message' => 'No active sections found for ' . grade_level_label((int) $gradeLevel)
             ]);
         }
 
@@ -1311,7 +1664,7 @@ class Dashboard extends BaseController
             ->where('(section_id IS NULL OR section_id = 0)')
             ->countAllResults();
         
-        $message = "Successfully assigned {$assignedCount} students to Grade {$gradeLevel} sections";
+        $message = "Successfully assigned {$assignedCount} students to " . grade_level_label((int) $gradeLevel) . ' sections';
         if ($totalUnassigned > 0) {
             $message .= ". {$totalUnassigned} students remain unassigned (no available capacity)";
         }
@@ -1408,7 +1761,10 @@ class Dashboard extends BaseController
         $html = view('admin/analytics_pdf', $data);
         
         $options = new \Dompdf\Options();
-        $options->set('defaultFont', 'Helvetica');
+        $options->set('defaultFont', 'Times');
+        $options->set('isRemoteEnabled', false);
+        $options->set('isHtml5ParserEnabled', true);
+        $options->set('isPhpEnabled', false);
         $dompdf = new \Dompdf\Dompdf($options);
         $dompdf->loadHtml($html);
         $dompdf->setPaper('A4', 'portrait');
@@ -1436,7 +1792,7 @@ class Dashboard extends BaseController
             ->findAll();
 
         if (empty($sections)) {
-            return redirect()->back()->with('error', 'No sections found for Grade ' . $gradeLevel);
+            return redirect()->back()->with('error', 'No sections found for ' . grade_level_label((int) $gradeLevel));
         }
 
         // Get all assigned students for this grade
@@ -1475,23 +1831,9 @@ class Dashboard extends BaseController
             $sectionModel->updateEnrollmentCount($section['id']);
         }
 
-        return redirect()->back()->with('success', "Rebalanced {$studentIndex} students across Grade {$gradeLevel} sections");
+        return redirect()->back()->with('success', "Rebalanced {$studentIndex} students across " . grade_level_label((int) $gradeLevel) . ' sections');
     }
 
-    public function fixSectionSchoolYears()
-    {
-        if (!auth()->user() || !is_any_admin()) {
-            return redirect()->to(base_url('/'));
-        }
-
-        $db = \Config\Database::connect();
-        $currentSchoolYear = get_current_school_year();
-        
-        $result = $db->query("UPDATE sections SET school_year = ? WHERE deleted_at IS NULL", [$currentSchoolYear]);
-        $affectedRows = $db->affectedRows();
-        
-        return redirect()->to('admin/sections')->with('success', "Updated {$affectedRows} sections to school year {$currentSchoolYear}");
-    }
 
     public function assignSubjectsToSection()
     {
@@ -1556,7 +1898,37 @@ class Dashboard extends BaseController
         }
 
         $db = \Config\Database::connect();
-        
+
+        // Non-numerical sections assign teachers to developmental domains, which
+        // live in teacher_schedules.domain_id — joining subjects here would
+        // return nothing (or the wrong subject, since ids collide).
+        if (is_non_numerical_section($sectionId)) {
+            if (! schedule_domain_column_ready()) {
+                return $this->response->setJSON([
+                    'success'     => true,
+                    'assignments' => [],
+                    'needs_schema' => true,
+                ]);
+            }
+
+            $assignments = $db->query(
+                "SELECT ts.id as schedule_id, ts.teacher_id, ts.domain_id as subject_id,
+                        CONCAT(t.first_name, ' ', t.last_name) as teacher_name,
+                        sc.name as subject_name, NULL as subject_code
+                 FROM teacher_schedules ts
+                 JOIN teachers t ON t.id = ts.teacher_id
+                 JOIN sned_categories sc ON sc.id = ts.domain_id
+                 WHERE ts.section_id = ?",
+                [$sectionId]
+            )->getResultArray();
+
+            return $this->response->setJSON([
+                'success'     => true,
+                'assignments' => $assignments,
+                'domain_mode' => true,
+            ]);
+        }
+
         $assignments = $db->query(
             "SELECT ts.id as schedule_id, ts.teacher_id, ts.subject_id, 
                     CONCAT(t.first_name, ' ', t.last_name) as teacher_name,
@@ -1588,40 +1960,119 @@ class Dashboard extends BaseController
             return $this->response->setJSON(['success' => false, 'message' => 'Teacher, section, and subject are required']);
         }
 
-        $db = \Config\Database::connect();
-        $schoolYear = get_current_school_year();
+        // Same convention as assignSubjectTeacherOnly(): the item id is a
+        // subject for numerical sections and a developmental domain for
+        // non-numerical ones, and insertTeacherAssignment() routes it to the
+        // correct column (subject_id vs domain_id).
+        $result = $this->insertTeacherAssignment(
+            (int) $teacherId,
+            (int) $sectionId,
+            (int) $subjectId,
+            'Monday',
+            '07:00:00',
+            '08:00:00',
+            ''
+        );
 
-        // Check if teacher already assigned to this subject in this section
+        return $this->response->setJSON([
+            'success' => $result['ok'],
+            'message' => $result['message'],
+        ]);
+    }
+    
+    /**
+     * Insert one teacher assignment row.
+     *
+     * Non-numerical sections assign teachers to developmental domains, which
+     * MUST go into teacher_schedules.domain_id: subject_id carries a FOREIGN KEY
+     * to subjects and 20 of the 21 current domain ids collide with subject ids,
+     * so writing a domain id there would silently attach an unrelated subject.
+     *
+     * @return array{ok: bool, message: string}
+     */
+    private function insertTeacherAssignment(
+        int $teacherId,
+        int $sectionId,
+        int $itemId,
+        string $dayOfWeek,
+        string $startTime,
+        string $endTime,
+        string $room
+    ): array {
+        $db = \Config\Database::connect();
+        $isDomain = is_non_numerical_section($sectionId);
+        $column   = $isDomain ? 'domain_id' : 'subject_id';
+
+        if ($isDomain && ! schedule_domain_column_ready()) {
+            return [
+                'ok'      => false,
+                'message' => 'Your database is missing the teacher_schedules.domain_id column, which is required to '
+                    . 'assign teachers to developmental domains. Run the ALTER TABLE statement for domain support, then try again.',
+            ];
+        }
+
         $exists = $db->table('teacher_schedules')
             ->where('teacher_id', $teacherId)
             ->where('section_id', $sectionId)
-            ->where('subject_id', $subjectId)
+            ->where($column, $itemId)
             ->countAllResults();
 
         if ($exists > 0) {
-            return $this->response->setJSON(['success' => false, 'message' => 'Teacher already assigned to this subject']);
+            // Already assigned is the requested end state, so report success.
+            // Reporting a failure here made the bulk "Assign Teachers" submit
+            // say "Failed to assign 1 teacher(s)" even though the teacher was
+            // (sometimes through a leftover duplicate row) already assigned.
+            return [
+                'ok'      => true,
+                'message' => $isDomain
+                    ? 'Teacher is already assigned to this domain'
+                    : 'Teacher is already assigned to this subject',
+            ];
+        }
+
+        // day_of_week is an ENUM that only recently gained 'TBD'. If this host
+        // could not take that change, fall back to a real weekday (with the
+        // unscheduled 00:00-00:00 window) rather than letting MySQL truncate it.
+        $note = '';
+        if (! schedule_day_accepts_tbd()) {
+            $validDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+            if (! in_array($dayOfWeek, $validDays, true)) {
+                $dayOfWeek = 'Monday';
+                $note = ' (saved as "Monday, unscheduled" because the database does not yet allow a TBD weekday)';
+            }
         }
 
         $data = [
-            'teacher_id' => $teacherId,
-            'section_id' => $sectionId,
-            'subject_id' => $subjectId,
-            'day_of_week' => 'Monday',
-            'start_time' => '07:00:00',
-            'end_time' => '08:00:00',
-            'room' => '',
-            'school_year' => $schoolYear,
-            'created_at' => date('Y-m-d H:i:s'),
-            'updated_at' => date('Y-m-d H:i:s')
+            'teacher_id'  => $teacherId,
+            'section_id'  => $sectionId,
+            'day_of_week' => $dayOfWeek,
+            'start_time'  => $startTime,
+            'end_time'    => $endTime,
+            'room'        => $room,
+            'school_year' => get_current_school_year(),
+            'created_at'  => date('Y-m-d H:i:s'),
+            'updated_at'  => date('Y-m-d H:i:s'),
         ];
 
-        if ($db->table('teacher_schedules')->insert($data)) {
-            return $this->response->setJSON(['success' => true, 'message' => 'Teacher assigned successfully']);
+        if ($isDomain) {
+            $data['domain_id']  = $itemId;
+            $data['subject_id'] = null;
+        } else {
+            $data['subject_id'] = $itemId;
         }
 
-        return $this->response->setJSON(['success' => false, 'message' => 'Failed to assign teacher']);
+        try {
+            if ($db->table('teacher_schedules')->insert($data)) {
+                return ['ok' => true, 'message' => 'Teacher assigned successfully' . $note];
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'insertTeacherAssignment failed: ' . $e->getMessage());
+            return ['ok' => false, 'message' => 'Failed to assign teacher: ' . $e->getMessage()];
+        }
+
+        return ['ok' => false, 'message' => 'Failed to assign teacher'];
     }
-    
+
     public function assignSubjectTeacherOnly()
     {
         if (!is_any_admin()) {
@@ -1636,39 +2087,18 @@ class Dashboard extends BaseController
             return $this->response->setJSON(['success' => false, 'message' => 'Teacher, section, and subject are required']);
         }
 
-        $db = \Config\Database::connect();
-        $schoolYear = get_current_school_year();
+        // Assignment without a timetable yet — same convention as before.
+        $result = $this->insertTeacherAssignment(
+            (int) $teacherId,
+            (int) $sectionId,
+            (int) $subjectId,
+            'TBD',
+            '00:00:00',
+            '00:00:00',
+            ''
+        );
 
-        // Check if assignment already exists
-        $exists = $db->table('teacher_schedules')
-            ->where('teacher_id', $teacherId)
-            ->where('section_id', $sectionId)
-            ->where('subject_id', $subjectId)
-            ->countAllResults();
-
-        if ($exists > 0) {
-            return $this->response->setJSON(['success' => false, 'message' => 'Teacher already assigned to this subject']);
-        }
-
-        // Create a placeholder schedule entry with default values
-        $data = [
-            'teacher_id' => $teacherId,
-            'section_id' => $sectionId,
-            'subject_id' => $subjectId,
-            'day_of_week' => 'TBD',
-            'start_time' => '00:00:00',
-            'end_time' => '00:00:00',
-            'room' => '',
-            'school_year' => $schoolYear,
-            'created_at' => date('Y-m-d H:i:s'),
-            'updated_at' => date('Y-m-d H:i:s')
-        ];
-
-        if ($db->table('teacher_schedules')->insert($data)) {
-            return $this->response->setJSON(['success' => true, 'message' => 'Teacher assigned successfully']);
-        }
-
-        return $this->response->setJSON(['success' => false, 'message' => 'Failed to assign teacher']);
+        return $this->response->setJSON(['success' => $result['ok'], 'message' => $result['message']]);
     }
     
     public function getGradeSections($gradeLevel)

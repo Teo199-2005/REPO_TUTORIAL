@@ -1,18 +1,80 @@
-﻿<?= $this->extend('dashboard_layout') ?>
+<?= $this->extend('dashboard_layout') ?>
 <?= $this->section('content') ?>
 <!-- Prevent caching of analytics data -->
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<div class="d-flex justify-content-between align-items-center mb-3 analytics-header">
-  <h1 class="h5 mb-0">Analytics Dashboard</h1>
-  <div class="d-flex gap-2">
-    <a href="<?= base_url('admin/analytics/export-pdf') ?>" class="btn btn-sm btn-primary" target="_blank">
-      <i class="bi bi-file-earmark-pdf"></i> Export PDF Report
-    </a>
-    <a href="<?= base_url('admin/dashboard') ?>" class="btn btn-sm btn-outline-secondary">Back</a>
+<?php
+    helper('school_year');
+    $currentCalendarYear = (int) date('Y');
+    $schoolYear = get_current_school_year();
+    $yearParts = explode('-', (string) $schoolYear);
+    $syEndYear = (count($yearParts) === 2 && is_numeric($yearParts[1]))
+        ? (int) $yearParts[1]
+        : $currentCalendarYear;
+    $maxYear = max($currentCalendarYear, $syEndYear);
+    $availableYears = $availableYears ?? [];
+    if (empty($availableYears)) {
+        for ($y = $maxYear - 2; $y <= $maxYear; $y++) {
+            $availableYears[] = $y;
+        }
+    }
+    $selectedYear = (int) ($selectedYear ?? $currentCalendarYear);
+    if (! in_array($selectedYear, $availableYears, true)) {
+        $selectedYear = $currentCalendarYear;
+    }
+    ?>
+<?php
+  // Header actions: year filter + period selector + export, kept together so
+  // the controls that change the report sit in one predictable place.
+  ob_start();
+  ?>
+  <form method="get" class="admin-filter-form analytics-year-filter" aria-label="Analytics year filter">
+    <input type="hidden" name="period" value="<?= esc($period ?? 'all') ?>">
+    <i class="bi bi-calendar3 text-muted" aria-hidden="true"></i>
+    <span class="analytics-year-filter__label">Filter by year:</span>
+    <select name="year" class="analytics-year-filter__select" aria-label="Year">
+      <?php foreach ($availableYears as $yr): ?>
+        <option value="<?= (int) $yr ?>" <?= ((int) $selectedYear === (int) $yr) ? 'selected' : '' ?>><?= (int) $yr ?></option>
+      <?php endforeach; ?>
+    </select>
+  </form>
+
+  <div class="filter-buttons analytics-filter" role="group" aria-label="Analytics period filter">
+    <?php
+      $analyticsYear = (int) ($selectedYear ?? date('Y'));
+      $periods = [
+          'week'  => ['bi-calendar-week', 'Week'],
+          'month' => ['bi-calendar-month', 'Month'],
+          'term'  => ['bi-journal-bookmark', 'Term ' . ($currentTerm ?? get_current_term())],
+          'all'   => ['bi-infinity', 'All'],
+      ];
+    ?>
+    <?php foreach ($periods as $key => [$icon, $text]): ?>
+      <a href="?period=<?= esc($key) ?>&year=<?= $analyticsYear ?>"
+         class="btn btn-sm <?= ($period ?? 'all') === $key ? 'btn-primary' : 'btn-outline-primary' ?>">
+        <i class="bi <?= esc($icon) ?> me-1" aria-hidden="true"></i><?= esc((string) $text) ?>
+      </a>
+    <?php endforeach; ?>
   </div>
-</div>
+
+  <a href="<?= base_url('admin/analytics/export-pdf') ?>?period=<?= esc($period ?? 'all') ?>&year=<?= (int) ($selectedYear ?? date('Y')) ?>"
+     class="btn btn-sm btn-primary admin-btn-primary" target="_blank">
+    <i class="bi bi-file-earmark-pdf"></i> Export PDF report
+  </a>
+  <a href="<?= base_url('admin/dashboard') ?>" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back
+  </a>
+  <?php
+  $analyticsHeaderActions = (string) ob_get_clean();
+
+  echo view('admin/partials/page_header', ['pageHeader' => [
+    'icon'     => 'bi-graph-up-arrow',
+    'title'    => 'Analytics Dashboard',
+    'subtitle' => 'Enrollment, faculty, and performance insights for the whole school',
+    'actions'  => $analyticsHeaderActions,
+  ]]);
+?>
 
 <?php
   $maleCount = (int)($genderDistribution['male'] ?? 0);
@@ -22,23 +84,32 @@
   $approvedTotal = (int)($statusDistribution['approved'] ?? 0);
   $rejectedTotal = (int)($statusDistribution['rejected'] ?? 0);
   $totalStudents = $enrolledTotal + $pendingTotal + $approvedTotal + $rejectedTotal;
+  $periodDescription = match ($period ?? 'all') {
+    'week'  => 'Enrollments recorded in the last 7 days',
+    'month' => 'Enrollments recorded in the last 30 days',
+    'term'  => 'Enrollments for school year ' . ($schoolYear ?? get_current_school_year()),
+    default => 'Enrollments for year ' . ((int) ($selectedYear ?? date('Y'))) . ' (SY starting ' . ((int) ($selectedYear ?? date('Y'))) . ' + records created in ' . ((int) ($selectedYear ?? date('Y'))) . ')',
+  };
 ?>
 
 <div class="analytics-page compact">
   <div class="card overview-card mb-3">
     <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-2 py-2">
       <div class="d-flex align-items-center gap-2">
-        <h6 class="mb-0">Overview</h6>
-        <small class="text-muted">This school year's quick snapshot</small>
+        <i class="bi bi-clipboard2-data text-primary fs-5" aria-hidden="true"></i>
+        <div>
+          <h6 class="mb-0">Overview</h6>
+          <small class="text-muted"><?= esc($periodDescription) ?></small>
+        </div>
       </div>
       <div class="stat-chips">
-        <span class="stat-chip bg-primary-soft">Total <strong><?= $totalStudents ?></strong></span>
-        <span class="stat-chip bg-blue-soft">Enrolled <strong><?= $enrolledTotal ?></strong></span>
-        <span class="stat-chip bg-amber-soft">Pending <strong><?= $pendingTotal ?></strong></span>
-        <span class="stat-chip bg-slate-soft">Approved <strong><?= $approvedTotal ?></strong></span>
-        <span class="stat-chip bg-gray-soft">Rejected <strong><?= $rejectedTotal ?></strong></span>
-        <span class="stat-chip bg-cyan-soft">Male <strong><?= $maleCount ?></strong></span>
-        <span class="stat-chip bg-indigo-soft">Female <strong><?= $femaleCount ?></strong></span>
+        <span class="stat-chip bg-primary-soft"><i class="bi bi-people me-1"></i>Total <strong><?= $totalStudents ?></strong></span>
+        <span class="stat-chip bg-blue-soft"><i class="bi bi-check2-circle me-1"></i>Enrolled <strong><?= $enrolledTotal ?></strong></span>
+        <span class="stat-chip bg-amber-soft"><i class="bi bi-hourglass-split me-1"></i>Pending <strong><?= $pendingTotal ?></strong></span>
+        <span class="stat-chip bg-slate-soft"><i class="bi bi-patch-check me-1"></i>Approved <strong><?= $approvedTotal ?></strong></span>
+        <span class="stat-chip bg-gray-soft"><i class="bi bi-x-circle me-1"></i>Rejected <strong><?= $rejectedTotal ?></strong></span>
+        <span class="stat-chip bg-cyan-soft"><i class="bi bi-gender-male me-1"></i>Male <strong><?= $maleCount ?></strong></span>
+        <span class="stat-chip bg-indigo-soft"><i class="bi bi-gender-female me-1"></i>Female <strong><?= $femaleCount ?></strong></span>
       </div>
     </div>
   </div>
@@ -50,10 +121,11 @@
 
         <div class="card chart-card">
           <div class="card-header d-flex justify-content-between align-items-center py-2">
-            <strong class="small">Teachers Overview</strong>
-            <small class="text-muted d-none d-md-inline">Faculty</small>
+            <strong class="small"><i class="bi bi-person-video3 me-1"></i>Teachers Overview</strong>
+            <small class="text-muted d-none d-md-inline">Active faculty & who advises a section</small>
           </div>
           <div class="card-body py-2">
+            <small class="text-muted d-block mb-2">Shows how many teachers are currently active and how many of them are assigned as section advisers.</small>
             <div class="row mb-2">
               <div class="col-6">
                 <div class="text-center">
@@ -75,10 +147,11 @@
         </div>
         <div class="card chart-card">
           <div class="card-header d-flex justify-content-between align-items-center py-2">
-            <strong class="small">Grade Level Distribution</strong>
-            <small class="text-muted d-none d-md-inline">Per grade</small>
+            <strong class="small"><i class="bi bi-grid-3x3-gap me-1"></i>Grade Level Distribution</strong>
+            <small class="text-muted d-none d-md-inline">Enrolled students per grade level</small>
           </div>
           <div class="card-body py-2">
+            <small class="text-muted d-block mb-2">Breaks down the enrolled population by grade level — shows how many students are in each grade and which grade has the highest enrollment.</small>
             <div class="row mb-2">
               <div class="col-6">
                 <div class="text-center">
@@ -100,10 +173,11 @@
         </div>
         <div class="card chart-card">
           <div class="card-header d-flex justify-content-between align-items-center py-2">
-            <strong class="small">Gender Distribution</strong>
-            <small class="text-muted d-none d-md-inline">Enrolled</small>
+            <strong class="small"><i class="bi bi-gender-ambiguous me-1"></i>Gender Distribution</strong>
+            <small class="text-muted d-none d-md-inline">Male vs female (enrolled only)</small>
           </div>
           <div class="card-body py-2">
+            <small class="text-muted d-block mb-2">Compares the number of male and female enrolled students so you can see the gender balance across the current enrollment.</small>
             <div class="row mb-2">
               <div class="col-6">
                 <div class="text-center">
@@ -126,10 +200,11 @@
 
         <div class="card chart-card">
           <div class="card-header d-flex justify-content-between align-items-center py-2">
-            <strong class="small">Enrollment Status</strong>
-            <small class="text-muted d-none d-md-inline">Breakdown</small>
+            <strong class="small"><i class="bi bi-clipboard2-check me-1"></i>Enrollment Status</strong>
+            <small class="text-muted d-none d-md-inline">Where applications stand</small>
           </div>
           <div class="card-body py-2">
+            <small class="text-muted d-block mb-2">Tracks the status of all student applications — how many have been enrolled, are still pending review, approved, or rejected.</small>
             <div class="row mb-2">
               <div class="col-6">
                 <div class="text-center">
@@ -155,19 +230,24 @@
     <!-- Right: compact widgets stacked -->
     <div class="analytics-cell">
       <div class="card mb-3">
-        <div class="card-header py-2"><strong class="small">Key Metrics</strong></div>
+        <div class="card-header py-2">
+          <div class="d-flex justify-content-between align-items-center">
+            <strong class="small"><i class="bi bi-speedometer2 me-1"></i>Key Metrics</strong>
+            <small class="text-muted d-none d-md-inline">Enrollment funnel at a glance</small>
+          </div>
+        </div>
         <div class="card-body py-2">
-          <div class="metric-row"><span>Completion</span><strong><?= esc(($metrics['completionRate'] ?? 0) . '%') ?></strong></div>
-          <div class="metric-row"><span>Pending</span><strong><?= esc(($metrics['pendingRate'] ?? 0) . '%') ?></strong></div>
-          <div class="metric-row"><span>Approval</span><strong><?= esc(($metrics['approvalRate'] ?? 0) . '%') ?></strong></div>
-          <div class="metric-row mb-0"><span>Gender Gap</span><strong><?= esc($metrics['genderBalance'] ?? 0) ?></strong></div>
+          <div class="metric-row"><span><i class="bi bi-check2-all me-1 text-success"></i>Completion</span><strong><?= esc(($metrics['completionRate'] ?? 0) . '%') ?></strong></div>
+          <div class="metric-row"><span><i class="bi bi-hourglass-split me-1 text-warning"></i>Pending</span><strong><?= esc(($metrics['pendingRate'] ?? 0) . '%') ?></strong></div>
+          <div class="metric-row"><span><i class="bi bi-patch-check me-1 text-info"></i>Approval</span><strong><?= esc(($metrics['approvalRate'] ?? 0) . '%') ?></strong></div>
+          <div class="metric-row mb-0"><span><i class="bi bi-gender-ambiguous me-1 text-secondary"></i>Gender Gap</span><strong><?= esc($metrics['genderBalance'] ?? 0) ?></strong></div>
         </div>
       </div>
 
       <div class="card mb-3">
         <div class="card-header d-flex justify-content-between align-items-center py-2">
-          <strong class="small">Recent Enrolled</strong>
-          <small class="text-muted">Latest 5</small>
+          <strong class="small"><i class="bi bi-clock-history me-1"></i>Recent Enrolled</strong>
+          <small class="text-muted d-none d-md-inline">Newest 5 enrollees</small>
         </div>
         <div class="card-body p-0">
           <?php if (!empty($recentEnrolled)): ?>
@@ -175,7 +255,7 @@
               <?php foreach ($recentEnrolled as $s): ?>
                 <li class="list-group-item py-2 d-flex justify-content-between align-items-center">
                   <span class="small text-truncate" style="max-width: 170px;">
-                    <?= esc(($s['last_name'] ?? '') . ', ' . ($s['first_name'] ?? '')) ?>
+                    <i class="bi bi-person-circle text-muted me-1"></i><?= esc(($s['last_name'] ?? '') . ', ' . ($s['first_name'] ?? '')) ?>
                   </span>
                   <small class="text-muted">G<?= esc($s['grade_level'] ?? '-') ?></small>
                 </li>
@@ -189,7 +269,10 @@
 
       <div class="card">
         <div class="card-header py-2">
-          <strong class="small">Average Grade (T<?= esc((string) ($currentTerm ?? get_current_term())) ?>)</strong>
+          <div class="d-flex justify-content-between align-items-center">
+            <strong class="small"><i class="bi bi-award me-1"></i>Average Grade (T<?= esc((string) ($currentTerm ?? get_current_term())) ?>)</strong>
+            <small class="text-muted d-none d-md-inline">Mean per grade level</small>
+          </div>
         </div>
         <div class="card-body py-2">
           <?php foreach (grade_level_options() as $g): ?>
@@ -203,6 +286,20 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Chart.js draws on a canvas, so no CSS cascade can reach it: the platform
+// typeface has to be handed to Chart.js explicitly, otherwise axis ticks,
+// legends and data labels fall back to Chart.js' own default stack.
+if (typeof Chart !== 'undefined') {
+  if (Chart.defaults.font) {
+    Chart.defaults.font.family = "'Times New Roman', Times, 'Liberation Serif', 'DejaVu Serif', serif";
+    Chart.defaults.font.weight = 400;
+  } else if (Chart.defaults.global) {
+    Chart.defaults.global.defaultFontFamily = "'Times New Roman', Times, 'Liberation Serif', 'DejaVu Serif', serif";
+    Chart.defaults.global.defaultFontWeight = 'normal';
+  }
+}
+</script>
 <script>
 const css = getComputedStyle(document.documentElement);
 const colorPrimary = css.getPropertyValue('--color-primary').trim() || '#1e40af';

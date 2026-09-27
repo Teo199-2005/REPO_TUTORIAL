@@ -39,7 +39,7 @@
     RewriteRule ^uploads/(.*)$ uploads/$1 [L]
     RewriteRule ^uploads/(.*)$ public/uploads/$1 [L]
     RewriteRule ^assets/(.*)$ public/assets/$1 [L]
-    RewriteRule ^(LPHS2\.png|poster2\.png|principal\.jpg|principal\.jfif|robots\.txt|citizens\.png|citizens2\.png)$ public/$1 [L]
+    RewriteRule ^(LPHS2\.png|poster2\.png|robots\.txt|citizens\.png|citizens2\.png)$ public/$1 [L]
 
     # Do not rewrite existing files or directories
     RewriteCond %{REQUEST_FILENAME} !-f

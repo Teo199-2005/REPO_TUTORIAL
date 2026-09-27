@@ -16,14 +16,27 @@ class Students extends BaseController
         $studentModel = model(StudentModel::class);
         $sectionModel = model('SectionModel');
 
-        // Get filter parameters
+        // Get filter parameters (every set filter narrows the list further - AND)
         $gradeLevel = $this->request->getGet('grade');
         $section = $this->request->getGet('section');
         $search = $this->request->getGet('search');
         $assignment = $this->request->getGet('assignment');
-        $status = $this->request->getGet('status') ?: 'all';
+        $status = (string) ($this->request->getGet('status') ?: 'all');
+        $gender = trim((string) $this->request->getGet('gender'));
+        $studentType = trim((string) $this->request->getGet('student_type'));
+        $religion = trim((string) $this->request->getGet('religion'));
         $page = max(1, (int)($this->request->getGet('page') ?? 1));
         $perPage = 30;
+
+        // 'pending' lives on the Pending Students page; the remaining enum
+        // values stay selectable here so graduated/dropped records are reachable.
+        $statusOptions = ['all', 'enrolled', 'approved', 'graduated', 'dropped'];
+        if (! in_array($status, $statusOptions, true)) {
+            $status = 'all';
+        }
+
+        // Nutritional status is filtered on the dedicated Nutrition / BMI page.
+        $db = \Config\Database::connect();
         
 
 
@@ -63,6 +76,18 @@ class Students extends BaseController
                    ->groupEnd();
         }
 
+        if ($gender === 'Male' || $gender === 'Female') {
+            $builder->where('students.gender', $gender);
+        }
+
+        if ($studentType !== '') {
+            $builder->where('students.student_type', $studentType);
+        }
+
+        if ($religion !== '') {
+            $builder->where('students.religion', $religion);
+        }
+
         // Get paginated results - order by enrollment date (newest first), then by last name
         $students = $builder->orderBy('students.created_at', 'DESC')
                            ->orderBy('students.last_name', 'ASC')
@@ -100,6 +125,18 @@ class Students extends BaseController
                         ->orLike('students.lrn', $search)
                         ->groupEnd();
         }
+
+        if ($gender === 'Male' || $gender === 'Female') {
+            $countBuilder->where('students.gender', $gender);
+        }
+
+        if ($studentType !== '') {
+            $countBuilder->where('students.student_type', $studentType);
+        }
+
+        if ($religion !== '') {
+            $countBuilder->where('students.religion', $religion);
+        }
         
         $totalStudents = $countBuilder->countAllResults(false);
         
@@ -121,8 +158,17 @@ class Students extends BaseController
         $this->response->setHeader('Pragma', 'no-cache');
         $this->response->setHeader('Expires', '0');
         
+        // Filter dropdown values come from the data actually recorded so new
+        // religions / student types appear without any code change.
+        $studentTypeOptions = array_column($db->query(
+            "SELECT DISTINCT student_type AS v FROM students WHERE deleted_at IS NULL AND student_type IS NOT NULL AND student_type <> '' ORDER BY student_type ASC"
+        )->getResultArray(), 'v');
+        $religionOptions = array_column($db->query(
+            "SELECT DISTINCT religion AS v FROM students WHERE deleted_at IS NULL AND religion IS NOT NULL AND religion <> '' ORDER BY religion ASC"
+        )->getResultArray(), 'v');
+
         return view('admin/students', [
-            'title' => 'Manage Students - CSCS SMS',
+            'title' => 'Manage Students - CSCS Tap n Track',
             'students' => $students,
             'allSections' => $allSections,
             'gradeLevel' => $gradeLevel,
@@ -130,12 +176,180 @@ class Students extends BaseController
             'search' => $search,
             'assignment' => $assignment,
             'status' => $status,
+            'statusOptions' => $statusOptions,
+            'gender' => $gender,
+            'studentType' => $studentType,
+            'religion' => $religion,
+            'studentTypeOptions' => $studentTypeOptions,
+            'religionOptions' => $religionOptions,
             'pendingCount' => $pendingCount,
             'currentPage' => $page,
             'totalPages' => $totalPages,
             'totalStudents' => $totalStudents,
             'perPage' => $perPage
         ]);
+    }
+
+    /**
+     * Export the filtered master list as a PDF. Mirrors the list page: every
+     * row matching the active filters (no pagination limit).
+     */
+    public function exportPdf()
+    {
+        if (! auth()->user() || ! is_any_admin()) {
+            return redirect()->to(base_url('/'));
+        }
+
+        $data = [
+            'students'       => $this->exportRows(),
+            'reportDate'     => date('F j, Y'),
+            'schoolYear'     => get_current_school_year(),
+            'filtersSummary' => $this->filtersSummary(),
+        ];
+
+        $html = view('admin/students_pdf', $data);
+
+        $options = new \Dompdf\Options();
+        $options->set('defaultFont', 'Times');
+        $options->set('isRemoteEnabled', false);
+        $options->set('isHtml5ParserEnabled', true);
+        $options->set('isPhpEnabled', false);
+        $dompdf = new \Dompdf\Dompdf($options);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'landscape');
+        $dompdf->render();
+
+        return $this->sendPdfInline($dompdf, 'CSCS_Students_' . date('Y-m-d') . '.pdf');
+    }
+
+    /**
+     * Human-readable filter summary printed under the PDF letterhead.
+     */
+    private function filtersSummary(): string
+    {
+        $parts = [];
+
+        $grade = $this->request->getGet('grade');
+        if ($grade !== null && $grade !== '' && ctype_digit((string) $grade)) {
+            $parts[] = grade_level_label((int) $grade);
+        }
+
+        $sectionId = $this->request->getGet('section');
+        if ($sectionId !== null && $sectionId !== '') {
+            $section = model('SectionModel')->select('section_name')->find((int) $sectionId);
+            $parts[] = 'Section: ' . (is_array($section) && ! empty($section['section_name'])
+                ? $section['section_name']
+                : '#' . (int) $sectionId);
+        }
+
+        $assignment = $this->request->getGet('assignment');
+        if ($assignment === 'assigned') {
+            $parts[] = 'Assigned only';
+        } elseif ($assignment === 'unassigned') {
+            $parts[] = 'Unassigned only';
+        }
+
+        $status = (string) ($this->request->getGet('status') ?: 'all');
+        if ($status !== 'all') {
+            $parts[] = 'Status: ' . ucfirst($status);
+        }
+
+        $gender = trim((string) $this->request->getGet('gender'));
+        if ($gender === 'Male' || $gender === 'Female') {
+            $parts[] = 'Sex: ' . $gender;
+        }
+
+        $studentType = trim((string) $this->request->getGet('student_type'));
+        if ($studentType !== '') {
+            $parts[] = 'Type: ' . ucfirst($studentType);
+        }
+
+        $religion = trim((string) $this->request->getGet('religion'));
+        if ($religion !== '') {
+            $parts[] = 'Religion: ' . $religion;
+        }
+
+        $search = trim((string) $this->request->getGet('search'));
+        if ($search !== '') {
+            $parts[] = 'Search: ' . $search;
+        }
+
+        return $parts === [] ? 'All students (pending / archived excluded)' : implode(' | ', $parts);
+    }
+
+    /**
+     * Every row matching the current filters - same WHERE chain as index()
+     * but without the pagination limit. Sex / type / religion are selected so
+     * the filtered values are visible in the export.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function exportRows(): array
+    {
+        $studentModel = model(StudentModel::class);
+
+        $gradeLevel  = $this->request->getGet('grade');
+        $section     = $this->request->getGet('section');
+        $search      = $this->request->getGet('search');
+        $assignment  = $this->request->getGet('assignment');
+        $status      = (string) ($this->request->getGet('status') ?: 'all');
+        $gender      = trim((string) $this->request->getGet('gender'));
+        $studentType = trim((string) $this->request->getGet('student_type'));
+        $religion    = trim((string) $this->request->getGet('religion'));
+
+        if (! in_array($status, ['all', 'enrolled', 'approved', 'graduated', 'dropped'], true)) {
+            $status = 'all';
+        }
+
+        $builder = $studentModel->select('students.id, students.lrn, students.first_name, students.middle_name, students.last_name, students.grade_level, sections.section_name, students.gender, students.student_type, students.religion, students.enrollment_status, students.created_at')
+                                ->join('sections', 'sections.id = students.section_id', 'left')
+                                ->where('students.deleted_at IS NULL')
+                                ->where('students.enrollment_status !=', 'pending');
+
+        if ($status !== 'all') {
+            $builder->where('students.enrollment_status', $status);
+        }
+
+        if ($gradeLevel && $gradeLevel !== '') {
+            $builder->where('students.grade_level', (string) $gradeLevel);
+        }
+
+        if ($section && $section !== '') {
+            $builder->where('students.section_id', $section);
+        }
+
+        if ($assignment && $assignment !== '') {
+            if ($assignment === 'assigned') {
+                $builder->where('students.section_id IS NOT NULL');
+            } elseif ($assignment === 'unassigned') {
+                $builder->where('students.section_id IS NULL');
+            }
+        }
+
+        if ($search) {
+            $builder->groupStart()
+                    ->like('students.first_name', $search)
+                    ->orLike('students.last_name', $search)
+                    ->orLike('students.lrn', $search)
+                    ->groupEnd();
+        }
+
+        if ($gender === 'Male' || $gender === 'Female') {
+            $builder->where('students.gender', $gender);
+        }
+
+        if ($studentType !== '') {
+            $builder->where('students.student_type', $studentType);
+        }
+
+        if ($religion !== '') {
+            $builder->where('students.religion', $religion);
+        }
+
+        // Same ordering as the list page (newest enrolments first, then name).
+        return $builder->orderBy('students.created_at', 'DESC')
+                       ->orderBy('students.last_name', 'ASC')
+                       ->findAll();
     }
 
     /**
@@ -172,7 +386,7 @@ class Students extends BaseController
         $this->response->setHeader('Expires', '0');
 
         return view('admin/student_view', [
-            'title' => 'Student Details - CSCS SMS',
+            'title' => 'Student Details - CSCS Tap n Track',
             'student' => $student,
             'documents' => $documentsByType,
             'passwordReset' => $passwordReset
@@ -203,8 +417,9 @@ class Students extends BaseController
             return $this->response->setStatusCode(400)->setJSON(['error' => 'Passwords do not match']);
         }
 
-        if (strlen($password) < 8) {
-            return $this->response->setStatusCode(400)->setJSON(['error' => 'Password must be at least 8 characters long']);
+        $policyError = password_meets_policy($password);
+        if ($policyError !== null) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => $policyError]);
         }
 
         // Update password in auth_identities table
@@ -217,6 +432,15 @@ class Students extends BaseController
             ->update(['secret2' => $hashedPassword]);
 
         if ($result) {
+            audit_event('account.password_reset_by_admin', [
+                'category'      => 'account',
+                'status'        => 'success',
+                'resource_type' => 'student',
+                'resource_id'   => (string) $student['id'],
+                'description'   => 'Student password reset by an administrator',
+                'metadata'      => ['lrn' => $student['lrn'] ?? null, 'method' => 'admin_portal'],
+            ]);
+
             return $this->response->setJSON([
                 'success' => true,
                 'message' => 'Password updated successfully'
@@ -284,16 +508,68 @@ class Students extends BaseController
     {
         $studentModel = model(StudentModel::class);
         
-        $pendingStudents = $studentModel->select('students.*, users.email')
+        $pendingStudents = $studentModel->select('students.*, users.email as user_email')
                                        ->join('users', 'users.id = students.user_id', 'left')
                                        ->where('students.enrollment_status', 'pending')
                                        ->orderBy('students.created_at', 'DESC')
                                        ->findAll();
 
+        // Ensure email is properly set - prioritize students table email
+        foreach ($pendingStudents as &$pendingStudent) {
+            if (empty($pendingStudent['email'])) {
+                $pendingStudent['email'] = $pendingStudent['user_email'] ?? '';
+            }
+        }
+        unset($pendingStudent);
+
+        // Next school year promotion applications are reviewed on this same page
+        // (rendered below the new student applicants table) so the admin
+        // processes everything from a single screen.
+        $nextYear = $this->fetchNextYearApplications();
+
         return view('admin/students_pending', [
-            'title' => 'Pending Applications - CSCS SMS',
-            'pendingStudents' => $pendingStudents
+            'title' => 'Pending Applications - CSCS Tap n Track',
+            'pendingStudents' => $pendingStudents,
+            'nextYearPending' => $nextYear['pending'],
+            'nextYearProcessed' => $nextYear['processed'],
         ]);
+    }
+
+    /**
+     * Load next_year_applications joined with student/section info, split into
+     * pending and processed. Returns empty arrays when the table is missing so
+     * the applications page still renders on a database that predates the
+     * promotion feature.
+     */
+    private function fetchNextYearApplications(): array
+    {
+        $empty = ['pending' => [], 'processed' => []];
+
+        try {
+            $db = \Config\Database::connect();
+
+            if (! in_array('next_year_applications', $db->listTables(), true)) {
+                return $empty;
+            }
+
+            $rows = $db->table('next_year_applications a')
+                ->select('a.*, students.first_name, students.middle_name, students.last_name, students.lrn, students.enrollment_status AS student_status, sections.section_name')
+                ->join('students', 'students.id = a.student_id', 'left')
+                ->join('sections', 'sections.id = students.section_id', 'left')
+                ->orderBy('a.status', 'ASC')
+                ->orderBy('a.applied_at', 'DESC')
+                ->get()
+                ->getResultArray();
+
+            return [
+                'pending'   => array_values(array_filter($rows, static fn ($r) => ($r['status'] ?? '') === 'pending')),
+                'processed' => array_values(array_filter($rows, static fn ($r) => ($r['status'] ?? '') !== 'pending')),
+            ];
+        } catch (\Throwable $e) {
+            log_message('error', 'Failed to load next year applications: ' . $e->getMessage());
+
+            return $empty;
+        }
     }
 
     /**
@@ -303,34 +579,163 @@ class Students extends BaseController
     {
         $studentModel = model(StudentModel::class);
         
-        // Pagination setup
         $perPage = 15;
-        $currentPage = $this->request->getGet('page') ?? 1;
-        $offset = ($currentPage - 1) * $perPage;
+        $currentPage = max(1, (int) ($this->request->getGet('page') ?? 1));
         
         // Get total count
         $totalRecords = $studentModel->whereIn('students.enrollment_status', ['enrolled', 'rejected'])
                                    ->countAllResults();
-        $totalPages = ceil($totalRecords / $perPage);
+        $totalPages = max(1, (int) ceil($totalRecords / $perPage));
+        $currentPage = min($currentPage, $totalPages);
+        $offset = ($currentPage - 1) * $perPage;
         
         // Get paginated results
-        $processedStudents = $studentModel->select('students.*, users.email')
+        $processedStudents = $studentModel->select('students.*, users.email as user_email')
                                          ->join('users', 'users.id = students.user_id', 'left')
                                          ->whereIn('students.enrollment_status', ['enrolled', 'rejected'])
                                          ->orderBy('students.updated_at', 'DESC')
                                          ->limit($perPage, $offset)
                                          ->findAll();
+
+        // Ensure email is properly set - prioritize students table email
+        foreach ($processedStudents as &$processedStudent) {
+            if (empty($processedStudent['email'])) {
+                $processedStudent['email'] = $processedStudent['user_email'] ?? '';
+            }
+        }
+        unset($processedStudent);
         
         return view('admin/students_pending_history', [
-            'title' => 'Application History - CSCS SMS',
+            'title' => 'Application History - CSCS Tap n Track',
             'processedStudents' => $processedStudents,
             'currentPage' => $currentPage,
             'totalPages' => $totalPages,
-            'totalRecords' => $totalRecords
+            'totalRecords' => $totalRecords,
+            'perPage' => $perPage,
         ]);
     }
     
 
+
+    /**
+     * Next school year promotion applications (next_year_applications table).
+     * Students apply from the student portal; the admin approves (promotes
+     * the student via Admin\Students::promote) or rejects.
+     */
+    /**
+     * Next school year promotion applications now render inline on the Pending
+     * Applications page (admin/students/pending) so the admin only ever visits
+     * one screen. This legacy URL is kept as a redirect for bookmarks.
+     */
+    public function nextYearApplications()
+    {
+        return redirect()->to(base_url('admin/students/pending') . '#next-year-applications');
+    }
+
+    /**
+     * Bulk-approve next school year applications: promotes every selected
+     * student. Reuses performPromotion() so the single and bulk paths can never
+     * drift apart, and reports per-application outcomes.
+     */
+    public function bulkPromoteApplications()
+    {
+        return $this->response->setJSON($this->runBulkApplications('promote'));
+    }
+
+    /**
+     * Bulk-reject next school year applications. Reuses performRejection() so
+     * the single and bulk paths can never drift apart.
+     */
+    public function bulkRejectApplications()
+    {
+        return $this->response->setJSON($this->runBulkApplications('reject'));
+    }
+
+    /**
+     * Shared bulk processor for next_year_applications rows.
+     *
+     * The stored next_grade_level is used as the server-side source of truth
+     * (never a client-supplied value), each row is re-checked for `pending`
+     * status, and one failing row never aborts the rest of the batch.
+     */
+    private function runBulkApplications(string $action): array
+    {
+        $input = $this->request->getJSON(true);
+        if (! is_array($input)) {
+            $input = $this->request->getPost() ?? [];
+        }
+
+        $ids = $input['ids'] ?? $input['application_ids'] ?? [];
+        if (is_string($ids)) {
+            $ids = explode(',', $ids);
+        }
+        $ids = array_values(array_unique(array_filter(array_map('intval', (array) $ids))));
+
+        if ($ids === []) {
+            return ['success' => false, 'error' => 'No applications were selected.'];
+        }
+
+        $db = \Config\Database::connect();
+        $processed = 0;
+        $failures = [];
+
+        foreach ($ids as $applicationId) {
+            $application = $db->table('next_year_applications')->where('id', $applicationId)->get()->getRowArray();
+
+            if (! $application) {
+                $failures[] = '#' . $applicationId . ' not found.';
+                continue;
+            }
+
+            if (($application['status'] ?? '') !== 'pending') {
+                $failures[] = '#' . $applicationId . ' is already ' . ($application['status'] ?? 'processed') . '.';
+                continue;
+            }
+
+            if ($action === 'promote') {
+                $result = $this->performPromotion((int) $application['student_id'], (int) $application['next_grade_level']);
+            } else {
+                $result = $this->performRejection($applicationId);
+            }
+
+            if (! empty($result['success'])) {
+                $processed++;
+            } else {
+                $failures[] = '#' . $applicationId . ': ' . ($result['error'] ?? 'action failed.');
+            }
+        }
+
+        return $this->buildBulkApplicationResult($processed, $failures, $action === 'promote' ? 'promoted' : 'rejected');
+    }
+
+    /**
+     * Shape the response of a bulk next-year action, surfacing the first few
+     * per-row reasons when anything failed.
+     */
+    private function buildBulkApplicationResult(int $processed, array $failures, string $verb): array
+    {
+        $failureCount = count($failures);
+
+        if ($processed === 0) {
+            $detail = $failures === []
+                ? 'Nothing was processed.'
+                : ($failureCount === 1 ? $failures[0] : implode(' ', array_slice($failures, 0, 3)));
+
+            return ['success' => false, 'error' => 'No applications were ' . $verb . '. ' . $detail, 'failures' => $failures];
+        }
+
+        $message = $processed . ' application' . ($processed === 1 ? '' : 's') . ' ' . $verb . ' successfully.';
+        if ($failureCount > 0) {
+            $message .= ' ' . $failureCount . ' failed: ' . implode(' ', array_slice($failures, 0, 3));
+        }
+
+        return [
+            'success'   => true,
+            'message'   => $message,
+            'processed' => $processed,
+            'failures'  => $failures,
+        ];
+    }
 
     /**
      * Show create student form
@@ -346,7 +751,7 @@ class Students extends BaseController
         $sections = $sectionModel->findAll();
 
         return view('admin/students_create', [
-            'title' => 'Add New Student - CSCS SMS',
+            'title' => 'Add New Student - CSCS Tap n Track',
             'sections' => $sections
         ]);
     }
@@ -365,7 +770,7 @@ class Students extends BaseController
         $sections = $sectionModel->findAll();
 
         return view('admin/students_enroll', [
-            'title' => 'Enroll New Student - CSCS SMS',
+            'title' => 'Enroll New Student - CSCS Tap n Track',
             'sections' => $sections
         ]);
     }
@@ -380,13 +785,23 @@ class Students extends BaseController
             return redirect()->to(base_url('/'));
         }
 
+        // Normalise legacy phone formats once, up front: validation, the
+        // getPost() writes below, and withInput() all see 09XXXXXXXXX.
+        phone_normalize_request($this->request, ['contact_number', 'emergency_contact_number']);
+
+        // Relationship "Other" is resolved to its free-text companion before
+        // validation, so the literal word "Other" is never stored.
+        emergency_contact_relationship_normalize_request($this->request);
+
         $rules = [
-            'first_name' => 'required|min_length[2]|max_length[50]',
-            'middle_name' => 'permit_empty|max_length[50]',
-            'last_name' => 'required|min_length[2]|max_length[50]',
+            'first_name' => 'required|min_length[2]|max_length[50]|regex_match[/^[\p{L}\p{M}\s.\x27\-]+$/u]',
+            // "No middle name" ticked -> nothing to validate; otherwise a middle
+            // name is required and must be 2+ characters (no lone letter).
+            'middle_name' => middle_name_validation_rule() . '|regex_match[/^[\p{L}\p{M}\s.\x27\-]+$/u]',
+            'last_name' => 'required|min_length[2]|max_length[50]|regex_match[/^[\p{L}\p{M}\s.\x27\-]+$/u]',
             'suffix' => 'permit_empty|max_length[10]',
             'email' => 'required|valid_email|is_unique[users.email]',
-            'password' => 'required|min_length[8]',
+            'password' => password_validation_rule('password'),
             'confirm_password' => 'required|matches[password]',
             'lrn' => 'permit_empty|max_length[20]',
             'grade_level' => 'required|' . grade_level_in_list_rule(),
@@ -394,13 +809,13 @@ class Students extends BaseController
             'section_id' => 'permit_empty|integer',
             'gender' => 'required|in_list[Male,Female]',
             'date_of_birth' => 'required|valid_date',
-            'place_of_birth' => 'permit_empty|max_length[100]',
+            'place_of_birth' => 'permit_empty|max_length[255]',
             'nationality' => 'permit_empty|max_length[50]',
             'religion' => 'permit_empty|max_length[50]',
-            'contact_number' => 'permit_empty|max_length[20]',
+            'contact_number' => phone_validation_rule(),
             'address' => 'permit_empty|max_length[255]',
-            'emergency_contact_name' => 'permit_empty|max_length[100]',
-            'emergency_contact_number' => 'permit_empty|max_length[20]',
+            'emergency_contact_name' => 'permit_empty|max_length[100]|regex_match[/^[\p{L}\p{M}\s.\x27\-]+$/u]',
+            'emergency_contact_number' => phone_validation_rule(),
             'emergency_contact_relationship' => 'permit_empty|max_length[50]',
             'birth_certificate' => 'permit_empty|max_size[birth_certificate,5120]',
             'report_card' => 'permit_empty|max_size[report_card,5120]',
@@ -408,12 +823,15 @@ class Students extends BaseController
             'photo' => 'permit_empty|max_size[photo,2048]|is_image[photo]'
         ];
 
-        if (!$this->validate($rules)) {
+        if (!$this->validate($rules, phone_validation_messages([
+            'contact_number' => 'Contact Number',
+            'emergency_contact_number' => 'Emergency Contact Number',
+        ]))) {
             $sectionModel = model(SectionModel::class);
             $sections = $sectionModel->findAll();
 
             return view('admin/students_create', [
-                'title' => 'Add New Student - CSCS SMS',
+                'title' => 'Add New Student - CSCS Tap n Track',
                 'sections' => $sections,
                 'validation' => $this->validator
             ]);
@@ -521,7 +939,7 @@ class Students extends BaseController
             'user_id' => $userId,
             'lrn' => $lrn,
             'first_name' => $this->request->getPost('first_name'),
-            'middle_name' => $this->request->getPost('middle_name'),
+            'middle_name' => normalize_middle_name(),
             'last_name' => $this->request->getPost('last_name'),
             'suffix' => $this->request->getPost('suffix'),
             'student_type' => $this->request->getPost('student_type'),
@@ -570,6 +988,20 @@ class Students extends BaseController
                 log_message('error', 'Failed to send enrollment email: ' . $e->getMessage());
             }
             
+            audit_event('student.created', [
+                'category'      => 'data',
+                'status'        => 'success',
+                'resource_type' => 'student',
+                'resource_id'   => (string) $studentId,
+                'description'   => 'Student enrolled from the admin portal',
+                'after'         => [
+                    'lrn'         => $lrn,
+                    'name'        => trim((string) $this->request->getPost('first_name') . ' ' . (string) $this->request->getPost('last_name')),
+                    'grade_level' => $this->request->getPost('grade_level'),
+                    'section_id'  => $this->request->getPost('section_id'),
+                ],
+            ]);
+
             return redirect()->to('admin/students')->with('success', 'Student enrolled successfully.');
         } else {
             // If student creation fails, delete the user account
@@ -626,7 +1058,7 @@ class Students extends BaseController
         $this->response->setHeader('Expires', '0');
 
         return view('admin/students_edit', [
-            'title' => 'Edit Student - CSCS SMS',
+            'title' => 'Edit Student - CSCS Tap n Track',
             'student' => $student,
             'sections' => $sections
         ]);
@@ -648,18 +1080,56 @@ class Students extends BaseController
             return redirect()->back()->with('error', 'Student not found');
         }
 
+        // Normalise legacy phone formats once, up front: validation, the
+        // getPost() writes below, and withInput() all see 09XXXXXXXXX.
+        phone_normalize_request($this->request, ['contact_number', 'emergency_contact_number']);
+
+        // Same idea for the religion selector: the literal "Other" choice is
+        // resolved to whatever was typed into its companion box (religion_other)
+        // before validation, getPost() and withInput() ever read religion.
+        religion_normalize_request($this->request);
+
+        // Relationship "Other" is resolved to its free-text companion before
+        // validation, so the literal word "Other" is never stored.
+        emergency_contact_relationship_normalize_request($this->request);
+
+        // Transferees must say where they came from. The rules are only added
+        // for that student type, so every other type is never asked for it and
+        // never blocked by it.
+        $studentType = (string) $this->request->getPost('student_type');
+        $isTransferee = $studentType === 'Transferee';
+
         // Custom validation rules with proper LRN uniqueness check
         $rules = [
             'lrn' => "required|max_length[20]|is_unique[students.lrn,id,{$studentId}]",
-            'first_name' => 'required',
-            'last_name' => 'required',
+            'first_name' => 'required|min_length[2]|max_length[50]|regex_match[/^[\p{L}\p{M}\s.\x27\-]+$/u]',
+            // "No middle name" ticked -> nothing to validate; otherwise a middle
+            // name is required and must be 2+ characters (no lone letter).
+            'middle_name' => middle_name_validation_rule() . '|regex_match[/^[\p{L}\p{M}\s.\x27\-]+$/u]',
+            'last_name' => 'required|min_length[2]|max_length[50]|regex_match[/^[\p{L}\p{M}\s.\x27\-]+$/u]',
             'email' => 'permit_empty|valid_email',
             'grade_level' => 'required',
             'gender' => 'required',
+            'contact_number' => phone_validation_rule(),
+            'religion' => 'permit_empty|max_length[50]',
+            'emergency_contact_name' => 'permit_empty|max_length[100]|regex_match[/^[\p{L}\p{M}\s.\x27\-]+$/u]',
+            'emergency_contact_number' => phone_validation_rule(),
+            'emergency_contact_relationship' => 'permit_empty|max_length[50]',
             'enrollment_status' => 'required|in_list[pending,approved,rejected,enrolled,graduated,dropped,transferred]'
         ];
 
-        if (!$this->validate($rules)) {
+        if ($isTransferee) {
+            $rules['previous_school'] = 'required|max_length[255]';
+            $rules['previous_school_year'] = 'required|in_list[' . implode(',', previous_school_year_choices()) . ']';
+        }
+
+        if (!$this->validate($rules, array_merge(phone_validation_messages([
+            'contact_number' => 'Contact Number',
+            'emergency_contact_number' => 'Emergency Contact Number',
+        ]), $isTransferee ? [
+            'previous_school' => 'Previous School',
+            'previous_school_year' => 'School Year Last Attended',
+        ] : []))) {
             log_message('error', 'Validation failed: ' . json_encode($this->validator->getErrors()));
             log_message('error', 'Form data: ' . json_encode($this->request->getPost()));
             return redirect()->back()->withInput()->with('error', 'Validation failed: ' . implode(', ', $this->validator->getErrors()));
@@ -695,9 +1165,13 @@ class Students extends BaseController
             $gradeLevel = $this->request->getPost('grade_level');
             $data = [
                 'lrn' => $this->request->getPost('lrn'),
-                'student_type' => $this->request->getPost('student_type'),
+                'student_type' => $studentType,
+                // Only transferees carry a previous school; the columns are
+                // cleared for every other type so no stale value survives.
+                'previous_school' => $isTransferee ? $this->request->getPost('previous_school') : null,
+                'previous_school_year' => $isTransferee ? $this->request->getPost('previous_school_year') : null,
                 'first_name' => $this->request->getPost('first_name'),
-                'middle_name' => $this->request->getPost('middle_name'),
+                'middle_name' => normalize_middle_name(),
                 'last_name' => $this->request->getPost('last_name'),
                 'suffix' => $this->request->getPost('suffix'),
                 'grade_level' => $gradeLevel,
@@ -792,7 +1266,23 @@ class Students extends BaseController
                 $updatedStudent = $studentModel->find($studentId);
                 log_message('debug', 'Student update - Data sent: ' . json_encode($data));
                 log_message('debug', 'Student update - Result: ' . json_encode($updatedStudent));
-                
+
+                $trackedFields = [
+                    'first_name', 'last_name', 'middle_name', 'email', 'contact_number', 'address',
+                    'grade_level', 'section_id', 'student_type', 'enrollment_status', 'gender',
+                    'date_of_birth', 'previous_school', 'student_type',
+                ];
+                $beforeSnapshot = array_intersect_key((array) $currentStudent, array_flip($trackedFields));
+                $afterSnapshot  = array_intersect_key((array) ($updatedStudent ?? $data), array_flip($trackedFields));
+
+                audit_event('student.updated', [
+                    'category'      => 'data',
+                    'status'        => 'success',
+                    'resource_type' => 'student',
+                    'resource_id'   => (string) $studentId,
+                    'description'   => 'Student record updated',
+                ] + audit_diff($beforeSnapshot, $afterSnapshot, $trackedFields));
+
                 return redirect()->to('admin/students/edit/' . $studentId)->with('success', 'Student updated successfully.');
             } else {
                 $errors = $studentModel->errors();
@@ -870,9 +1360,11 @@ class Students extends BaseController
             $user->active = 1;
             $userModel->save($user);
 
+            $passwordSyncWarning = false;
             if ($plainPassword !== '') {
                 if (! sync_student_auth_password($userId, $studentEmail, $plainPassword)) {
-                    throw new \RuntimeException('Could not save login password.');
+                    log_message('error', 'Student approve: password sync failed for student id ' . $studentId . '. Approval will continue; set the password manually via Records.');
+                    $passwordSyncWarning = true;
                 }
             } else {
                 $identity = $db->table('auth_identities')
@@ -910,29 +1402,44 @@ class Students extends BaseController
 
         $loginPassword = $plainPassword !== '' ? $plainPassword : '(use the password you chose when registering)';
 
-        $emailService = new SupabaseEmailService();
         $studentName  = trim($student['first_name'] . ' ' . $student['last_name']);
         $emailSent    = false;
 
-        if ($plainPassword !== '') {
-            log_message('info', 'Attempting to send approval email to: ' . $studentEmail);
-            $emailSent = $emailService->sendVerificationEmail(
-                $studentEmail,
-                $studentName,
-                (string) $student['lrn'],
-                $plainPassword
-            );
-            log_message('info', 'Email send result: ' . ($emailSent ? 'SUCCESS' : 'FAILED'));
+        try {
+            if ($plainPassword !== '') {
+                $emailService = new SupabaseEmailService();
+                log_message('info', 'Attempting to send approval email to: ' . $studentEmail);
+                $emailSent = $emailService->sendVerificationEmail(
+                    $studentEmail,
+                    $studentName,
+                    (string) $student['lrn'],
+                    $plainPassword
+                );
+                log_message('info', 'Email send result: ' . ($emailSent ? 'SUCCESS' : 'FAILED'));
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'Student approval email error: ' . $e->getMessage());
         }
 
         $message = $isRepairSync
             ? 'Login credentials updated. The student can sign in with their LRN and registration password.'
             : 'Enrollment approved. The student can log in with their LRN and registration password.';
-        if ($emailSent) {
-            $message .= ' Email sent to ' . $studentEmail . '.';
-        } elseif ($plainPassword !== '' && ! $isRepairSync) {
-            $message .= ' (Email could not be sent; share their LRN and password manually.)';
+        if (! empty($passwordSyncWarning)) {
+            $message .= ' WARNING: the login password could not be saved automatically. Open the student record and use Update Password to set it manually.';
         }
+
+        audit_event('student.approved', [
+            'category'      => 'data',
+            'status'        => 'success',
+            'resource_type' => 'student',
+            'resource_id'   => (string) $studentId,
+            'description'   => 'Student enrollment approved',
+            'metadata'      => [
+                'lrn'                 => $student['lrn'] ?? null,
+                'email'               => $studentEmail,
+                'password_sync_warning' => (bool) ($passwordSyncWarning ?? false),
+            ],
+        ]);
 
         return $this->response->setJSON([
             'success'     => true,
@@ -987,17 +1494,153 @@ class Students extends BaseController
         }
         
         $message = 'Student application rejected.';
-        if ($emailSent) {
-            $message .= ' Email notification sent to ' . $studentEmail;
-        } elseif ($studentEmail) {
-            $message .= ' (Email sending failed. Check logs for details.)';
-        } else {
-            $message .= ' No email address found.';
-        }
+
+        audit_event('student.rejected', [
+            'category'      => 'data',
+            'status'        => 'success',
+            'resource_type' => 'student',
+            'resource_id'   => (string) $student['id'],
+            'description'   => 'Student application rejected',
+            'metadata'      => [
+                'lrn'        => $student['lrn'] ?? null,
+                'email'      => $studentEmail,
+                'email_sent' => (bool) $emailSent,
+            ],
+        ]);
         
         return $this->response->setJSON([
             'success' => true,
             'message' => $message
+        ]);
+    }
+
+    /**
+     * Bulk approve pending student applications
+     * Expects JSON: { student_ids: [id, id, ...] }
+     */
+    public function bulkApprove()
+    {
+        if (! is_any_admin()) {
+            return $this->response->setStatusCode(403)->setJSON(['error' => 'Unauthorized']);
+        }
+
+        $input = $this->request->getJSON(true);
+        $studentIds = $input['student_ids'] ?? [];
+
+        if (empty($studentIds) || ! is_array($studentIds)) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'No students selected']);
+        }
+
+        $approved = 0;
+        $failed   = 0;
+        $errors   = [];
+
+        foreach ($studentIds as $studentId) {
+            $studentId = (int) $studentId;
+            if ($studentId <= 0) {
+                continue;
+            }
+
+            $resp    = $this->approve($studentId);
+            $payload = json_decode($resp->getJSON(), true);
+
+            // NOTE: do not trust getStatusCode() here — $this->response is a
+            // shared object and child approve() calls set persistent status
+            // codes (400/500). Judge success by the JSON payload only.
+            if ($payload['success'] ?? false) {
+                $approved++;
+            } else {
+                $failed++;
+                $errors[] = 'Student #' . $studentId . ': ' . ($payload['error'] ?? 'Failed to approve');
+            }
+        }
+
+        // Reset the shared response status before answering (child calls may
+        // have left it at 400/500).
+        $this->response->setStatusCode(200);
+
+        if ($approved === 0) {
+            return $this->response->setJSON([
+                'success' => false,
+                'error'   => 'No applications were approved. ' . implode(' ', $errors),
+            ]);
+        }
+
+        $message = $approved . ' application(s) approved successfully.';
+        if ($failed > 0) {
+            $message .= ' ' . $failed . ' failed: ' . implode(' ', $errors);
+        }
+
+        return $this->response->setJSON([
+            'success'  => true,
+            'message'  => $message,
+            'approved' => $approved,
+            'failed'   => $failed,
+        ]);
+    }
+
+    /**
+     * Bulk reject pending student applications
+     * Expects JSON: { student_ids: [id, id, ...] }
+     */
+    public function bulkReject()
+    {
+        if (! is_any_admin()) {
+            return $this->response->setStatusCode(403)->setJSON(['error' => 'Unauthorized']);
+        }
+
+        $input = $this->request->getJSON(true);
+        $studentIds = $input['student_ids'] ?? [];
+
+        if (empty($studentIds) || ! is_array($studentIds)) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'No students selected']);
+        }
+
+        $rejected = 0;
+        $failed   = 0;
+        $errors   = [];
+
+        foreach ($studentIds as $studentId) {
+            $studentId = (int) $studentId;
+            if ($studentId <= 0) {
+                continue;
+            }
+
+            $resp    = $this->reject($studentId);
+            $payload = json_decode($resp->getJSON(), true);
+
+            // NOTE: do not trust getStatusCode() here — $this->response is a
+            // shared object and child reject() calls set persistent status
+            // codes (400/500). Judge success by the JSON payload only.
+            if ($payload['success'] ?? false) {
+                $rejected++;
+            } else {
+                $failed++;
+                $errors[] = 'Student #' . $studentId . ': ' . ($payload['error'] ?? 'Failed to reject');
+            }
+        }
+
+        // Reset the shared response status before answering (child calls may
+        // have left it at 400/500).
+        $this->response->setStatusCode(200);
+
+        if ($rejected === 0) {
+            return $this->response->setJSON([
+                'success' => false,
+                'error'   => 'No applications were rejected. ' . implode(' ', $errors),
+            ]);
+        }
+
+        $message = $rejected . ' application(s) rejected successfully.';
+        if ($failed > 0) {
+            $message .= ' ' . $failed . ' failed: ' . implode(' ', $errors);
+        }
+
+        return $this->response->setJSON([
+            'success'  => true,
+            'message'  => $message,
+            'rejected' => $rejected,
+            'failed'   => $failed,
         ]);
     }
 
@@ -1018,6 +1661,18 @@ class Students extends BaseController
         }
 
         if ($studentModel->delete($studentId)) {
+            audit_event('student.archived', [
+                'category'      => 'data',
+                'status'        => 'success',
+                'resource_type' => 'student',
+                'resource_id'   => (string) $studentId,
+                'description'   => 'Student archived',
+                'before'        => [
+                    'lrn'  => $student['lrn'] ?? null,
+                    'name' => trim((string) ($student['first_name'] ?? '') . ' ' . (string) ($student['last_name'] ?? '')),
+                ],
+            ]);
+
             return $this->response->setJSON([
                 'success' => true,
                 'message' => 'Student archived successfully.'
@@ -1161,7 +1816,7 @@ class Students extends BaseController
         $archivedStudents = $studentModel->onlyDeleted()->findAll();
 
         return view('admin/students_archived', [
-            'title' => 'Archived Students - CSCS SMS',
+            'title' => 'Archived Students - CSCS Tap n Track',
             'archivedStudents' => $archivedStudents
         ]);
     }
@@ -1193,7 +1848,7 @@ class Students extends BaseController
         $documentsByType = [];
 
         return view('admin/student_view', [
-            'title' => 'Archived Student Details - CSCS SMS',
+            'title' => 'Archived Student Details - CSCS Tap n Track',
             'student' => $student,
             'documents' => $documentsByType,
             'isArchived' => true
@@ -1223,6 +1878,15 @@ class Students extends BaseController
             ->update(['deleted_at' => null]);
 
         if ($result) {
+            audit_event('student.restored', [
+                'category'      => 'data',
+                'status'        => 'success',
+                'resource_type' => 'student',
+                'resource_id'   => (string) $studentId,
+                'description'   => 'Archived student restored',
+                'metadata'      => ['lrn' => $student['lrn'] ?? null],
+            ]);
+
             return $this->response->setJSON([
                 'success' => true,
                 'message' => 'Student restored successfully.'
@@ -1286,7 +1950,20 @@ class Students extends BaseController
             if ($db->transStatus() === false) {
                 throw new \Exception('Transaction failed');
             }
-            
+
+            audit_event('student.deleted', [
+                'category'      => 'data',
+                'status'        => 'success',
+                'resource_type' => 'student',
+                'resource_id'   => (string) $studentId,
+                'description'   => 'Student permanently deleted',
+                'before'        => [
+                    'lrn'   => $student['lrn'] ?? null,
+                    'name'  => trim((string) ($student['first_name'] ?? '') . ' ' . (string) ($student['last_name'] ?? '')),
+                    'email' => $student['email'] ?? null,
+                ],
+            ]);
+
             return $this->response->setJSON([
                 'success' => true,
                 'message' => 'Student permanently deleted.'
@@ -1357,6 +2034,25 @@ class Students extends BaseController
 
     public function rejectApplication($applicationId)
     {
+        return $this->response->setJSON($this->performRejection((int) $applicationId));
+    }
+
+    /**
+     * Reject one application and return a plain result array so bulk actions can
+     * aggregate per-application outcomes. The original body lives in
+     * buildRejectionResponse().
+     */
+    private function performRejection(int $applicationId): array
+    {
+        $decoded = json_decode((string) $this->buildRejectionResponse($applicationId)->getBody(), true);
+
+        return is_array($decoded)
+            ? $decoded
+            : ['success' => false, 'error' => 'Unexpected server response while rejecting the application.'];
+    }
+
+    private function buildRejectionResponse($applicationId)
+    {
         $db = \Config\Database::connect();
         
         $application = $db->table('next_year_applications')->where('id', $applicationId)->get()->getRow();
@@ -1366,7 +2062,13 @@ class Students extends BaseController
         
         $result = $db->table('next_year_applications')
             ->where('id', $applicationId)
-            ->update(['status' => 'rejected', 'updated_at' => date('Y-m-d H:i:s')]);
+            ->update([
+                'status'       => 'rejected',
+                'processed_at' => date('Y-m-d H:i:s'),
+                'processed_by' => auth()->id() ?: null,
+                'remarks'      => 'Application not approved. Please talk to your adviser.',
+                'updated_at'   => date('Y-m-d H:i:s'),
+            ]);
         
         if ($result) {
             $studentModel = new \App\Models\StudentModel();
@@ -1374,6 +2076,23 @@ class Students extends BaseController
             $emailSent = false;
             
             if ($student) {
+                // Notify the student inside the portal (in addition to the email).
+                if (!empty($student['user_id'])) {
+                    try {
+                        model(\App\Models\NotificationModel::class)->insert([
+                            'user_id'    => (int) $student['user_id'],
+                            'type'       => 'enrollment_rejected',
+                            'title'      => 'Enrollment Application Update',
+                            'message'    => 'Your application for S.Y. ' . $application->school_year . ' was not approved. Please come and talk to your adviser to discuss your options.',
+                            'is_read'    => 0,
+                            'created_at' => date('Y-m-d H:i:s'),
+                            'updated_at' => date('Y-m-d H:i:s'),
+                        ]);
+                    } catch (\Exception $e) {
+                        log_message('error', 'Failed to create rejection notification: ' . $e->getMessage());
+                    }
+                }
+
                 $userModel = model(UserModel::class);
                 $user = $userModel->find($student['user_id']);
                 $studentEmail = null;
@@ -1397,11 +2116,6 @@ class Students extends BaseController
             }
             
             $message = 'Application rejected successfully.';
-            if ($emailSent) {
-                $message .= ' Email notification sent.';
-            } elseif ($student && ($user->email ?? $student['email'] ?? null)) {
-                $message .= ' (Email sending failed)';
-            }
             
             return $this->response->setJSON(['success' => true, 'message' => $message]);
         }
@@ -1413,6 +2127,32 @@ class Students extends BaseController
     {
         $input = $this->request->getJSON(true);
         $nextGradeLevel = $input['next_grade_level'] ?? null;
+
+        if (!$nextGradeLevel) {
+            return $this->response->setJSON(['success' => false, 'error' => 'Next grade level is required.']);
+        }
+
+        return $this->response->setJSON($this->performPromotion((int) $studentId, (int) $nextGradeLevel));
+    }
+
+    /**
+     * Promote one student and return a plain result array so bulk actions can
+     * aggregate per-student outcomes. The actual work (validation, DB update,
+     * application stamping, portal notification, email) lives in
+     * buildPromotionResponse() — the original promote() body — so the single
+     * and bulk paths can never drift apart.
+     */
+    private function performPromotion(int $studentId, int $nextGradeLevel): array
+    {
+        $decoded = json_decode((string) $this->buildPromotionResponse($studentId, $nextGradeLevel)->getBody(), true);
+
+        return is_array($decoded)
+            ? $decoded
+            : ['success' => false, 'error' => 'Unexpected server response while promoting the student.'];
+    }
+
+    private function buildPromotionResponse($studentId, $nextGradeLevel)
+    {
         
         if (!$nextGradeLevel) {
             return $this->response->setJSON(['success' => false, 'error' => 'Next grade level is required.']);
@@ -1431,10 +2171,18 @@ class Students extends BaseController
         
         $currentGrade = (int) $student['grade_level'];
 
-        if (is_graduating_grade($currentGrade)) {
+        // Grade levels with no next level in this school:
+        // 6 = Grade 6 (elementary exit - graduates instead),
+        // 7 = SNED (terminal), 99 = custom class.
+        // NOTE: is_graduating_grade() only returns true for grade 7 because
+        // grade_level_max() is 7, which would have let Grade 6 students be
+        // promoted into SNED — so the levels are listed explicitly here.
+        if (in_array($currentGrade, [6, 7, 99], true)) {
             return $this->response->setJSON([
                 'success' => false,
-                'error' => 'Grade 6 students cannot be promoted. They should graduate instead.'
+                'error'   => $currentGrade === 6
+                    ? 'Grade 6 students cannot be promoted. They should graduate instead.'
+                    : 'Students in this program cannot be promoted to a higher grade level.'
             ]);
         }
 
@@ -1455,18 +2203,37 @@ class Students extends BaseController
                 'section_id' => null
             ]);
             
-            // Update application status
+            if (!$result1) {
+                return $this->response->setJSON(['success' => false, 'error' => 'Failed to update student records.']);
+            }
+            
             $nextSchoolYear = $this->getNextSchoolYear();
-            $result2 = $db->table('next_year_applications')
+
+            // Mark the next-year application (if any) as approved and processed.
+            // The row is optional: admins may also promote students directly, so
+            // a missing application row must not fail the promotion.
+            $db->table('next_year_applications')
                 ->where('student_id', $studentId)
                 ->where('school_year', $nextSchoolYear)
+                ->where('status', 'pending')
                 ->update([
-                    'status' => 'approved',
-                    'updated_at' => date('Y-m-d H:i:s')
+                    'status'       => 'approved',
+                    'processed_at' => date('Y-m-d H:i:s'),
+                    'processed_by' => auth()->id() ?: null,
+                    'updated_at'   => date('Y-m-d H:i:s'),
                 ]);
             
-            if (!$result1 || !$result2) {
-                return $this->response->setJSON(['success' => false, 'error' => 'Failed to update student records.']);
+            // Notify the student inside the portal (in addition to the email).
+            if (!empty($student['user_id'])) {
+                model(\App\Models\NotificationModel::class)->insert([
+                    'user_id'    => (int) $student['user_id'],
+                    'type'       => 'enrollment_approved',
+                    'title'      => 'Enrollment Approved',
+                    'message'    => 'Congratulations! Your application to enroll in ' . grade_level_label((int) $nextGradeLevel) . ' for S.Y. ' . $nextSchoolYear . ' has been approved. You will be assigned to a section when classes open.',
+                    'is_read'    => 0,
+                    'created_at' => date('Y-m-d H:i:s'),
+                    'updated_at' => date('Y-m-d H:i:s'),
+                ]);
             }
             
             // Send email notification to student
@@ -1499,11 +2266,6 @@ class Students extends BaseController
             }
             
             $message = 'Student promoted to ' . grade_level_label((int) $nextGradeLevel) . ' successfully!';
-            if ($emailSent) {
-                $message .= " Email notification sent to " . $studentEmail;
-            } elseif ($studentEmail) {
-                $message .= " (Email sending failed. Check logs for details.)";
-            }
             
             return $this->response->setJSON([
                 'success' => true,

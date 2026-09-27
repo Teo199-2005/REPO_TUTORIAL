@@ -3,17 +3,13 @@
 
 <style>
 .blue-divider {
-  height: 3px;
-  background: linear-gradient(90deg, #007bff, #0056b3);
-  border-radius: 2px;
-  margin: 1rem 0;
-}
+  height: 1px;
+  background: var(--hairline-strong);
 
 .announcement-content {
   background: #f8f9fa;
   border-radius: 8px;
   padding: 1.5rem;
-  border-left: 4px solid #007bff;
 }
 
 .meta-info {

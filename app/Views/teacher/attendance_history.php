@@ -71,6 +71,39 @@
     </div>
 </div>
 
+<style>
+/* Attendance history summary widgets (matches dashboard stat tiles) */
+.att-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem 1rem;
+}
+
+.att-summary-grid .card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.att-summary-grid .card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+.att-summary-grid .dash-icon-tile {
+  width: 44px;
+  height: 44px;
+}
+
+.att-summary-grid .dash-icon-tile i {
+  font-size: 1.2rem;
+}
+
+@media (max-width: 767.98px) {
+  .att-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+</style>
+
 <script>
 // Load attendance history
 function loadHistory() {
@@ -147,13 +180,51 @@ function displayHistory(history) {
         
         html += `
             <div class="mb-4">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h6 class="mb-0 text-primary">${formattedDate}</h6>
-                    <div class="d-flex gap-2">
-                        <span class="badge bg-success">${statusCounts.present} Present</span>
-                        <span class="badge bg-danger">${statusCounts.absent} Absent</span>
-                        <span class="badge bg-warning text-dark">${statusCounts.late} Late</span>
-                        <span class="badge bg-info">${statusCounts.excused} Excused</span>
+                <h6 class="mb-2 text-primary">${formattedDate}</h6>
+                <div class="att-summary-grid mb-3">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body d-flex align-items-center gap-3 py-3">
+                            <div class="dash-icon-tile dash-icon-tile--emerald" aria-hidden="true">
+                                <i class="bi bi-person-check-fill"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="text-muted small">Present</div>
+                                <div class="fw-bold" style="font-size:1.15rem; line-height:1.2;">${statusCounts.present}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body d-flex align-items-center gap-3 py-3">
+                            <div class="dash-icon-tile dash-icon-tile--rose" aria-hidden="true">
+                                <i class="bi bi-person-x-fill"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="text-muted small">Absent</div>
+                                <div class="fw-bold" style="font-size:1.15rem; line-height:1.2;">${statusCounts.absent}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body d-flex align-items-center gap-3 py-3">
+                            <div class="dash-icon-tile dash-icon-tile--amber" aria-hidden="true">
+                                <i class="bi bi-alarm-fill"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="text-muted small">Late</div>
+                                <div class="fw-bold" style="font-size:1.15rem; line-height:1.2;">${statusCounts.late}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body d-flex align-items-center gap-3 py-3">
+                            <div class="dash-icon-tile dash-icon-tile--cyan" aria-hidden="true">
+                                <i class="bi bi-envelope-check-fill"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="text-muted small">Excused</div>
+                                <div class="fw-bold" style="font-size:1.15rem; line-height:1.2;">${statusCounts.excused}</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="table-responsive">

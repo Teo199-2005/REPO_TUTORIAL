@@ -1,0 +1,137 @@
+/* ==========================================================================
+   Tappy — guided tour
+   A spotlight overlay with a speech-bubble step card. The mascot sits in the
+   card and points at whatever is being explained.
+
+   The overlay is a real dialog: it traps focus, closes on Escape, and restores
+   focus to whatever opened it.
+   ========================================================================== */
+
+.mascot-tour {
+  position: fixed;
+  inset: 0;
+  z-index: 1080;
+  display: none;
+}
+
+.mascot-tour.is-open { display: block; }
+
+.mascot-tour__scrim {
+  position: absolute;
+  inset: 0;
+  /* The "hole" is a cut-out box-shadow, so the target stays visible. */
+  background: rgba(15, 23, 42, 0.55);
+  box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.55);
+  border-radius: 12px;
+  transition: all 0.28s ease;
+  pointer-events: none;
+}
+
+.mascot-tour__card {
+  position: absolute;
+  z-index: 2;
+  width: min(460px, calc(100vw - 2rem));
+  background: #fff;
+  border-radius: var(--radius-lg, 0.75rem);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.10), 0 24px 56px -8px rgba(15, 23, 42, 0.16);
+  padding: 1.1rem 1.15rem 0.9rem;
+  transition: top 0.28s ease, left 0.28s ease;
+}
+
+/* The card reads as a speech bubble he is leaning out of, rather than a dialog
+   with a small portrait glued onto the title. */
+.mascot-tour__head {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.mascot-tour__head .mascot {
+  --mascot-size: var(--mascot-tour);
+  margin: 0 0 -0.35rem -0.5rem;
+  flex: 0 0 auto;
+  animation: mascot-breathe 4s ease-in-out infinite;
+}
+
+.mascot-tour__title {
+  font-size: var(--fs-lg, 1.25rem);
+  font-weight: 700;
+  color: var(--color-heading, #0f172a);
+  margin: 0;
+  padding-bottom: 0.35rem;
+}
+
+.mascot-tour__text {
+  font-size: var(--fs-sm, 0.875rem);
+  color: var(--color-text-muted, #64748b);
+  margin: 0 0 0.85rem;
+}
+
+.mascot-tour__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--color-border, #e2e8f0);
+}
+
+.mascot-tour__count {
+  font-size: var(--fs-xs, 0.75rem);
+  color: var(--color-text-muted, #64748b);
+  font-weight: 700;
+}
+
+/* Progress dots: "Step 2 of 4" in words stops being readable at a glance once a
+   page has five steps. */
+.mascot-tour__dots {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.mascot-tour__dot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.18);
+  transition: width 0.25s ease, background 0.25s ease;
+}
+
+.mascot-tour__dot.is-current {
+  width: 20px;
+  border-radius: 999px;
+  background: var(--color-primary, #1e40af);
+}
+
+.mascot-tour__actions { display: flex; gap: 0.4rem; }
+
+.mascot-tour__skip {
+  border: 0;
+  background: none;
+  color: var(--color-text-muted, #64748b);
+  font-size: var(--fs-xs, 0.75rem);
+  padding: 0.35rem 0.4rem;
+  border-radius: var(--radius-sm, 0.375rem);
+}
+
+.mascot-tour__skip:hover { color: var(--color-danger, #ef4444); }
+
+@media (prefers-reduced-motion: reduce) {
+  .mascot-tour__head .mascot { animation: none; }
+  .mascot-tour__scrim,
+  .mascot-tour__card,
+  .mascot-tour__dot { transition: none; }
+}
+
+@media print {
+  .mascot-tour { display: none !important; }
+}
+
+@media (max-width: 575.98px) {
+  .mascot-tour__card { width: calc(100vw - 1.5rem); }
+  .mascot-tour__head .mascot { --mascot-size: 84px; }
+}

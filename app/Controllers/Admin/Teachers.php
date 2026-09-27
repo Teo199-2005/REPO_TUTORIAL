@@ -3,6 +3,7 @@ namespace App\Controllers\Admin;
 
 use App\Controllers\BaseController;
 use App\Models\TeacherModel;
+use App\Models\SystemSettingModel;
 use CodeIgniter\Shield\Models\UserModel;
 use App\Models\SectionModel;
 use App\Models\TeacherScheduleModel;
@@ -27,12 +28,27 @@ class Teachers extends BaseController
         $sortBy = $this->request->getGet('sort_by');
         $sortOrder = strtolower((string) $this->request->getGet('sort_order')) === 'desc' ? 'DESC' : 'ASC';
 
+        // Multi-filter fields - every set filter narrows the list further (AND).
+        $status     = trim((string) $this->request->getGet('status'));
+        $position   = trim((string) $this->request->getGet('position'));
+        $department = trim((string) $this->request->getGet('department'));
+        $gender     = trim((string) $this->request->getGet('gender'));
+        $religion   = trim((string) $this->request->getGet('religion'));
+        $grade      = trim((string) $this->request->getGet('grade'));
+
         if (! in_array($sortBy, ['name', 'age'], true)) {
             $sortBy = 'name';
         }
         
         // Get all teachers
         $builder = $teacherModel->select('teachers.*');
+
+        // Teacher self-registrations awaiting approval (or rejected) are handled
+        // on the Pending Registrations page, not in the main faculty list.
+        $builder->groupStart()
+                ->where('teachers.registration_status IS NULL')
+                ->orWhere('teachers.registration_status', 'approved')
+                ->groupEnd();
         
         if ($search) {
             $builder->groupStart()
@@ -44,6 +60,36 @@ class Teachers extends BaseController
                    ->orLike('teachers.tin', $search)
                    ->orLike('teachers.philsys_number', $search)
                    ->groupEnd();
+        }
+
+        if ($status !== '') {
+            $builder->where('teachers.employment_status', $status);
+        }
+
+        if ($position !== '') {
+            $builder->where('teachers.position', $position);
+        }
+
+        if ($department !== '') {
+            $builder->where('teachers.department', $department);
+        }
+
+        if ($gender === 'Male' || $gender === 'Female') {
+            $builder->where('teachers.gender', $gender);
+        }
+
+        if ($religion !== '') {
+            $builder->where('teachers.religion', $religion);
+        }
+
+        // Grade level handled: advisory class OR any scheduled teaching section
+        // in that grade. EXISTS sub-selects keep everything in one findAll().
+        if ($grade !== '' && ctype_digit($grade)) {
+            $gradeInt = (int) $grade;
+            $builder->groupStart()
+                    ->where("EXISTS (SELECT 1 FROM sections adv WHERE adv.adviser_id = teachers.id AND adv.grade_level = {$gradeInt})", null, false)
+                    ->orWhere("EXISTS (SELECT 1 FROM teacher_schedules ts2 JOIN sections sec2 ON sec2.id = ts2.section_id WHERE ts2.teacher_id = teachers.id AND sec2.grade_level = {$gradeInt})", null, false)
+                    ->groupEnd();
         }
         
         if ($sortBy === 'age') {
@@ -106,14 +152,262 @@ class Teachers extends BaseController
             $teachers = array_filter($teachers, fn($t) => empty($t['section_name']));
         }
 
+        $pendingRegistrationCount = (int) $db->table('teachers')
+            ->where('registration_status', 'pending')
+            ->where('deleted_at', null)
+            ->countAllResults();
+
+        // Global personnel-record editing switch (applies to ALL teachers).
+        $settingModel = model(SystemSettingModel::class);
+        $personnelEditGlobal = (int) ($settingModel->getSetting('personnel_edit_global', '1')) === 1;
+
+        // Filter dropdown values reflect the data actually recorded, so new
+        // positions / departments / religions appear without code changes.
+        $statusOptions = array_column($db->query(
+            "SELECT DISTINCT employment_status AS v FROM teachers WHERE deleted_at IS NULL AND employment_status IS NOT NULL AND employment_status <> '' ORDER BY employment_status ASC"
+        )->getResultArray(), 'v');
+        $positionOptions = array_column($db->query(
+            "SELECT DISTINCT position AS v FROM teachers WHERE deleted_at IS NULL AND position IS NOT NULL AND position <> '' ORDER BY position ASC"
+        )->getResultArray(), 'v');
+        $departmentOptions = array_column($db->query(
+            "SELECT DISTINCT department AS v FROM teachers WHERE deleted_at IS NULL AND department IS NOT NULL AND department <> '' ORDER BY department ASC"
+        )->getResultArray(), 'v');
+        $religionOptions = array_column($db->query(
+            "SELECT DISTINCT religion AS v FROM teachers WHERE deleted_at IS NULL AND religion IS NOT NULL AND religion <> '' ORDER BY religion ASC"
+        )->getResultArray(), 'v');
+
         return view('admin/teachers', [
-            'title' => 'Manage Teachers - CSCS SMS',
+            'title' => 'Manage Teachers - CSCS Tap n Track',
             'teachers' => $teachers,
             'search' => $search,
             'assignment' => $assignment,
             'sortBy' => $sortBy,
             'sortOrder' => strtolower($sortOrder),
+            'status' => $status,
+            'position' => $position,
+            'department' => $department,
+            'gender' => $gender,
+            'religion' => $religion,
+            'grade' => $grade,
+            'statusOptions' => $statusOptions,
+            'positionOptions' => $positionOptions,
+            'departmentOptions' => $departmentOptions,
+            'religionOptions' => $religionOptions,
+            'pendingRegistrationCount' => $pendingRegistrationCount,
+            'personnelEditGlobal' => $personnelEditGlobal,
         ]);
+    }
+
+    /**
+     * Export the filtered faculty list as a PDF. Mirrors the list page: every
+     * row matching the active filters.
+     */
+    public function exportPdf()
+    {
+        if (! auth()->user() || ! is_any_admin()) {
+            return redirect()->to(base_url('/'));
+        }
+
+        $data = [
+            'teachers'       => $this->exportRows(),
+            'reportDate'     => date('F j, Y'),
+            'schoolYear'     => get_current_school_year(),
+            'filtersSummary' => $this->filtersSummary(),
+        ];
+
+        $html = view('admin/teachers_pdf', $data);
+
+        $options = new \Dompdf\Options();
+        $options->set('defaultFont', 'Times');
+        $options->set('isRemoteEnabled', false);
+        $options->set('isHtml5ParserEnabled', true);
+        $options->set('isPhpEnabled', false);
+        $dompdf = new \Dompdf\Dompdf($options);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'landscape');
+        $dompdf->render();
+
+        return $this->sendPdfInline($dompdf, 'CSCS_Teachers_' . date('Y-m-d') . '.pdf');
+    }
+
+    /**
+     * Human-readable filter summary printed under the PDF letterhead.
+     */
+    private function filtersSummary(): string
+    {
+        $parts = [];
+
+        $search = trim((string) $this->request->getGet('search'));
+        if ($search !== '') {
+            $parts[] = 'Search: ' . $search;
+        }
+
+        $assignment = $this->request->getGet('assignment');
+        if ($assignment === 'assigned') {
+            $parts[] = 'With Advisory Class';
+        } elseif ($assignment === 'unassigned') {
+            $parts[] = 'No Advisory Class';
+        }
+
+        $status = trim((string) $this->request->getGet('status'));
+        if ($status !== '') {
+            $parts[] = 'Status: ' . ucfirst(str_replace('_', ' ', $status));
+        }
+
+        $position = trim((string) $this->request->getGet('position'));
+        if ($position !== '') {
+            $parts[] = 'Position: ' . $position;
+        }
+
+        $department = trim((string) $this->request->getGet('department'));
+        if ($department !== '') {
+            $parts[] = 'Department: ' . $department;
+        }
+
+        $grade = trim((string) $this->request->getGet('grade'));
+        if ($grade !== '' && ctype_digit($grade)) {
+            $parts[] = 'Grade: ' . grade_level_label((int) $grade);
+        }
+
+        $gender = trim((string) $this->request->getGet('gender'));
+        if ($gender === 'Male' || $gender === 'Female') {
+            $parts[] = 'Sex: ' . $gender;
+        }
+
+        $religion = trim((string) $this->request->getGet('religion'));
+        if ($religion !== '') {
+            $parts[] = 'Religion: ' . $religion;
+        }
+
+        return $parts === [] ? 'All faculty' : implode(' | ', $parts);
+    }
+
+    /**
+     * Every row matching the current filters, with the same advisory-section
+     * enrichment and assignment (advisory class) filter the list page applies.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function exportRows(): array
+    {
+        $teacherModel = model(TeacherModel::class);
+        $db = \Config\Database::connect();
+
+        $search = $this->request->getGet('search');
+        $assignment = $this->request->getGet('assignment');
+        $sortBy = $this->request->getGet('sort_by');
+        $sortOrder = strtolower((string) $this->request->getGet('sort_order')) === 'desc' ? 'DESC' : 'ASC';
+
+        $status = trim((string) $this->request->getGet('status'));
+        $position = trim((string) $this->request->getGet('position'));
+        $department = trim((string) $this->request->getGet('department'));
+        $gender = trim((string) $this->request->getGet('gender'));
+        $religion = trim((string) $this->request->getGet('religion'));
+        $grade = trim((string) $this->request->getGet('grade'));
+
+        if (! in_array($sortBy, ['name', 'age'], true)) {
+            $sortBy = 'name';
+        }
+
+        $builder = $teacherModel->select('teachers.*');
+
+        // Pending registrations have their own page (same as index()).
+        $builder->groupStart()
+                ->where('teachers.registration_status IS NULL')
+                ->orWhere('teachers.registration_status', 'approved')
+                ->groupEnd();
+
+        if ($search) {
+            $builder->groupStart()
+                    ->like('teachers.first_name', $search)
+                    ->orLike('teachers.last_name', $search)
+                    ->orLike('teachers.license_number', $search)
+                    ->orLike('teachers.email', $search)
+                    ->orLike('teachers.government_employee_no', $search)
+                    ->orLike('teachers.tin', $search)
+                    ->orLike('teachers.philsys_number', $search)
+                    ->groupEnd();
+        }
+
+        if ($status !== '') {
+            $builder->where('teachers.employment_status', $status);
+        }
+
+        if ($position !== '') {
+            $builder->where('teachers.position', $position);
+        }
+
+        if ($department !== '') {
+            $builder->where('teachers.department', $department);
+        }
+
+        if ($gender === 'Male' || $gender === 'Female') {
+            $builder->where('teachers.gender', $gender);
+        }
+
+        if ($religion !== '') {
+            $builder->where('teachers.religion', $religion);
+        }
+
+        // Grade level handled: advisory class OR any scheduled teaching section
+        // in that grade (same EXISTS sub-selects as index()).
+        if ($grade !== '' && ctype_digit($grade)) {
+            $gradeInt = (int) $grade;
+            $builder->groupStart()
+                    ->where("EXISTS (SELECT 1 FROM sections adv WHERE adv.adviser_id = teachers.id AND adv.grade_level = {$gradeInt})", null, false)
+                    ->orWhere("EXISTS (SELECT 1 FROM teacher_schedules ts2 JOIN sections sec2 ON sec2.id = ts2.section_id WHERE ts2.teacher_id = teachers.id AND sec2.grade_level = {$gradeInt})", null, false)
+                    ->groupEnd();
+        }
+
+        if ($sortBy === 'age') {
+            // Age ASC = younger first (newer DOB); DESC = older first (earlier DOB).
+            $builder->where('teachers.date_of_birth IS NOT NULL');
+            if ($sortOrder === 'ASC') {
+                $builder->orderBy('teachers.date_of_birth', 'DESC');
+            } else {
+                $builder->orderBy('teachers.date_of_birth', 'ASC');
+            }
+            $builder->orderBy('teachers.last_name', 'ASC')
+                   ->orderBy('teachers.first_name', 'ASC');
+        } else {
+            $builder->orderBy('teachers.last_name', $sortOrder)
+                   ->orderBy('teachers.first_name', $sortOrder);
+        }
+
+        $teachers = $builder->findAll();
+
+        foreach ($teachers as &$teacher) {
+            // Age for the PDF column (same derivation as the list page).
+            $teacher['age'] = null;
+            if (! empty($teacher['date_of_birth'])) {
+                try {
+                    $dob = new \DateTime((string) $teacher['date_of_birth']);
+                    $today = new \DateTime('today');
+                    $teacher['age'] = $dob->diff($today)->y;
+                } catch (\Throwable $e) {
+                    $teacher['age'] = null;
+                }
+            }
+
+            // Advisory class for the PDF column.
+            $advisorySection = $db->table('sections')
+                ->select('section_name, grade_level')
+                ->where('adviser_id', $teacher['id'])
+                ->get()->getRow();
+
+            $teacher['section_name'] = $advisorySection->section_name ?? null;
+            $teacher['grade_level'] = $advisorySection->grade_level ?? null;
+        }
+        unset($teacher);
+
+        // Assignment filter is applied in PHP on the list page too (advisory class only).
+        if ($assignment === 'assigned') {
+            $teachers = array_filter($teachers, fn($t) => !empty($t['section_name']));
+        } elseif ($assignment === 'unassigned') {
+            $teachers = array_filter($teachers, fn($t) => empty($t['section_name']));
+        }
+
+        return array_values($teachers);
     }
 
     /**
@@ -127,7 +421,7 @@ class Teachers extends BaseController
         }
 
         return view('admin/teachers_create', [
-            'title' => 'Add New Teacher - CSCS SMS'
+            'title' => 'Add New Teacher - CSCS Tap n Track'
         ]);
     }
 
@@ -142,9 +436,17 @@ class Teachers extends BaseController
         }
 
         helper('teacher_form');
+
+        // Normalise legacy phone formats before validation and the writes below.
+        phone_normalize_request($this->request, ['contact_number']);
+
+        // Religion's "Other" choice is swapped for its typed text before the
+        // rules run, so the stored value is the real religion (same as students).
+        religion_normalize_request($this->request);
+
         $rules = teacher_store_validation_rules(true);
 
-        if (!$this->validate($rules)) {
+        if (!$this->validate($rules, teacher_store_validation_messages())) {
             return redirect()->back()->withInput()->with('validation', $this->validator);
         }
 
@@ -174,14 +476,16 @@ class Teachers extends BaseController
                 throw new \Exception('Failed to create user account');
             }
 
-            // Create password hash and auth identity
+            // Create password hash and auth identity.
+            // Canonical Shield format: secret = email, secret2 = password hash.
             $hashedPassword = password_hash($this->request->getPost('password'), PASSWORD_DEFAULT);
+            $teacherEmail   = str_replace('mailto:', '', trim((string) $this->request->getPost('email')));
             $db->table('auth_identities')->insert([
                 'user_id' => $userId,
                 'type' => 'email_password',
-                'name' => '',
-                'secret' => $hashedPassword,
-                'secret2' => null,
+                'name' => $teacherEmail,
+                'secret' => $teacherEmail,
+                'secret2' => $hashedPassword,
                 'expires' => null,
                 'extra' => null,
                 'force_reset' => 0,
@@ -215,6 +519,18 @@ class Teachers extends BaseController
                 throw new \Exception('Transaction failed');
             }
 
+            audit_event('teacher.created', [
+                'category'      => 'data',
+                'status'        => 'success',
+                'resource_type' => 'teacher',
+                'resource_id'   => (string) ($teacherModel->getInsertID() ?: $userId),
+                'description'   => 'Teacher created from the admin portal',
+                'after'         => [
+                    'name'  => trim((string) $this->request->getPost('first_name') . ' ' . (string) $this->request->getPost('last_name')),
+                    'email' => (string) $this->request->getPost('email'),
+                ],
+            ]);
+
             return redirect()->to('admin/teachers')
                 ->with('success', 'Teacher created successfully.');
 
@@ -224,6 +540,206 @@ class Teachers extends BaseController
                 ->withInput()
                 ->with('error', 'Failed to create teacher: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Show teacher self-registrations awaiting approval.
+     */
+    public function pending()
+    {
+        if (! is_any_admin()) {
+            return redirect()->to(base_url('/'));
+        }
+
+        $teacherModel = model(TeacherModel::class);
+
+        $pendingTeachers = $teacherModel
+            ->select('teachers.*, users.email as user_email, users.active as user_active, users.created_at as registered_at')
+            ->join('users', 'users.id = teachers.user_id', 'left')
+            ->where('teachers.registration_status', 'pending')
+            ->orderBy('teachers.created_at', 'DESC')
+            ->findAll();
+
+        return view('admin/teachers_pending', [
+            'title'           => 'Pending Teacher Registrations - CSCS Tap n Track',
+            'pendingTeachers' => $pendingTeachers,
+        ]);
+    }
+
+    /**
+     * JSON count of pending teacher registrations (for the sidebar badge).
+     */
+    public function getPendingCount()
+    {
+        if (! is_any_admin()) {
+            return $this->response->setStatusCode(403)->setJSON(['error' => 'Unauthorized']);
+        }
+
+        $count = model(TeacherModel::class)
+            ->where('registration_status', 'pending')
+            ->countAllResults();
+
+        return $this->response->setJSON(['count' => $count]);
+    }
+
+    /**
+     * Approve a teacher self-registration: activate the login account and
+     * attach the 'teacher' group.
+     */
+    public function approve($teacherId)
+    {
+        if (! is_any_admin()) {
+            return $this->response->setStatusCode(403)->setJSON(['error' => 'Unauthorized']);
+        }
+
+        $teacherModel = model(TeacherModel::class);
+        $teacher = $teacherModel->find($teacherId);
+
+        if (! $teacher) {
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'Teacher not found']);
+        }
+
+        if (($teacher['registration_status'] ?? '') !== 'pending') {
+            return $this->response->setStatusCode(422)
+                ->setJSON(['error' => 'Only pending registrations can be approved.']);
+        }
+
+        $db = \Config\Database::connect();
+        $db->transStart();
+
+        try {
+            $userId = (int) ($teacher['user_id'] ?? 0);
+            if ($userId <= 0) {
+                throw new \Exception('This registration has no linked login account.');
+            }
+
+            // Activate the login account
+            $db->table('users')->where('id', $userId)->update([
+                'active'     => 1,
+                'updated_at' => date('Y-m-d H:i:s'),
+            ]);
+
+            // Attach the teacher group (idempotent)
+            $hasGroup = $db->table('auth_groups_users')
+                ->where('user_id', $userId)
+                ->where('group', 'teacher')
+                ->countAllResults() > 0;
+
+            if (! $hasGroup) {
+                $db->table('auth_groups_users')->insert([
+                    'user_id'    => $userId,
+                    'group'      => 'teacher',
+                    'created_at' => date('Y-m-d H:i:s'),
+                ]);
+            }
+
+            $teacherModel->skipValidation(true);
+            $teacherModel->update($teacherId, [
+                'registration_status'      => 'approved',
+                'registration_reviewed_at' => date('Y-m-d H:i:s'),
+                'registration_reviewed_by' => (int) (auth()->id() ?? 0) ?: null,
+                'employment_status'        => 'active',
+            ]);
+            $teacherModel->skipValidation(false);
+
+            $db->transComplete();
+
+            if ($db->transStatus() === false) {
+                throw new \Exception('Transaction failed');
+            }
+
+            log_message('info', 'Teacher registration approved: teacher id ' . $teacherId);
+
+            $name = trim(($teacher['first_name'] ?? '') . ' ' . ($teacher['last_name'] ?? ''));
+
+            audit_event('teacher.approved', [
+                'category'      => 'data',
+                'status'        => 'success',
+                'resource_type' => 'teacher',
+                'resource_id'   => (string) $teacherId,
+                'description'   => 'Teacher registration approved',
+                'metadata'      => ['name' => $name, 'email' => $teacher['email'] ?? null],
+            ]);
+
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => 'Registration approved. ' . ($name !== '' ? $name : 'This teacher') . ' can now sign in.',
+            ]);
+        } catch (\Throwable $e) {
+            $db->transRollback();
+
+            log_message('error', 'Teacher registration approval failed: ' . $e->getMessage());
+
+            return $this->response->setStatusCode(500)
+                ->setJSON(['error' => 'Failed to approve registration.']);
+        }
+    }
+
+    /**
+     * Reject a teacher self-registration. The login account stays inactive.
+     */
+    public function reject($teacherId)
+    {
+        if (! is_any_admin()) {
+            return $this->response->setStatusCode(403)->setJSON(['error' => 'Unauthorized']);
+        }
+
+        $teacherModel = model(TeacherModel::class);
+        $teacher = $teacherModel->find($teacherId);
+
+        if (! $teacher) {
+            return $this->response->setStatusCode(404)->setJSON(['error' => 'Teacher not found']);
+        }
+
+        if (($teacher['registration_status'] ?? '') !== 'pending') {
+            return $this->response->setStatusCode(422)
+                ->setJSON(['error' => 'Only pending registrations can be rejected.']);
+        }
+
+        $teacherModel->skipValidation(true);
+        $teacherModel->update($teacherId, [
+            'registration_status'      => 'rejected',
+            'registration_reviewed_at' => date('Y-m-d H:i:s'),
+            'registration_reviewed_by' => (int) (auth()->id() ?? 0) ?: null,
+            'employment_status'        => 'inactive',
+        ]);
+        $teacherModel->skipValidation(false);
+
+        // Keep the login account disabled and detach the teacher group so the
+        // applicant cannot sign in or reach any teacher portal route.
+        $userId = (int) ($teacher['user_id'] ?? 0);
+        if ($userId > 0) {
+            $db = \Config\Database::connect();
+
+            $db->table('users')->where('id', $userId)->update([
+                'active'     => 0,
+                'updated_at' => date('Y-m-d H:i:s'),
+            ]);
+
+            $db->table('auth_groups_users')
+                ->where('user_id', $userId)
+                ->where('group', 'teacher')
+                ->delete();
+        }
+
+        log_message('info', 'Teacher registration rejected: teacher id ' . $teacherId);
+
+        audit_event('teacher.rejected', [
+            'category'      => 'data',
+            'status'        => 'success',
+            'resource_type' => 'teacher',
+            'resource_id'   => (string) $teacherId,
+            'description'   => 'Teacher registration rejected',
+            'metadata'      => [
+                'name'  => trim((string) ($teacher['first_name'] ?? '') . ' ' . (string) ($teacher['last_name'] ?? '')),
+                'email' => $teacher['email'] ?? null,
+            ],
+        ]);
+
+        return $this->response->setJSON([
+            'success' => true,
+            'message' => 'Teacher registration rejected.',
+        ]);
     }
 
     /**
@@ -238,9 +754,16 @@ class Teachers extends BaseController
 
         $teacherModel = model(TeacherModel::class);
 
-        // Get teacher with user details - using WHERE clause instead of find()
-        $teacher = $teacherModel->select('teachers.*, users.email')
-            ->join('users', 'users.id = teachers.user_id', 'inner')
+        // Get teacher with user details - using WHERE clause instead of find().
+        // The account email lives in users.email but older/linked-less records only
+        // have teachers.email, and a LEFT JOIN would null it out; fall back to the
+        // teachers column so the form never renders a blank (and therefore
+        // unsavable) email field.
+        $teacher = $teacherModel->select(
+                "teachers.*, COALESCE(NULLIF(users.email, ''), teachers.email) AS email",
+                false
+            )
+            ->join('users', 'users.id = teachers.user_id', 'left')
             ->where('teachers.id', $teacherId)
             ->first();
 
@@ -250,7 +773,7 @@ class Teachers extends BaseController
         }
 
         return view('admin/teachers_edit', [
-            'title' => 'Edit Teacher - CSCS SMS',
+            'title' => 'Edit Teacher - CSCS Tap n Track',
             'teacher' => $teacher
         ]);
     }
@@ -279,8 +802,13 @@ class Teachers extends BaseController
                 return $this->response->setStatusCode(404)->setJSON(['error' => 'Teacher not found']);
             }
 
-            // Get teacher with user details - using WHERE clause instead of find()
-            $teacher = $teacherModel->select('teachers.*, users.email')
+            // Get teacher with user details - using WHERE clause instead of find().
+            // Fall back to teachers.email when the linked account has no email (see
+            // edit() above) so the modal's required Email field is always populated.
+            $teacher = $teacherModel->select(
+                    "teachers.*, COALESCE(NULLIF(users.email, ''), teachers.email) AS email",
+                    false
+                )
                 ->join('users', 'users.id = teachers.user_id', 'left')
                 ->where('teachers.id', $teacherId)
                 ->first();
@@ -316,6 +844,13 @@ class Teachers extends BaseController
                 return $this->respondUpdate(false, 'Teacher not found', [], 404);
             }
 
+            // Normalise legacy phone formats before validation and the writes below.
+            phone_normalize_request($this->request, ['contact_number']);
+
+            // Religion's "Other" choice is swapped for its typed text before the
+            // rules run, so validation and the write see the real religion.
+            religion_normalize_request($this->request);
+
             $rules = teacher_store_validation_rules(false);
             $newEmail = $this->request->getPost('email');
             if ($newEmail && $newEmail !== $teacher['email']) {
@@ -324,7 +859,7 @@ class Teachers extends BaseController
                 $rules['email'] = 'required|valid_email';
             }
 
-            if (! $this->validate($rules)) {
+            if (! $this->validate($rules, teacher_store_validation_messages())) {
                 return $this->respondUpdate(false, 'Validation failed', $this->validator->getErrors(), 422);
             }
 
@@ -355,6 +890,22 @@ class Teachers extends BaseController
             if ($db->transStatus() === false) {
                 return $this->respondUpdate(false, 'Failed to update teacher data.');
             }
+
+            $trackedFields = [
+                'first_name', 'last_name', 'middle_name', 'email', 'contact_number', 'address',
+                'gender', 'date_of_birth', 'civil_status', 'position', 'employment_status',
+                'license_number', 'employee_id', 'baccalaureate_degree', 'masters_degree',
+            ];
+            $beforeSnapshot = array_intersect_key((array) $teacher, array_flip($trackedFields));
+            $afterSnapshot  = array_intersect_key((array) ($teacherModel->find($teacherId) ?? $teacherData), array_flip($trackedFields));
+
+            audit_event('teacher.updated', [
+                'category'      => 'data',
+                'status'        => 'success',
+                'resource_type' => 'teacher',
+                'resource_id'   => (string) $teacherId,
+                'description'   => 'Teacher record updated',
+            ] + audit_diff($beforeSnapshot, $afterSnapshot, $trackedFields));
 
             return $this->respondUpdate(true, 'Teacher updated successfully.');
         } catch (\Exception $e) {
@@ -394,6 +945,81 @@ class Teachers extends BaseController
 
 
     /**
+     * Toggle whether the teacher may edit their own Personnel Record
+     * (teacher/profile -> Personnel Record tab).
+     */
+    public function toggleGlobalPersonnelEdit()
+    {
+        try {
+            if (! is_any_admin()) {
+                return $this->response->setStatusCode(403)->setJSON(['error' => 'Unauthorized']);
+            }
+
+            $settingModel = model(SystemSettingModel::class);
+            $newState = ((int) ($settingModel->getSetting('personnel_edit_global', '1')) === 1) ? 0 : 1;
+            $settingModel->setSetting('personnel_edit_global', (string) $newState, 'Global personnel record editing switch for all teachers');
+
+            // Keep every teacher's per-teacher flag in sync so the teacher
+            // portal's check (Teacher\Profile::updatePersonnel) follows the
+            // same switch. The column is self-healed because some deployments
+            // predate the migration.
+            $db = \Config\Database::connect();
+            $synced = $this->ensurePersonnelEditColumn();
+            if ($synced) {
+                $db->table('teachers')->update(['personnel_edit_enabled' => $newState]);
+            }
+
+            log_message('info', 'Personnel record editing ' . ($newState ? 'ENABLED' : 'DISABLED') . ' for ALL teachers by admin.');
+
+            audit_event('settings.personnel_edit_toggled', [
+                'category'      => 'settings',
+                'status'        => 'success',
+                'resource_type' => 'setting',
+                'resource_id'   => 'personnel_edit_global',
+                'description'   => 'Personnel record editing ' . ($newState ? 'enabled' : 'disabled') . ' for all teachers',
+            ] + audit_diff(
+                ['personnel_edit_global' => $newState ? '0' : '1'],
+                ['personnel_edit_global' => (string) $newState],
+                ['personnel_edit_global']
+            ));
+
+            return $this->response->setJSON([
+                'success' => true,
+                'enabled' => (bool) $newState,
+                'synced'  => $synced,
+                'message' => $newState
+                    ? 'Personnel record editing is now ENABLED for all teachers.'
+                    : 'Personnel record editing is now DISABLED for all teachers.',
+            ]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Global toggle personnel edit error: ' . $e->getMessage());
+
+            return $this->response->setStatusCode(500)->setJSON(['error' => 'Failed to toggle personnel record editing.']);
+        }
+    }
+
+    /**
+     * Self-healing: make sure teachers.personnel_edit_enabled exists (older
+     * live databases may predate the migration and hosts may block DDL).
+     */
+    private function ensurePersonnelEditColumn(): bool
+    {
+        $db = \Config\Database::connect();
+        foreach ($db->getFieldData('teachers') as $field) {
+            if (($field->name ?? '') === 'personnel_edit_enabled') {
+                return true;
+            }
+        }
+        try {
+            $db->query("ALTER TABLE `teachers` ADD COLUMN `personnel_edit_enabled` TINYINT(1) NOT NULL DEFAULT 1 AFTER `employment_status`");
+            return true;
+        } catch (\Throwable $e) {
+            log_message('error', 'Could not add personnel_edit_enabled column: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Delete teacher
      */
     public function delete($teacherId)
@@ -406,23 +1032,64 @@ class Teachers extends BaseController
         $teacherModel = model(TeacherModel::class);
         $userModel = model(UserModel::class);
 
-        $teacher = $teacherModel->find($teacherId);
+        // withDeleted() so rows that were only soft-deleted in the past can
+        // still be found and permanently purged.
+        $teacher = $teacherModel->withDeleted()->find($teacherId);
         if (!$teacher) {
             return $this->response->setStatusCode(404)->setJSON(['error' => 'Teacher not found']);
         }
 
-        // Delete teacher record first
-        if ($teacherModel->delete($teacherId)) {
-            // Then delete user account
-            $userModel->delete($teacher['user_id']);
-            
+        $db = \Config\Database::connect();
+        $db->transStart();
+
+        try {
+            // Detach the teacher from any sections they advise. sections.adviser_id
+            // has no foreign key, so it must be cleared explicitly or the row
+            // would point at a teacher that no longer exists.
+            $db->table('sections')
+                ->where('adviser_id', $teacherId)
+                ->update(['adviser_id' => null, 'updated_at' => date('Y-m-d H:i:s')]);
+
+            // Permanently remove the teacher row. The second argument forces a
+            // hard DELETE instead of a soft delete (deleted_at stamp), so the
+            // row is gone from the database. attendance/quizzes/teacher_schedules
+            // rows cascade via foreign keys.
+            $teacherModel->delete($teacherId, true);
+
+            // Permanently remove the login account (auth_* tables cascade).
+            if (! empty($teacher['user_id'])) {
+                $userModel->delete((int) $teacher['user_id'], true);
+            }
+
+            $db->transComplete();
+
+            if ($db->transStatus() === false) {
+                return $this->response->setStatusCode(500)->setJSON(['error' => 'Failed to delete teacher.']);
+            }
+
+            log_message('info', 'Teacher permanently deleted: ID ' . $teacherId . ' by admin.');
+
+            audit_event('teacher.deleted', [
+                'category'      => 'data',
+                'status'        => 'success',
+                'resource_type' => 'teacher',
+                'resource_id'   => (string) $teacherId,
+                'description'   => 'Teacher permanently deleted',
+                'before'        => [
+                    'name'  => trim((string) ($teacher['first_name'] ?? '') . ' ' . (string) ($teacher['last_name'] ?? '')),
+                    'email' => $teacher['email'] ?? null,
+                ],
+            ]);
+
             return $this->response->setJSON([
                 'success' => true,
                 'message' => 'Teacher deleted successfully.'
             ]);
-        } else {
+        } catch (\Throwable $e) {
+            log_message('error', 'Teacher delete error: ' . $e->getMessage());
+
             return $this->response->setStatusCode(500)->setJSON([
-                'error' => 'Failed to delete teacher.'
+                'error' => 'Failed to delete teacher: ' . $e->getMessage(),
             ]);
         }
     }
@@ -450,18 +1117,10 @@ class Teachers extends BaseController
         $sections = $sectionModel->where('adviser_id', $teacherId)->findAll();
 
         return view('admin/teacher_view', [
-            'title' => 'Teacher Details - CSCS SMS',
+            'title' => 'Teacher Details - CSCS Tap n Track',
             'teacher' => $teacher,
             'sections' => $sections
         ]);
-    }
-
-    /**
-     * Get teacher details for modal display
-     */
-    public function details($teacherId)
-    {
-        return $this->getTeacherDetails($teacherId);
     }
 
     /**
@@ -590,7 +1249,11 @@ class Teachers extends BaseController
             'subjects' => $subjects,
             'subjectsByGrade' => $subjectsByGrade,
             'sections' => $sections,
-            'assignedCombinations' => $assignedCombinations
+            'assignedCombinations' => $assignedCombinations,
+            // A teacher cannot be in two rooms at once. Overlaps that already
+            // exist (legacy rows, rows from another school year) are shown here
+            // instead of being rediscovered one rejected block at a time.
+            'conflicts' => $scheduleModel->findExistingTeacherConflicts($teacherId),
         ]);
     }
 
@@ -742,107 +1405,237 @@ class Teachers extends BaseController
         }
 
         $db = \Config\Database::connect();
-        
-        // Check for duplicate subject-section combinations on the same day
-        $subjectSectionByDay = [];
-        foreach ($schedules as $schedule) {
-            $day = $schedule['day_of_week'];
-            $subjectId = $schedule['subject_id'];
-            $sectionId = $schedule['section_id'];
-            $key = $subjectId . '_' . $sectionId;
-            
-            if (isset($subjectSectionByDay[$day][$key])) {
-                // Get subject and section names for error message
-                $subjectModel = model(SubjectModel::class);
-                $sectionModel = model(SectionModel::class);
-                $subject = $subjectModel->find($subjectId);
-                $section = $sectionModel->find($sectionId);
-                $subjectName = $subject['subject_name'] ?? 'Subject';
-                $sectionName = $section['section_name'] ?? 'Section';
-                
-                return $this->response->setJSON([
-                    'success' => false,
-                    'error' => 'Duplicate detected: "' . $subjectName . '" for section "' . $sectionName . '" is scheduled multiple times on ' . $day . '. One subject per section per day only!'
-                ]);
-            }
-            $subjectSectionByDay[$day][$key] = true;
-        }
-        
-        // Check for room conflicts with other teachers
-        foreach ($schedules as $schedule) {
-            if (empty($schedule['room'])) continue;
-            
-            $conflicts = $db->table('teacher_schedules')
-                ->where('day_of_week', $schedule['day_of_week'])
-                ->where('start_time', $schedule['start_time'])
-                ->where('end_time', $schedule['end_time'])
-                ->where('room', $schedule['room'])
-                ->where('teacher_id !=', $teacherId)
+
+        // This page replaces the teacher's timetable for the current school
+        // year, so those rows must not be read as conflicts against the very
+        // blocks that are about to replace them. Deleting by teacher_id alone
+        // (what this method used to do) also destroyed rows from other school
+        // years and the '' (unassigned) placeholder rows other pages read.
+        $replacedIds = array_map(
+            static fn (array $row): int => (int) $row['id'],
+            $db->table('teacher_schedules')
+                ->select('id')
+                ->where('teacher_id', (int) $teacherId)
                 ->where('school_year', get_current_school_year())
-                ->get()->getResultArray();
-            
-            if (!empty($conflicts)) {
-                return $this->response->setJSON([
-                    'success' => false,
-                    'error' => 'Room "' . $schedule['room'] . '" is already occupied on ' . $schedule['day_of_week'] . ' from ' . substr($schedule['start_time'], 0, 5) . ' to ' . substr($schedule['end_time'], 0, 5) . ' by another teacher.'
-                ]);
+                ->whereIn('day_of_week', schedule_conflict_weekdays())
+                ->get()->getResultArray()
+        );
+
+        $validated = [];
+        $errors    = [];
+
+        // Every block is validated twice: on its own shape, then against the
+        // stored timetable AND against the blocks submitted alongside it. The
+        // sibling pass is what stops one click from writing two overlapping
+        // rows - they are not in the database yet, so no query can see them.
+        foreach ($schedules as $index => $schedule) {
+            $check = schedule_validate_slot(is_array($schedule) ? $schedule : []);
+
+            if (! $check['ok']) {
+                $errors[] = 'Block ' . ($index + 1) . ': ' . $check['error'];
+                continue;
             }
+
+            $slot = $check['slot'];
+            // The grid posts the id of the teacher whose page this is; a
+            // crafted payload cannot reassign these blocks to someone else.
+            $slot['teacher_id'] = (int) $teacherId;
+
+            $validated[] = $slot;
         }
-        
+
+        if ($errors === []) {
+            $validated = $this->labelScheduleSlots($validated);
+
+            $accepted = [];
+            foreach ($validated as $index => $slot) {
+                $conflicts = $scheduleModel->findConflicts($slot, $accepted, true, $replacedIds);
+
+                if ($conflicts !== []) {
+                    foreach ($conflicts as $conflict) {
+                        $errors[] = 'Block ' . ($index + 1) . ': ' . $conflict['message'];
+                    }
+                    continue;
+                }
+
+                $accepted[] = $slot;
+            }
+
+            $validated = $accepted;
+        }
+
+        if ($errors !== []) {
+            // Nothing is written. The grid is replaced wholesale, so a partial
+            // save would silently drop every block the admin did not submit.
+            log_message('info', 'Schedule rejected for teacher ID ' . $teacherId . ': ' . implode(' | ', $errors));
+
+            return $this->response->setJSON([
+                'success'   => false,
+                'error'     => implode('<br>', $errors),
+                'conflicts' => array_map(
+                    static fn (string $message): array => ['message' => $message],
+                    $errors
+                ),
+            ], 409);
+        }
+
         $db->transStart();
 
         try {
-            // Delete existing schedules
-            $deleted = $scheduleModel->where('teacher_id', $teacherId)->delete();
-            log_message('info', 'Deleted existing schedules: ' . ($deleted ? 'success' : 'failed'));
+            // Delete only the rows this save replaces (current school year,
+            // real weekdays). Rows from other years and '' placeholders survive.
+            $deleted = $replacedIds === []
+                ? 0
+                : $db->table('teacher_schedules')->whereIn('id', $replacedIds)->delete();
 
-            // Insert new schedules
+            log_message('info', 'Deleted existing schedules: ' . ($deleted === false ? 'failed' : (string) $deleted));
+
+            // Insert the validated timetable. Every block already passed the
+            // conflict engine, so a failure here is a database problem, and
+            // the transaction rolls the whole grid back rather than leaving a
+            // half-written week.
+            $now      = date('Y-m-d H:i:s');
             $inserted = 0;
-            $errors = [];
-            
-            foreach ($schedules as $schedule) {
+
+            foreach ($validated as $slot) {
                 $data = [
-                    'teacher_id' => (int)$teacherId,
-                    'subject_id' => (int)$schedule['subject_id'],
-                    'section_id' => (int)$schedule['section_id'],
-                    'day_of_week' => $schedule['day_of_week'],
-                    'start_time' => $schedule['start_time'],
-                    'end_time' => $schedule['end_time'],
-                    'room' => $schedule['room'] ?? '',
-                    'school_year' => get_current_school_year()
+                    'teacher_id'  => (int) $teacherId,
+                    'section_id'  => (int) $slot['section_id'],
+                    'day_of_week' => $slot['day_of_week'],
+                    'start_time'  => $slot['start_time'],
+                    'end_time'    => $slot['end_time'],
+                    // Empty means "no room yet"; NULL keeps the room-overlap
+                    // check from matching every other unassigned block.
+                    'room'        => $slot['room'] === '' ? null : $slot['room'],
+                    'school_year' => get_current_school_year(),
+                    'created_at'  => $now,
+                    'updated_at'  => $now,
                 ];
-                
-                log_message('info', 'Attempting to insert: ' . json_encode($data));
-                
-                if ($scheduleModel->insert($data)) {
-                    $inserted++;
-                    log_message('info', 'Successfully inserted schedule entry');
-                } else {
-                    $modelErrors = $scheduleModel->errors();
-                    $errors[] = $modelErrors;
-                    log_message('error', 'Failed to insert schedule: ' . json_encode($data) . ' Errors: ' . json_encode($modelErrors));
+
+                // This page can reach a non-numerical (domain-graded) advisory
+                // section, where the item is a developmental domain id. Writing
+                // that id into subject_id would break its FOREIGN KEY - or, when
+                // the ids happen to collide, silently attach an unrelated
+                // subject. schedule_item_column() resolves the right column.
+                $itemColumn = schedule_item_column((int) $slot['section_id']);
+
+                $data[$itemColumn] = (int) $slot['item_id'];
+
+                if ($itemColumn === 'domain_id') {
+                    $data['subject_id'] = null;
+                } elseif (schedule_domain_column_ready()) {
+                    $data['domain_id'] = null;
                 }
+
+                if (! $db->table('teacher_schedules')->insert($data)) {
+                    $failure = $db->error();
+                    log_message('error', 'Failed to insert schedule: ' . json_encode($data) . ' DB error: ' . json_encode($failure));
+
+                    $db->transRollback();
+
+                    return $this->response->setJSON([
+                        'success' => false,
+                        'error'   => 'The schedule could not be saved (database error).',
+                    ], 500);
+                }
+
+                $inserted++;
             }
-            
+
             $db->transComplete();
-            
+
             if ($db->transStatus() === false) {
                 log_message('error', 'Transaction failed');
-                return $this->response->setJSON(['success' => false, 'error' => 'Transaction failed']);
+
+                return $this->response->setJSON([
+                    'success' => false,
+                    'error'   => 'The schedule could not be saved (transaction failed).',
+                ], 500);
             }
-            
+
             log_message('info', 'Inserted ' . $inserted . ' schedule entries out of ' . count($schedules));
-            
-            if ($inserted > 0) {
-                return $this->response->setJSON(['success' => true, 'message' => 'Schedule saved successfully (' . $inserted . ' entries)']);
-            } else {
-                return $this->response->setJSON(['success' => false, 'error' => 'No schedules were saved. Errors: ' . json_encode($errors)]);
-            }
+
+            audit_event('teacher.schedule_saved', [
+                'category'      => 'data',
+                'status'        => 'success',
+                'resource_type' => 'teacher',
+                'resource_id'   => (string) $teacherId,
+                'description'   => 'Teacher schedule saved (' . $inserted . ' entr' . ($inserted === 1 ? 'y' : 'ies') . ')',
+                'metadata'      => ['inserted' => (int) $inserted, 'submitted' => count($schedules)],
+            ]);
+
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => 'Schedule saved successfully (' . $inserted . ' entries)',
+            ]);
         } catch (\Exception $e) {
             $db->transRollback();
             log_message('error', 'Schedule save error: ' . $e->getMessage());
-            return $this->response->setJSON(['success' => false, 'error' => 'Database error: ' . $e->getMessage()]);
+
+            return $this->response->setJSON([
+                'success' => false,
+                'error'   => 'Database error: ' . $e->getMessage(),
+            ], 500);
         }
+    }
+
+    /**
+     * Attach the display labels the conflict messages need to validated slots.
+     *
+     * findConflicts() names a stored blocking row itself, but blocks validated
+     * in the same save are still in memory, and without a label their messages
+     * would read "item #12". The label follows the section's grading type, the
+     * same way the schedule pages do: developmental domains for non-numerical
+     * sections, subjects otherwise. Domain ids can collide with subject ids, so
+     * the fallback matters when one of the two tables has no matching row.
+     *
+     * @param  list<array<string, mixed>> $slots Validated slots from schedule_validate_slot().
+     * @return list<array<string, mixed>>        The same slots, plus item_name/section_name.
+     */
+    private function labelScheduleSlots(array $slots): array
+    {
+        if ($slots === []) {
+            return $slots;
+        }
+
+        $db = \Config\Database::connect();
+
+        $ids = static fn (string $key): array => array_values(array_unique(
+            array_map(static fn (array $slot): int => (int) $slot[$key], $slots)
+        ));
+
+        $sectionNames = [];
+        foreach ($db->table('sections')->select('id, section_name')->whereIn('id', $ids('section_id'))->get()->getResultArray() as $row) {
+            $sectionNames[(int) $row['id']] = (string) $row['section_name'];
+        }
+
+        $itemIds = $ids('item_id');
+
+        $subjectNames = [];
+        foreach ($db->table('subjects')->select('id, subject_name')->whereIn('id', $itemIds)->get()->getResultArray() as $row) {
+            $subjectNames[(int) $row['id']] = (string) $row['subject_name'];
+        }
+
+        $domainNames = [];
+
+        if (schedule_domain_column_ready()) {
+            foreach ($db->table('sned_categories')->select('id, name')->whereIn('id', $itemIds)->get()->getResultArray() as $row) {
+                $domainNames[(int) $row['id']] = (string) $row['name'];
+            }
+        }
+
+        foreach ($slots as &$slot) {
+            $sectionId = (int) $slot['section_id'];
+            $itemId    = (int) $slot['item_id'];
+
+            $slot['section_name'] = $sectionNames[$sectionId] ?? ('section #' . $sectionId);
+            $slot['item_name']    = is_non_numerical_section($sectionId)
+                ? ($domainNames[$itemId] ?? $subjectNames[$itemId] ?? ('item #' . $itemId))
+                : ($subjectNames[$itemId] ?? $domainNames[$itemId] ?? ('item #' . $itemId));
+        }
+        unset($slot);
+
+        return $slots;
     }
 }
 

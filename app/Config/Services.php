@@ -28,4 +28,30 @@ class Services extends BaseService
      *     return new \CodeIgniter\Example();
      * }
      */
+
+    /**
+     * Shared activity/audit log writer (single instance per request so the
+     * request id and hash chain stay consistent across every event).
+     */
+    public static function auditLogger($getShared = true): \App\Libraries\AuditLogger
+    {
+        if ($getShared) {
+            return static::getSharedInstance('auditLogger');
+        }
+
+        return new \App\Libraries\AuditLogger();
+    }
+
+    /**
+     * Database backup / restore engine (native mysqldump + mysql clients).
+     * Shared so the resolved client paths and directory checks are memoized.
+     */
+    public static function databaseBackup($getShared = true): \App\Libraries\DatabaseBackupService
+    {
+        if ($getShared) {
+            return static::getSharedInstance('databaseBackup');
+        }
+
+        return new \App\Libraries\DatabaseBackupService();
+    }
 }

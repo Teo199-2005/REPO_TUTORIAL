@@ -1,4 +1,4 @@
-﻿// Global Modal System for CSCS SMS
+// Global Modal System for CSCS Tap n Track
 function customConfirm(message, title = 'Confirm Action', type = 'question') {
     return new Promise((resolve) => {
         // Decode HTML entities and format message
@@ -42,6 +42,14 @@ function customConfirm(message, title = 'Confirm Action', type = 'question') {
         
         document.body.insertAdjacentHTML('beforeend', modalHTML);
         
+        // Mascot decoration (see public/js/mascot.js). The dialog picks its own
+        // pose from the `type` argument, so a confirmation reads as "thinking"
+        // and an error reads as "worried".
+        const dialog = document.querySelector('#customModal .custom-modal-container');
+        if (dialog && typeof window.__mascotDecorateDialog === 'function') {
+            window.__mascotDecorateDialog(dialog, type);
+        }
+
         window.closeCustomModal = function(result) {
             const modal = document.getElementById('customModal');
             if (modal) {
@@ -94,6 +102,12 @@ function customAlert(message, title = 'Alert', type = 'info') {
         
         document.body.insertAdjacentHTML('beforeend', modalHTML);
         
+        // Mascot decoration (see public/js/mascot.js).
+        const dialog = document.querySelector('#customModal .custom-modal-container');
+        if (dialog && typeof window.__mascotDecorateDialog === 'function') {
+            window.__mascotDecorateDialog(dialog, type);
+        }
+
         window.closeCustomAlert = function() {
             const modal = document.getElementById('customModal');
             if (modal) {
@@ -104,12 +118,14 @@ function customAlert(message, title = 'Alert', type = 'info') {
     });
 }
 
-// Override native alert and confirm
+// Override native alert only.
+// NOTE: Do NOT override window.confirm here. A promise-based confirm() breaks
+// every synchronous caller (if (confirm(msg)) {...}), because a Promise is
+// always truthy — those callers would "auto-approve" without waiting for the
+// user (this silently deleted announcements with a 0-second confirm).
+// Async code that wants the styled dialog must call customConfirm() directly
+// and await it (see announcements_create.php for the correct pattern).
 window.alert = function(message) {
     customAlert(message);
-};
-
-window.confirm = function(message) {
-    return customConfirm(message);
 };
 

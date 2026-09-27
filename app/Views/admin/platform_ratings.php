@@ -1,10 +1,13 @@
 <?= $this->extend('dashboard_layout') ?>
 <?= $this->section('content') ?>
 
-<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
-  <h1 class="h4 mb-0"><i class="bi bi-stars me-2 text-warning"></i>Platform feedback</h1>
-  <a href="<?= base_url('admin/dashboard') ?>" class="btn btn-outline-secondary btn-sm">Back to dashboard</a>
-</div>
+<?= view('admin/partials/page_header', ['pageHeader' => [
+  'icon'     => 'bi-stars',
+  'title'    => 'Platform feedback',
+  'subtitle' => 'What students and teachers said about the portal',
+  'actions'  => '<a class="btn btn-outline-secondary" href="' . base_url('admin/dashboard') . '">'
+    . '<i class="bi bi-arrow-left"></i> Back to dashboard</a>',
+]]) ?>
 
 <?php if (! empty($setupRequired)): ?>
   <div class="alert alert-warning border-0 shadow-sm mb-4" role="alert">
@@ -62,18 +65,25 @@
 <div class="card border-0 shadow-sm">
   <div class="card-header bg-white d-flex flex-wrap align-items-center justify-content-between gap-2 py-3">
     <span class="fw-semibold">All responses</span>
-    <form method="get" action="<?= base_url('admin/platform-ratings') ?>" class="d-flex align-items-center gap-2">
-      <label class="small text-muted mb-0" for="roleFilter">Role</label>
-      <select name="role" id="roleFilter" class="form-select form-select-sm" style="width: auto;" onchange="this.form.submit()">
-        <option value="" <?= $roleFilter === null ? 'selected' : '' ?>>All</option>
-        <option value="student" <?= $roleFilter === 'student' ? 'selected' : '' ?>>Students</option>
-        <option value="teacher" <?= $roleFilter === 'teacher' ? 'selected' : '' ?>>Teachers</option>
+    <form method="get" action="<?= base_url('admin/platform-ratings') ?>"
+          class="admin-filter-form d-flex align-items-center gap-2">
+      <label class="small text-muted mb-0" for="roleFilter">
+        <i class="bi bi-people me-1" aria-hidden="true"></i>Who gave feedback
+      </label>
+      <select name="role" id="roleFilter" class="form-select form-select-sm" style="width: auto;">
+        <option value="" <?= $roleFilter === null ? 'selected' : '' ?>>Everyone</option>
+        <option value="student" <?= $roleFilter === 'student' ? 'selected' : '' ?>>Students only</option>
+        <option value="teacher" <?= $roleFilter === 'teacher' ? 'selected' : '' ?>>Teachers only</option>
       </select>
+      <?php if ($roleFilter !== null && $roleFilter !== ''): ?>
+        <a class="btn btn-sm btn-outline-secondary" href="<?= base_url('admin/platform-ratings') ?>"
+           title="Clear this filter"><i class="bi bi-arrow-counterclockwise"></i><span class="visually-hidden">Reset</span></a>
+      <?php endif; ?>
     </form>
   </div>
   <div class="table-responsive">
-    <table class="table table-hover align-middle mb-0">
-      <thead class="table-light">
+    <table class="table table-hover align-middle mb-0 admin-table" data-js-paged="1">
+      <thead>
         <tr>
           <th>Role</th>
           <th>Name</th>

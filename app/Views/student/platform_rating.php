@@ -47,7 +47,7 @@ $thankYouStars     = (int) ($ratingThankYouStars ?? 0);
         </a>
       </div>
     <?php else: ?>
-      <p class="text-muted mb-2">Your feedback helps the school improve CSCS SMS. One rating per term is required before logout.</p>
+      <p class="text-muted mb-2">Your feedback helps the school improve CSCS Tap n Track. One rating per term is required before logout.</p>
       <p class="small text-secondary mb-4">
         <i class="bi bi-calendar3 me-1"></i><?= esc($school_year ?? '') ?> · <?= esc($term_label ?? '') ?>
       </p>

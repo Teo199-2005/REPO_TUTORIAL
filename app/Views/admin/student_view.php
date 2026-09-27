@@ -1,6 +1,8 @@
 <?= $this->extend('dashboard_layout') ?>
 <?= $this->section('content') ?>
 
+<style><?= view('partials/password_requirements_style') ?></style>
+
 <div class="container-fluid">
     <div class="row">
         <div class="col-12">
@@ -35,11 +37,14 @@
                                             <div class="mb-3">
                                                 <label for="password" class="form-label">New Password</label>
                                                 <div class="input-group">
-                                                    <input type="password" class="form-control" id="password" name="password" required minlength="6">
+                                                    <input type="password" class="form-control" id="password" name="password"
+                                                           minlength="<?= password_policy_min_length() ?>" pattern="(?=.*\d).{<?= password_policy_min_length() ?>,}"
+                                                           autocomplete="new-password" required data-password-indicator>
                                                     <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('password')">
                                                         <i class="bi bi-eye" id="password-icon"></i>
                                                     </button>
                                                 </div>
+                                                <?= view('partials/password_requirements') ?>
                                             </div>
                                         </div>
                                         <div class="col-md-6">
@@ -177,7 +182,7 @@ function showNotification(message, type) {
     align-items: center;
     gap: 0.75rem;
     font-size: 1.1rem;
-    font-weight: 600;
+    font-weight: 700;
     color: #1e40af;
     margin-bottom: 1rem;
     padding-bottom: 0.75rem;

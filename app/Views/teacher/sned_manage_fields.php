@@ -68,7 +68,7 @@
                                     <button class="btn btn-sm btn-outline-primary" onclick="editField(<?= $field['id'] ?>)">
                                         <i class="bi bi-pencil"></i>
                                     </button>
-                                    <form method="post" action="<?= base_url("teacher/sned/fields/delete/{$field['id']}") ?>" style="display: inline;" onsubmit="return confirm('Deactivate this field? Existing grades will be preserved.')">
+                                    <form method="post" action="<?= base_url("teacher/sned/fields/delete/{$field['id']}") ?>" style="display: inline;" class="sned-field-deactivate-form">
                                         <?= csrf_field() ?>
                                         <button type="submit" class="btn btn-sm btn-outline-danger">
                                             <i class="bi bi-trash"></i>
@@ -126,6 +126,22 @@ function cancelEdit(fieldId) {
     document.getElementById('field-name-' + fieldId).style.display = 'block';
     document.getElementById('edit-form-' + fieldId).style.display = 'none';
 }
+
+// Styled confirmation modal instead of the native confirm() dialog.
+document.querySelectorAll('form.sned-field-deactivate-form').forEach(function (form) {
+    form.addEventListener('submit', async function (e) {
+        if (form.dataset.confirmed === '1') { // real submit after modal approval
+            form.dataset.confirmed = '';
+            return;
+        }
+        e.preventDefault();
+        const ok = await customConfirm('Deactivate this field?\nExisting grades will be preserved.', 'Deactivate Field');
+        if (ok) {
+            form.dataset.confirmed = '1';
+            form.submit(); // bypasses the submit event, so no loop
+        }
+    });
+});
 </script>
 
 <?= $this->endSection() ?>

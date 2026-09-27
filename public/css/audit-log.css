@@ -1,0 +1,231 @@
+/* ==========================================================================
+   Activity log — readability layer
+   --------------------------------------------------------------------------
+   The log is read by school administrators, not developers, so this file
+   styles the plain-language pills (action / status / category / role) that the
+   audit_display helper produces, plus the summary cards and the "what does
+   this mean" legend.
+
+   Everything is scoped under .audit-log-page / .audit-entry so no other admin
+   screen is affected.
+   ========================================================================== */
+
+.audit-log-page .dashboard-header .btn {
+  font-size: 1rem !important;
+  padding: 1rem 2rem !important;
+}
+
+/* --- Summary cards ------------------------------------------------------ */
+.audit-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.audit-stat-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tile-sm);
+  height: var(--tile-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--icon-md);
+  background: var(--surface-tint);
+  border: var(--hairline);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Accent lives in the glyph, not in a painted block behind it. */
+.audit-stat-icon.is-primary { color: #1d4ed8; }
+.audit-stat-icon.is-danger  { color: #b91c1c; }
+.audit-stat-icon.is-success { color: #15803d; }
+.audit-stat-icon.is-info    { color: #0369a1; }
+
+.audit-stat-label {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: var(--letter-spacing-ui);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.audit-stat-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #0f172a;
+}
+
+.audit-stat-hint {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+/* --- Generic pill ------------------------------------------------------- */
+.audit-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.audit-pill i { font-size: 0.85rem; }
+
+.audit-pill.is-success { background: #e6f6ec; color: #15803d; border-color: #b7e4c8; }
+.audit-pill.is-danger  { background: #fdecec; color: #b91c1c; border-color: #f6c6c6; }
+.audit-pill.is-warning { background: #fff4e0; color: #b45309; border-color: #f7dca6; }
+.audit-pill.is-info    { background: #e8f1fd; color: #1d4ed8; border-color: #c3d8fb; }
+.audit-pill.is-muted   { background: #f1f5f9; color: #475569; border-color: #dde3ea; }
+
+/* --- Table -------------------------------------------------------------- */
+.audit-log-page .audit-table thead th {
+  background: #f8fafc;
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.audit-log-page .audit-table thead th a { color: inherit; }
+
+/* The action column carries the icon + label, so give it room. */
+.audit-log-page .audit-table td.audit-cell-action { min-width: 210px; }
+.audit-log-page .audit-table td.audit-cell-when   { min-width: 140px; white-space: nowrap; }
+.audit-log-page .audit-table td.audit-cell-status { white-space: nowrap; }
+
+.audit-action-label {
+  font-weight: 700;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.audit-action-label i { color: #1d4ed8; font-size: 0.95rem; }
+
+.audit-actor-name {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.audit-actor-avatar {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #e8f0fe;
+  color: #1d4ed8;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.audit-detail-text { color: #334155; }
+
+/* Raw machine code: still visible for support, but clearly secondary. */
+.audit-code {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 0.8125rem;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.05rem 0.35rem;
+  display: inline-block;
+  word-break: break-all;
+}
+
+/* --- Legend ("how to read this") ---------------------------------------- */
+.audit-legend-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.45rem 0;
+}
+
+.audit-legend-item i {
+  flex: 0 0 auto;
+  margin-top: 0.1rem;
+  color: #1d4ed8;
+}
+
+.audit-legend-item .audit-legend-text { font-size: 0.86rem; color: #475569; }
+
+.audit-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+}
+
+.audit-note i { color: #1d4ed8; margin-top: 0.1rem; }
+
+/* --- Detail page -------------------------------------------------------- */
+.audit-field {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.7rem 0.9rem;
+  height: 100%;
+}
+
+.audit-field-label {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 0.25rem;
+}
+
+.audit-field-value { font-weight: 700; color: #0f172a; }
+
+.audit-diff-before,
+.audit-diff-after {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 0.78rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 6px;
+  display: inline-block;
+  word-break: break-word;
+}
+
+.audit-diff-before { background: #fdecec; color: #b91c1c; }
+.audit-diff-after  { background: #e6f6ec; color: #15803d; }
+
+.audit-field-name {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 0.8rem;
+  color: #475569;
+  font-weight: 700;
+}
+
+/* --- Responsive --------------------------------------------------------- */
+@media (max-width: 991.98px) {
+  .audit-log-page .audit-table td.audit-cell-action,
+  .audit-log-page .audit-table td.audit-cell-when { min-width: 0; }
+}
+
+@media print {
+  .audit-log-page .audit-note,
+  .audit-legend { display: none !important; }
+}

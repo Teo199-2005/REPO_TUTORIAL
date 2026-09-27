@@ -1,8 +1,7 @@
 <?= $this->extend('dashboard_layout') ?>
 <?= $this->section('content') ?>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h1 class="h4 mb-0">Page access: <?= esc($targetUser->email) ?></h1>
+<div class="d-flex justify-content-end align-items-center mb-3">
   <a href="<?= base_url('admin/dashboard') ?>" class="btn btn-outline-secondary">Back to dashboard</a>
 </div>
 

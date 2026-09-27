@@ -184,6 +184,60 @@
                 </div>
             </div>
 
+            <!-- Tappy's message on the public page -->
+            <div class="cg-row">
+                <div class="cg-col" style="flex: 0 0 100%; max-width: 100%;">
+                    <div class="card border-0 shadow-sm cg-card">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0"><i class="bi bi-chat-quote me-2"></i>Tappy's message on the public CHILDPRO page</h5>
+                        </div>
+                        <div class="card-body">
+                            <?php
+                                $mascot     = $tabData['mascot'] ?? ['pose' => 'hero', 'title' => '', 'text' => '', 'isCustom' => false, 'defaults' => ['title' => '', 'text' => '', 'pose' => 'hero']];
+                                $mascotPose = $mascot['pose'] ?? 'hero';
+                            ?>
+                            <p class="text-muted small">
+                                Tappy floats in the corner of the public
+                                <a href="<?= base_url('childpro') ?>" target="_blank" rel="noopener">CHILDPRO</a>
+                                page. Write what he should say there. Leave both boxes empty to go back to
+                                the built-in wording.
+                            </p>
+
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label small">Pose</label>
+                                    <select class="form-select form-select-sm" name="mascot_pose">
+                                        <?php foreach (($mascotPoses ?? ['hero' => 'Waving (default)']) as $poseValue => $poseLabel): ?>
+                                            <option value="<?= esc($poseValue) ?>" <?= $mascotPose === $poseValue ? 'selected' : '' ?>><?= esc($poseLabel) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="col-md-8">
+                                    <label class="form-label small">Heading</label>
+                                    <input type="text" class="form-control form-control-sm" name="mascot_title"
+                                           value="<?= esc($mascot['title'] ?? '') ?>" maxlength="60"
+                                           placeholder="<?= esc($mascot['defaults']['title'] ?? 'CHILDPRO') ?>">
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label small">Message</label>
+                                    <textarea class="form-control form-control-sm" name="mascot_text" rows="2" maxlength="240"
+                                              placeholder="<?= esc($mascot['defaults']['text'] ?? '') ?>"></textarea>
+                                    <div class="form-text">
+                                        Currently using:
+                                        <strong><?= esc($mascot['defaults']['text'] ?? '') ?></strong>
+                                        <?php if ($mascot['isCustom'] ?? false): ?>
+                                            — this box will replace it. Clear both boxes to restore the default.
+                                        <?php else: ?>
+                                            — the built-in wording. Anything you type here overrides it.
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Save Button -->
             <div class="cg-row">
                 <div class="cg-col" style="flex: 0 0 100%; max-width: 100%;">
@@ -323,6 +377,60 @@
                 </div>
             </div>
 
+            <!-- Tappy's message on the public page -->
+            <div class="cg-row">
+                <div class="cg-col" style="flex: 0 0 100%; max-width: 100%;">
+                    <div class="card border-0 shadow-sm cg-card">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0"><i class="bi bi-chat-quote me-2"></i>Tappy's message on the public GAD page</h5>
+                        </div>
+                        <div class="card-body">
+                            <?php
+                                $mascot     = $tabData['mascot'] ?? ['pose' => 'hero', 'title' => '', 'text' => '', 'isCustom' => false, 'defaults' => ['title' => '', 'text' => '', 'pose' => 'hero']];
+                                $mascotPose = $mascot['pose'] ?? 'hero';
+                            ?>
+                            <p class="text-muted small">
+                                Tappy floats in the corner of the public
+                                <a href="<?= base_url('gad') ?>" target="_blank" rel="noopener">GAD</a>
+                                page. Write what he should say there. Leave both boxes empty to go back to
+                                the built-in wording.
+                            </p>
+
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label small">Pose</label>
+                                    <select class="form-select form-select-sm" name="mascot_pose">
+                                        <?php foreach (($mascotPoses ?? ['hero' => 'Waving (default)']) as $poseValue => $poseLabel): ?>
+                                            <option value="<?= esc($poseValue) ?>" <?= $mascotPose === $poseValue ? 'selected' : '' ?>><?= esc($poseLabel) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="col-md-8">
+                                    <label class="form-label small">Heading</label>
+                                    <input type="text" class="form-control form-control-sm" name="mascot_title"
+                                           value="<?= esc($mascot['title'] ?? '') ?>" maxlength="60"
+                                           placeholder="<?= esc($mascot['defaults']['title'] ?? 'GAD') ?>">
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label small">Message</label>
+                                    <textarea class="form-control form-control-sm" name="mascot_text" rows="2" maxlength="240"
+                                              placeholder="<?= esc($mascot['defaults']['text'] ?? '') ?>"></textarea>
+                                    <div class="form-text">
+                                        Currently using:
+                                        <strong><?= esc($mascot['defaults']['text'] ?? '') ?></strong>
+                                        <?php if ($mascot['isCustom'] ?? false): ?>
+                                            — this box will replace it. Clear both boxes to restore the default.
+                                        <?php else: ?>
+                                            — the built-in wording. Anything you type here overrides it.
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Save Button -->
             <div class="cg-row">
                 <div class="cg-col" style="flex: 0 0 100%; max-width: 100%;">
@@ -426,8 +534,9 @@ function addSection(containerId, type) {
     container.insertAdjacentHTML('beforeend', sectionHtml);
 }
 
-function deleteSection(btn) {
-    if (!confirm('Delete this section?')) return;
+async function deleteSection(btn) {
+    const ok = await customConfirm('Delete this section? It will be removed from the page after saving.', 'Delete Section');
+    if (!ok) return;
     const sectionItem = btn.closest('.section-item');
     sectionItem.remove();
     
@@ -524,10 +633,30 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     });
+
+    // --- Instant image preview for newly selected files (before saving) ---
+    document.querySelectorAll('input[type="file"][accept^="image"]').forEach(function (input) {
+        input.addEventListener('change', function () {
+            const file = input.files && input.files[0];
+            if (!file || !/^image\//.test(file.type)) return; // video files are previewed after saving
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const isHero = input.classList.contains('hero-file-input');
+                const container = isHero ? input.closest('.card-body') : input.closest('.mt-2');
+                if (!container) return;
+                let img = container.querySelector('img');
+                if (!img) {
+                    img = document.createElement('img');
+                    img.alt = 'Selected media preview';
+                    img.className = 'img-fluid mb-2';
+                    img.style.cssText = 'max-height: 200px; max-width: 100%; object-fit: cover;';
+                    container.insertBefore(img, input);
+                }
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    });
 });
 </script>
 <?= $this->endSection() ?>
-</parameter>
-</write_to_file>
-</parameter>
-</write_to_file>

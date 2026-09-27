@@ -2,12 +2,11 @@
 <?= $this->section('content') ?>
 
 <style>
+<?= view('partials/password_requirements_style') ?>
+
 .blue-divider {
-  height: 3px;
-  background: linear-gradient(90deg, #007bff, #0056b3);
-  border-radius: 2px;
-  margin: 1rem 0;
-}
+  height: 1px;
+  background: var(--hairline-strong);
 
 .profile-card {
   background: #ffffff;
@@ -46,7 +45,39 @@
 .form-section h5 {
   color: #007bff;
   margin-bottom: 1rem;
-  font-weight: 600;
+  font-weight: 700;
+}
+
+/* Keep name/email white on the blue header — beats dashboard.css
+   `.main-content .page-content h3` (!important + higher specificity). */
+body.dashboard-app .main-content .page-content .profile-card .profile-header h3.profile-name {
+  color: #ffffff !important;
+  border-bottom: none !important;
+  margin-bottom: 0.25rem !important;
+  padding-bottom: 0 !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+body.dashboard-app .main-content .page-content .profile-card .profile-header p.profile-email {
+  color: #ffffff !important;
+  opacity: 0.92;
+}
+
+/* Header chips (matching teacher profile) */
+.profile-chips {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem;
+  margin-top: 1rem;
+}
+.profile-chip {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  padding: 0.25rem 0.75rem;
+  display: inline-flex; align-items: center; gap: 0.35rem;
+}
+body.dashboard-app .main-content .page-content .profile-card .profile-header .profile-chip {
+  color: #ffffff !important;
 }
 </style>
 
@@ -74,8 +105,13 @@
         <div class="profile-avatar">
           <?= strtoupper(substr($admin['first_name'] ?? 'A', 0, 1) . substr($admin['last_name'] ?? 'D', 0, 1)) ?>
         </div>
-        <h3 class="mb-1" style="color: white !important;"><?= esc($admin['first_name'] . ' ' . $admin['last_name']) ?></h3>
-        <p class="mb-0" style="color: white; opacity: 0.9;"><?= esc($admin['email']) ?></p>
+        <h3 class="mb-1 profile-name" style="color: white !important;"><?= esc($admin['first_name'] . ' ' . $admin['last_name']) ?></h3>
+        <p class="mb-0 profile-email" style="color: white; opacity: 0.9;"><?= esc($admin['email']) ?></p>
+        <div class="profile-chips">
+          <span class="profile-chip"><i class="bi bi-shield-lock"></i>Administrator</span>
+          <span class="profile-chip"><i class="bi bi-person-circle"></i>User ID: <?= esc($admin['id']) ?></span>
+          <span class="profile-chip"><i class="bi bi-check-circle"></i>Active</span>
+        </div>
       </div>
       
       <div class="card-body p-4">
@@ -144,12 +180,14 @@
           <div class="mb-3">
             <label for="new_password" class="form-label">New Password</label>
             <div class="input-group">
-              <input type="password" class="form-control" id="new_password" name="new_password" minlength="8" required>
+              <input type="password" class="form-control" id="new_password" name="new_password"
+                     minlength="<?= password_policy_min_length() ?>" pattern="(?=.*\d).{<?= password_policy_min_length() ?>,}"
+                     autocomplete="new-password" required data-password-indicator>
               <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('new_password')">
                 <i class="bi bi-eye" id="new_password_icon"></i>
               </button>
             </div>
-            <div class="form-text">Minimum 8 characters</div>
+            <?= view('partials/password_requirements') ?>
           </div>
           
           <div class="mb-3">

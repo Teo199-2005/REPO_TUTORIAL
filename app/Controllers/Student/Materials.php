@@ -35,7 +35,7 @@ class Materials extends BaseController
         $studentMaterials = $this->materialModel->getStudentMaterials($student['id']);
 
         return view('student/materials', [
-            'title' => 'Learning Materials - CSCS SMS',
+            'title' => 'Learning Materials - CSCS Tap n Track',
             'publicMaterials' => $publicMaterials,
             'studentMaterials' => $studentMaterials,
             'student' => $student

@@ -1,6 +1,8 @@
 <?= $this->extend('dashboard_layout') ?>
 <?= $this->section('content') ?>
 
+<style><?= view('partials/password_requirements_style') ?></style>
+
 <div class="dashboard-header mb-4">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
@@ -45,13 +47,14 @@
           <div class="mb-3">
             <label for="newPassword" class="form-label fw-medium">New Password</label>
             <div class="input-group">
-              <input type="password" class="form-control" id="newPassword" name="new_password" 
-                     minlength="6" required>
+              <input type="password" class="form-control" id="newPassword" name="new_password"
+                     minlength="<?= password_policy_min_length() ?>" pattern="(?=.*\d).{<?= password_policy_min_length() ?>,}"
+                     autocomplete="new-password" required data-password-indicator>
               <button class="btn btn-outline-secondary" type="button" id="toggleNewPassword">
                 <i class="bi bi-eye"></i>
               </button>
             </div>
-            <div class="form-text">Minimum 6 characters</div>
+            <?= view('partials/password_requirements') ?>
           </div>
           
           <div class="mb-4">

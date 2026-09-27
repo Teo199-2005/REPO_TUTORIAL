@@ -21,6 +21,33 @@
     </div>
 </div>
 
+<?php
+// Overlaps the save validation would now refuse: legacy rows, or rows written
+// through another page. They are listed here because a teacher cannot be in
+// two places at once, and because such a pair now blocks every new block that
+// would touch those times.
+$conflicts = $conflicts ?? [];
+?>
+<?php if (!empty($conflicts)): ?>
+    <div class="alert alert-danger py-3 px-3 mb-4">
+        <h6 class="alert-heading mb-2">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+            <?= count($conflicts) ?> existing conflict<?= count($conflicts) === 1 ? '' : 's' ?> in this teacher's schedule
+        </h6>
+        <ul class="mb-2 ps-3 small">
+            <?php foreach ($conflicts as $conflict): ?>
+                <li><?= esc($conflict['message']) ?></li>
+            <?php endforeach; ?>
+        </ul>
+        <div class="small mb-0">
+            Saving is refused while a block would collide with one of these, so fix them on the section
+            pages first. Conflicts that mention another school year are usually stale rows from a previous
+            year &mdash; open that section's schedule and press <strong>Remove Selected</strong> on the
+            block you no longer need.
+        </div>
+    </div>
+<?php endif; ?>
+
 <style>
 .teacher-name {
     font-size: 1.8rem;
@@ -49,13 +76,13 @@
 
 .time-input {
     width: 85px;
-    font-size: 11px;
+    font-size: 0.8125rem;
     text-align: center;
-    border: 2px solid #007bff;
-    border-radius: 6px;
+    border: var(--hairline);
+    border-radius: var(--radius-sm);
     padding: 4px 6px;
     background: #fff;
-    box-shadow: 0 2px 4px rgba(0,123,255,0.1);
+    box-shadow: var(--shadow-sm);
     transition: all 0.2s ease;
 }
 
@@ -236,11 +263,11 @@ tr:has(.schedule-cell .section-select option:checked:not([value=""])) {
             ];
             ?>
             <?php foreach ($days as $dayIndex => $day): ?>
-            <div class="card mb-3" style="border-left: 4px solid <?= $dayColors[$day] ?>;">
-                <div class="card-header" style="cursor: pointer; background: <?= $dayColors[$day] ?>;" onclick="toggleDay('<?= $day ?>')">
+            <div class="card mb-3" style="border: var(--hairline); box-shadow: var(--shadow-md);">
+                <div class="card-header" style="cursor: pointer; background: var(--surface-tint); border-bottom: var(--hairline);" onclick="toggleDay('<?= $day ?>')">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0" style="color: <?= $dayTextColors[$day] ?>; font-weight: bold;"><i class="bi bi-calendar-day me-2"></i><?= $day ?></h5>
-                        <i class="bi bi-chevron-down" style="color: <?= $dayTextColors[$day] ?>;" id="icon-<?= $day ?>"></i>
+                        <h5 class="mb-0" style="color: var(--color-heading); font-weight: 700;"><i class="bi bi-calendar-day me-2"></i><?= $day ?></h5>
+                        <i class="bi bi-chevron-down" style="color: var(--color-text-muted);" id="icon-<?= $day ?>"></i>
                     </div>
                 </div>
                 <div class="card-body" id="day-<?= $day ?>" style="display: none;">
@@ -277,7 +304,7 @@ tr:has(.schedule-cell .section-select option:checked:not([value=""])) {
                                         <div class="schedule-cell" data-day="<?= $day ?>" data-start="<?= $startTime ?>" data-end="<?= $endTime ?>">
                                             <div class="row g-2">
                                                 <div class="col-md-4">
-                                                    <label class="form-label" style="font-size: 16px; font-weight: 600;">Section</label>
+                                                    <label class="form-label" style="font-size: 16px; font-weight: 700;">Section</label>
                                                     <select class="form-select form-select-sm section-select" name="section" 
                                                             onchange="updateSubjectOptions(this, '<?= $day ?>', '<?= $timeSlot ?>'); checkForSuggestions(this)">
                                                         <option value="">Select Section</option>
@@ -299,7 +326,7 @@ tr:has(.schedule-cell .section-select option:checked:not([value=""])) {
                                                     </select>
                                                 </div>
                                                 <div class="col-md-4">
-                                                    <label class="form-label" style="font-size: 16px; font-weight: 600;">Subject</label>
+                                                    <label class="form-label" style="font-size: 16px; font-weight: 700;">Subject</label>
                                                     <select class="form-select form-select-sm subject-select" name="subject" 
                                                             data-day="<?= $day ?>" data-time="<?= $timeSlot ?>" 
                                                             onchange="showSmartSuggestions(this); refreshSubjectDropdownsForDay('<?= $day ?>')" disabled>
@@ -307,7 +334,7 @@ tr:has(.schedule-cell .section-select option:checked:not([value=""])) {
                                                     </select>
                                                 </div>
                                                 <div class="col-md-4">
-                                                    <label class="form-label" style="font-size: 16px; font-weight: 600;">Room</label>
+                                                    <label class="form-label" style="font-size: 16px; font-weight: 700;">Room</label>
                                                     <input type="text" class="form-control form-control-sm room-input" name="room" 
                                                            placeholder="Room" value="<?= esc($existingSchedule['room'] ?? '') ?>">
                                                 </div>
@@ -369,7 +396,7 @@ function editTime(element) {
     let isEditing = true;
     let isSaving = false;
     
-    const saveTime = () => {
+    const saveTime = async () => {
         if (!isEditing || isSaving) return;
         
         isSaving = true;
@@ -388,7 +415,11 @@ function editTime(element) {
         const hasSchedule = cell.querySelector('.section-select').value || cell.querySelector('.subject-select').value;
         
         if (hasSchedule && oldTimeSlot !== (newStart + '-' + newEnd)) {
-            if (!confirm('Warning: Changing this time slot will clear the schedule data for this time. Continue?')) {
+            const proceed = await customConfirm(
+                'Changing this time slot will clear the schedule data for this time.',
+                'Change Time Slot?'
+            );
+            if (!proceed) {
                 isSaving = false;
                 return;
             }
@@ -781,7 +812,7 @@ document.getElementById('scheduleFormList').addEventListener('submit', function(
     saveSchedule(e, '.schedule-cell-list');
 });
 
-function saveSchedule(e, cellSelector) {
+async function saveSchedule(e, cellSelector) {
     e.preventDefault();
     console.log('saveSchedule called with selector:', cellSelector);
     
@@ -822,26 +853,55 @@ function saveSchedule(e, cellSelector) {
         showValidationModal(errors);
         return;
     }
-    
-    // Check for conflicts
+
+    // Local pre-check: every block in this grid belongs to the same teacher, so
+    // two overlapping blocks anywhere in the submitted set would put the
+    // teacher in two places at once (and, when they share a section, double-book
+    // the section too). The previous version only compared identical
+    // room+time pairs, so overlapping-but-not-identical blocks slipped through
+    // to the server. The server re-checks this against the stored timetable -
+    // this pass only saves a round trip.
     const conflicts = [];
-    const roomUsage = {};
-    
-    schedules.forEach((schedule, index) => {
-        if (!schedule.room) return;
-        
-        const key = `${schedule.day_of_week}_${schedule.room}_${schedule.start_time}_${schedule.end_time}`;
-        if (roomUsage[key]) {
-            conflicts.push(`⚠️ Room "${schedule.room}" is already occupied on ${schedule.day_of_week} from ${schedule.start_time.substring(0,5)} to ${schedule.end_time.substring(0,5)}`);
+    const minutes = value => {
+        const [hour, minute] = value.substring(0, 5).split(':').map(Number);
+        return hour * 60 + minute;
+    };
+    const overlaps = (a, b) => minutes(a.start_time) < minutes(b.end_time)
+        && minutes(b.start_time) < minutes(a.end_time);
+
+    for (let i = 0; i < schedules.length; i++) {
+        for (let j = i + 1; j < schedules.length; j++) {
+            const first = schedules[i];
+            const second = schedules[j];
+
+            if (first.day_of_week !== second.day_of_week || !overlaps(first, second)) continue;
+
+            const when = `${first.day_of_week} ${first.start_time.substring(0, 5)}-${first.end_time.substring(0, 5)}`;
+            const also = `${second.start_time.substring(0, 5)}-${second.end_time.substring(0, 5)}`;
+
+            if (first.section_id === second.section_id) {
+                conflicts.push(`Section/Self conflict: two blocks in the same section on ${first.day_of_week} overlap (${when} and ${also}).`);
+            } else {
+                conflicts.push(`Teacher conflict: you are scheduled in two sections at the same time on ${first.day_of_week} (${when} and ${also}).`);
+            }
+
+            if (first.room && second.room
+                && first.room.toLowerCase() === second.room.toLowerCase()) {
+                conflicts.push(`Room conflict: "${first.room}" is used twice at overlapping times on ${first.day_of_week} (${when} and ${also}).`);
+            }
         }
-        roomUsage[key] = true;
-    });
-    
+    }
+
     if (conflicts.length > 0) {
-        const confirmMsg = 'Schedule Conflicts Detected:\n\n' + conflicts.join('\n') + '\n\nDo you want to save anyway?';
-        if (!confirm(confirmMsg)) {
-            return;
-        }
+        // No "save anyway" escape hatch: an overlapping grid is exactly what the
+        // server now refuses, so offering to bypass it only produced a rejected
+        // save and a vague error.
+        showValidationModal(
+            conflicts,
+            'Schedule Conflict',
+            'These blocks overlap, and a teacher cannot be in two places at once. Fix them before saving:'
+        );
+        return;
     }
     
     console.log('Saving schedules:', schedules);
@@ -861,24 +921,39 @@ function saveSchedule(e, cellSelector) {
         },
         body: JSON.stringify({ schedules: schedules })
     })
-    .then(response => {
-        console.log('Response status:', response.status); // Debug log
-        if (!response.ok) {
-            throw new Error('Network response was not ok: ' + response.status);
-        }
-        return response.json();
-    })
-    .then(data => {
+    .then(response => response.json().catch(() => null).then(data => {
+        // The conflict report is the payload of a 409, so a non-ok status is
+        // expected here; falling through to the catch() below would have thrown
+        // the reasons away and shown "Network response was not ok: 409".
+        return { ok: response.ok, status: response.status, data };
+    }))
+    .then(({ data }) => {
         console.log('Server response:', data); // Debug log
-        if (data.success) {
+        if (data && data.success) {
             showNotification(data.message || 'Schedule saved successfully!', 'success');
             // Reload page after 2 seconds to show saved data
             setTimeout(() => {
                 window.location.reload();
             }, 2000);
         } else {
-            showNotification('Error: ' + (data.error || 'Unknown error'), 'error');
+            // Every rejected block is listed, not just the first: the server
+            // returns them all in `conflicts`.
+            const messages = [];
+            (data?.conflicts || []).forEach(conflict => {
+                const message = typeof conflict === 'string' ? conflict : (conflict.message || '');
+                if (message) messages.push(message);
+            });
+
+            if (messages.length === 0 && data?.error) {
+                messages.push(data.error);
+            }
+
             console.error('Save failed:', data);
+            showValidationModal(
+                messages.length > 0 ? messages : ['The schedule was not saved.'],
+                'Schedule Not Saved',
+                'The server rejected this timetable. Nothing was changed:'
+            );
         }
     })
     .catch(error => {
@@ -940,7 +1015,7 @@ style.textContent = `
         display: inline-block;
         padding: 2px 8px;
         margin: 2px;
-        font-size: 11px;
+        font-size: 0.8125rem;
         border-radius: 12px;
         cursor: pointer;
         transition: all 0.2s;
@@ -950,7 +1025,7 @@ style.textContent = `
         box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     }
     .room-suggestions {
-        font-size: 11px;
+        font-size: 0.8125rem;
     }
     .suggestion-modal {
         position: fixed;
@@ -1187,7 +1262,7 @@ function closeSuggestionsModal() {
     document.querySelectorAll('.suggestion-overlay, .suggestion-modal').forEach(el => el.remove());
 }
 
-function showValidationModal(errors) {
+function showValidationModal(errors, title = 'Incomplete Schedule', intro = 'Please complete the following:') {
     const overlay = document.createElement('div');
     overlay.className = 'suggestion-overlay';
     
@@ -1197,10 +1272,10 @@ function showValidationModal(errors) {
     
     modal.innerHTML = `
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="mb-0"><i class="bi bi-exclamation-triangle text-warning"></i> Incomplete Schedule</h5>
+            <h5 class="mb-0"><i class="bi bi-exclamation-triangle text-warning"></i> ${title}</h5>
             <button class="btn-close" onclick="closeValidationModal()"></button>
         </div>
-        <p class="mb-3">Please complete the following:</p>
+        <p class="mb-3">${intro}</p>
         <div class="list-group mb-3">
             ${errors.map(error => `
                 <div class="list-group-item list-group-item-warning">

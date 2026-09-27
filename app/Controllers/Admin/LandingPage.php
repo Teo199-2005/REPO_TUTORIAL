@@ -11,7 +11,7 @@ class LandingPage extends BaseController
 {
     public function index()
     {
-        helper(['landing', 'asset', 'admin_access']);
+        helper(['landing', 'asset', 'admin_access', 'mascot']);
 
         landing_migrate_legacy_hero_uploads();
 
@@ -28,17 +28,45 @@ class LandingPage extends BaseController
         }
 
         return view('admin/landing_page', [
-            'title'              => 'Landing Page — CSCS SMS',
+            'title'              => 'Landing Page — CSCS Tap n Track',
             'slides'             => $slides,
             'announcementStrip'  => landing_announcement_strip_text(),
             'previewSlides'      => landing_hero_slides_for_view(),
-            'landingSections'    => landing_sections_get(),
+            // Tappy's message on the public front page. Keyed "home" because the
+            // front page has no path segment; see the note in update().
+            'mascot'             => $this->mascotState(),
+            'mascotPoses'        => mascot_pose_choices(),
         ]);
+    }
+
+    /**
+     * Tappy's message for the public front page: the administrator's own wording
+     * when they have set any, otherwise the built-in line plus a note that it is
+     * the default.
+     *
+     * @return array{pose: string, title: string, text: string, isCustom: bool, defaults: array{title: string, text: string, pose: string}}
+     */
+    private function mascotState(): array
+    {
+        $custom  = mascot_line_override_get('home');
+        $builtin = mascot_line_for('home');
+
+        return [
+            'pose'     => $custom['pose'] ?? $builtin['pose'],
+            'title'    => $custom['title'] ?? '',
+            'text'     => $custom['text'] ?? '',
+            'isCustom' => $custom !== null,
+            'defaults' => [
+                'title' => $builtin['title'],
+                'text'  => $builtin['text'],
+                'pose'  => $builtin['pose'],
+            ],
+        ];
     }
 
     public function update()
     {
-        helper(['landing', 'admin_access']);
+        helper(['landing', 'admin_access', 'mascot']);
 
         landing_migrate_legacy_hero_uploads();
 
@@ -150,61 +178,46 @@ class LandingPage extends BaseController
             log_message('warning', 'Could not save landing lifelines: ' . $e->getMessage());
         }
 
-        // Footer QR Code: optional upload
-        try {
-            helper('landing');
-            $removeQr = $this->request->getPost('remove_qr_code') === '1';
-            $qrFile = $this->request->getFile('footer_qr_code');
-            if ($removeQr) {
-                landing_save_qr_code_path('');
-            } elseif ($qrFile !== null && $qrFile->isValid() && $qrFile->getSize() > 0) {
-                $validation = $this->validateQrUpload($qrFile);
-                if ($validation !== true) {
-                    return redirect()->back()->with('error', 'QR Code: ' . $validation);
-                }
+        // --- Tappy's message on the public front page ---
+        // The front page runs on the root URL, which has no path segment at all -
+        // mascot_segment_key() returns '' there and mascot_dock.php normalises it
+        // to "home". So "home" is the key, and that is what the built-in line for
+        // the landing page is looked up under too.
+        $mascotTitle = trim((string) $this->request->getPost('mascot_title'));
+        $mascotText  = trim((string) $this->request->getPost('mascot_text'));
+        $mascotPose  = trim((string) $this->request->getPost('mascot_pose'));
 
-                $uploadDir = FCPATH . 'uploads' . DIRECTORY_SEPARATOR;
-                if (! is_dir($uploadDir) && ! mkdir($uploadDir, 0755, true) && ! is_dir($uploadDir)) {
-                    throw new \RuntimeException('Cannot create upload directory: ' . $uploadDir);
-                }
-
-                $newName = 'qr-code-' . date('Ymd-His') . '-' . bin2hex(random_bytes(4)) . '.' . $qrFile->getClientExtension();
-                $qrFile->move($uploadDir, $newName);
-                landing_save_qr_code_path('uploads/' . $newName);
-            }
-        } catch (\Throwable $e) {
-            log_message('warning', 'Could not save landing QR code: ' . $e->getMessage());
+        if ($mascotTitle !== '' && mb_strlen($mascotTitle) > 60) {
+            $mascotTitle = mb_substr($mascotTitle, 0, 60);
+        }
+        if ($mascotText !== '' && mb_strlen($mascotText) > 240) {
+            $mascotText = mb_substr($mascotText, 0, 240);
         }
 
-        // Save landing content sections
-        try {
-            helper('landing');
-            $sections = [];
-            $sectionIds = $this->request->getPost('section_id');
-            if (is_array($sectionIds)) {
-                for ($i = 0; $i < count($sectionIds); $i++) {
-                    if ($i >= 6) break;
-                    $sectionId = trim((string) ($sectionIds[$i] ?? ''));
-                    if ($sectionId === '') continue;
-                    $sectionTitle = trim((string) ($this->request->getPost('section_title')[$i] ?? ''));
-                    $sectionDesc = trim((string) ($this->request->getPost('section_description')[$i] ?? ''));
-                    $mediaType = (string) ($this->request->getPost('section_media_type')[$i] ?? 'image');
-                    $mediaUrl = trim((string) ($this->request->getPost('section_media_url')[$i] ?? ''));
-                    $order = (int) ($this->request->getPost('section_order')[$i] ?? $i);
-                    $sections[] = [
-                        'id' => $sectionId,
-                        'title' => $sectionTitle,
-                        'description' => $sectionDesc,
-                        'media_type' => $mediaType,
-                        'media_url' => $mediaUrl,
-                        'order' => $order,
-                    ];
-                }
-            }
-            landing_sections_save($sections);
-        } catch (\Throwable $e) {
-            log_message('warning', 'Could not save landing content sections: ' . $e->getMessage());
+        // An unknown pose is ignored rather than stored, so a stale form (or a
+        // hand-made POST) cannot leave the front page with a missing character.
+        if ($mascotPose !== '' && ! array_key_exists($mascotPose, mascot_pose_choices())) {
+            $mascotPose = '';
         }
+
+        mascot_line_override_save('home', [
+            'pose'  => $mascotPose,
+            'title' => $mascotTitle,
+            'text'  => $mascotText,
+        ]);
+
+        audit_event('settings.landing_page_updated', [
+            'category'      => 'settings',
+            'status'        => 'success',
+            'resource_type' => 'setting',
+            'resource_id'   => 'landing_page',
+            'description'   => 'Public landing page content updated',
+            'metadata'      => [
+                // Recorded so the activity log shows whether Tappy's message was
+                // changed, which is otherwise invisible in a diff of the page copy.
+                'mascot_message_custom' => $mascotTitle !== '' || $mascotText !== '',
+            ],
+        ]);
 
         return redirect()->back()->with('success', 'Landing page updated successfully.');
     }
@@ -227,35 +240,6 @@ class LandingPage extends BaseController
         $ext = strtolower($file->getClientExtension() ?: $file->getExtension() ?: '');
         if (! in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true)) {
             return 'Image must be JPG, PNG, or WEBP.';
-        }
-
-        $mime = strtolower((string) $file->getMimeType());
-        $allowedMime = ['image/jpeg', 'image/png', 'image/webp', 'image/pjpeg', 'image/x-png'];
-        if ($mime !== '' && ! in_array($mime, $allowedMime, true) && ! str_starts_with($mime, 'image/')) {
-            return 'File must be an image (JPG, PNG, or WEBP).';
-        }
-
-        return true;
-    }
-
-    /**
-     * @return true|string
-     */
-    private function validateQrUpload(UploadedFile $file)
-    {
-        if (! $file->isValid()) {
-            $error = $file->getErrorString();
-
-            return $error !== '' ? $error : 'Upload failed.';
-        }
-
-        if ($file->getSize() > 10 * 1024 * 1024) {
-            return 'QR code image must be 10MB or less.';
-        }
-
-        $ext = strtolower($file->getClientExtension() ?: $file->getExtension() ?: '');
-        if (! in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true)) {
-            return 'QR code must be JPG, PNG, or WEBP.';
         }
 
         $mime = strtolower((string) $file->getMimeType());

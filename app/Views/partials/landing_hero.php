@@ -2,8 +2,11 @@
 helper('landing');
 $heroSlides = $heroSlides ?? landing_hero_slides_for_view();
 $stripText  = $stripText ?? landing_announcement_strip_text();
-$stripHtml  = landing_announcement_strip_html();
 $showStrip  = $stripText !== '';
+// Built from $stripText so a caller that overrides the text still gets its URLs
+// linkified. Safe to echo raw: landing_announcement_strip_linkify() escapes the
+// text itself, so esc() here would turn our own <a> tags back into visible text.
+$stripHtml  = landing_announcement_strip_linkify($stripText);
 $slideCount = count($heroSlides);
 $lifelines  = landing_lifelines();
 ?>

@@ -4,11 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <?php
-    $docTitle = (string) ($title ?? 'Dashboard - CSCS SMS');
+    $docTitle = (string) ($title ?? 'Dashboard - CSCS Tap n Track');
     $docParts = explode(' - ', $docTitle, 2);
     $docSub = trim($docParts[1] ?? '');
     if ($docSub === '' || ctype_digit($docSub)) {
-      $docSub = 'CSCS SMS';
+      $docSub = 'CSCS Tap n Track';
     }
     $docTitle = $docParts[0] . ' - ' . $docSub;
   ?>
@@ -18,9 +18,9 @@
     'headMetaDescription' => $headMetaDescription ?? 'Cauayan South Central School — CSCS Tap n Track portal.',
   ]) ?>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- No webfont request: the platform renders in Times New Roman throughout, which
+       every target OS ships, so nothing is downloaded and there is no flash of
+       unstyled text. The family itself is declared in css/app.css. -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
   <?php
     $cssV = static function (string $file): string {
@@ -38,10 +38,43 @@
   <link href="<?= asset_url('css/dashboard.css') ?>?v=<?= $cssV('dashboard.css') ?>" rel="stylesheet" />
   <link href="<?= asset_url('css/featured-poster.css') ?>?v=<?= $cssV('featured-poster.css') ?>" rel="stylesheet" />
   <link href="<?= asset_url('css/responsive.css') ?>?v=<?= $cssV('responsive.css') ?>" rel="stylesheet" />
+  <link href="<?= asset_url('css/location-selector.css') ?>?v=<?= $cssV('location-selector.css') ?>" rel="stylesheet" />
   <link href="<?= asset_url('css/admin-table-enhancements.css') ?>" rel="stylesheet" />
-  <link href="<?= asset_url('css/modal-system.css') ?>" rel="stylesheet" />
+  <link href="<?= asset_url('css/modal-system.css') ?>?v=<?= $cssV('modal-system.css') ?>" rel="stylesheet" />
+  <link href="<?= asset_url('css/audit-log.css') ?>?v=<?= $cssV('audit-log.css') ?>" rel="stylesheet" />
+  <link href="<?= asset_url('css/mascot.css') ?>?v=<?= $cssV('mascot.css') ?>" rel="stylesheet" />
+  <link href="<?= asset_url('css/mascot-tour.css') ?>?v=<?= $cssV('mascot-tour.css') ?>" rel="stylesheet" />
+<link href="<?= asset_url('css/mascot-welcome.css') ?>?v=<?= $cssV('mascot-welcome.css') ?>" rel="stylesheet" />
+  <link href="<?= asset_url('css/admin-ui.css') ?>?v=<?= $cssV('admin-ui.css') ?>" rel="stylesheet" />
+<link href="<?= asset_url('css/admin-landing-preview.css') ?>?v=<?= $cssV('admin-landing-preview.css') ?>" rel="stylesheet" />
+  <!-- Surface-quality layer: glass panels, white/gray table stripes and
+       colour-tinted button shadows. MUST stay last among the local
+       stylesheets — it deliberately overrides several `!important` rules in
+       dashboard.css (flat white cards, the near-invisible #f9fafb table
+       stripes, and the single black box-shadow applied to every .btn). -->
+  <link href="<?= asset_url('css/ui-depth.css') ?>?v=<?= $cssV('ui-depth.css') ?>" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/cropperjs@1.5.13/dist/cropper.min.css" rel="stylesheet" />
 </head>
-<body class="dashboard-app">
+<?php
+  // The guided tour stores its once-only state per role, and mascot-tour.js
+  // reads it from here. Same vocabulary as mascot_tour_played(), so the PHP
+  // helper and the browser agree on the key. Anything that is not a student
+  // (admins, teachers) shares the staff tour.
+  $mascotRole = 'staff';
+  try {
+    if (auth()->loggedIn() && auth()->user()?->inGroup('student')) {
+      $mascotRole = 'student';
+    }
+  } catch (\Throwable $e) {
+    $mascotRole = 'staff';
+  }
+?>
+<body
+  class="dashboard-app"
+  data-mascot-role="<?= esc($mascotRole) ?>"
+  data-mascot-base="<?= esc(asset_url('assets/mascot/')) ?>"
+  data-mascot-basepath="<?= esc(mascot_base_path()) ?>"
+>
   <!-- Sidebar -->
   <div class="app-sidebar-wrapper">
     <aside class="app-sidebar">
@@ -63,13 +96,52 @@
         $accountPanelHref   = $portalNav['account_panel_href'];
         $notificationsHref  = $portalNav['notifications_href'];
         $navSections        = $portalNav['sections'];
+
+        // Students: recompute sidebar sections with the completion flags so
+        // pages stay locked until BMI + profile photo + 2x2 ID photo exist.
+        // A locked portal opens on My Profile, so the brand link follows the
+        // locked items to that page and every locked link explains in its
+        // tooltip exactly which requirements are still missing.
+        $studentUnlockReason = '';
+        if ($role === 'student' && $authUser !== null) {
+          try {
+            $portalNavStudent = (new \App\Models\StudentModel())->where('user_id', $authUser->id)->first();
+          } catch (\Throwable $e) {
+            $portalNavStudent = null;
+          }
+          $navSections = portal_nav_student_sections($portalNavStudent);
+
+          if ($portalNavStudent !== null && ! student_profile_complete($portalNavStudent)) {
+            $dashboardUrl = base_url('student/profile');
+            $studentUnlockReason = student_profile_unlock_reason($portalNavStudent);
+          }
+        }
       ?>
       <!-- Sidebar Header -->
       <div class="app-sidebar-header">
-        <a href="<?= $dashboardUrl ?>" class="d-flex align-items-center text-decoration-none">
+        <a href="<?= $dashboardUrl ?>" class="d-flex align-items-center text-decoration-none app-brand-link">
+          <?php
+            // School seal in the white medallion styled by .app-brand-logo in
+            // dashboard.css. school_logo_url() is the single place that knows
+            // which logo file ships with the app, so the sidebar, the ID cards
+            // and student profiles can never drift onto different images.
+            //
+            // If the logo file is ever missing, fall back to the DepEd seal and
+            // then to nothing at all, so the header never shows a broken image.
+            $sidebarLogo    = school_logo_url();
+            $sidebarSeal    = asset_url('DepEd_Official_Seal.png');
+            $sidebarTitle   = 'CSCS Tap n Track';
+            $sidebarSubtext = (string) $portalLabel;
+          ?>
+          <span class="app-brand-logo">
+            <img src="<?= esc($sidebarLogo) ?>"
+                 alt="<?= esc($sidebarTitle . ' — ' . $sidebarSubtext) ?>"
+                 width="54" height="54" decoding="async"
+                 onerror="this.onerror=null; if (this.src !== <?= json_encode($sidebarSeal) ?>) { this.src = <?= json_encode($sidebarSeal) ?>; } else { this.closest('.app-brand-logo')?.remove(); }">
+          </span>
           <div class="app-brand-text">
-            <div class="app-brand-title">CSCS Tap n Track</div>
-            <div class="app-brand-subtitle"><?= esc($portalLabel) ?></div>
+            <div class="app-brand-title"><?= esc($sidebarTitle) ?></div>
+            <div class="app-brand-subtitle"><?= esc($sidebarSubtext) ?></div>
           </div>
         </a>
         <button class="app-sidebar-toggle d-lg-none" type="button" aria-label="Toggle sidebar">
@@ -153,11 +225,18 @@
         ?>
           <div class="app-sidebar-section-title"><?= esc($section['title']) ?></div>
           <ul class="app-sidebar-menu">
-            <?php foreach ($section['items'] as $item):
+              <?php foreach ($section['items'] as $item):
               $itemPath = rtrim(parse_url($item['href'], PHP_URL_PATH) ?: '', '/');
               $isActive = $itemPath !== '' && $itemPath === $activeItemPath;
+              $isLocked = ! empty($item['locked']);
             ?>
               <li>
+                <?php if ($isLocked): ?>
+                  <a href="<?= base_url('student/profile') ?>" class="app-sidebar-link app-sidebar-link-locked" data-label="<?= esc($item['label']) ?>" title="<?= esc($studentUnlockReason !== '' ? $studentUnlockReason : 'Complete your profile to unlock this page') ?>" style="opacity:.6;">
+                    <i class="bi bi-lock" aria-hidden="true"></i>
+                    <span class="app-sidebar-link-text"><?= esc($item['label']) ?></span>
+                  </a>
+                <?php else: ?>
                 <a href="<?= $item['href'] ?>" class="app-sidebar-link<?= $isActive ? ' active' : '' ?>" data-label="<?= esc($item['label']) ?>"<?= $isActive ? ' aria-current="page"' : '' ?>>
                   <i class="bi <?= esc($item['icon']) ?>" aria-hidden="true"></i>
                   <span class="app-sidebar-link-text"><?= esc($item['label']) ?></span>
@@ -165,6 +244,7 @@
                     <span class="badge bg-danger app-sidebar-badge ms-auto flex-shrink-0" id="<?= esc($item['badge']) ?>" style="display: none;"></span>
                   <?php endif; ?>
                 </a>
+                <?php endif; ?>
               </li>
             <?php endforeach; ?>
           </ul>
@@ -188,20 +268,6 @@
 
   <!-- Main Content -->
   <div class="main-content">
-    <!-- Breadcrumb Navigation -->
-    <div class="container-fluid px-4">
-      <nav aria-label="breadcrumb" class="breadcrumb-nav">
-        <ol class="breadcrumb mb-0 py-2">
-          <li class="breadcrumb-item"><a href="<?= $dashboardUrl ?? base_url('dashboard') ?>"><i class="bi bi-house me-1"></i>Home</a></li>
-          <?php
-            $breadcrumbParts = explode(' - ', $pageTitle ?? 'Dashboard', 2);
-            $currentPage = trim($breadcrumbParts[0] ?? 'Dashboard');
-          ?>
-          <li class="breadcrumb-item active" aria-current="page"><?= esc($currentPage) ?></li>
-        </ol>
-      </nav>
-    </div>
-
     <!-- Top Bar -->
     <div class="top-bar">
       <div class="d-flex justify-content-between align-items-center">
@@ -216,8 +282,9 @@
             $pageTitle = (string) ($title ?? 'Dashboard');
             $parts = explode(' - ', $pageTitle, 2);
             $subtitle = trim($parts[1] ?? '');
+            // Ensure subtitle is CSCS Tap n Track when it looks like a number (e.g. badge/count mistaken for title)
             if ($subtitle === '' || ctype_digit($subtitle)) {
-              $subtitle = 'CSCS SMS';
+              $subtitle = 'CSCS Tap n Track';
             }
           ?>
           <div class="top-bar-title-wrap">
@@ -227,6 +294,12 @@
           </div>
         </div>
         <div class="top-bar-actions d-flex align-items-center gap-2">
+          <?php
+          // The permanent tour button that used to sit here is gone on purpose:
+          // the tour now starts by itself on a role's first visit, and Tappy in
+          // the floating dock is the way to replay it, so a permanent control in
+          // the top bar was a button nobody needed.
+          ?>
           <a
             href="<?= esc($notificationsHref ?? base_url('notifications')) ?>"
             class="top-bar-icon-btn top-bar-notification-bell"
@@ -275,9 +348,8 @@
           <div class="dashboard-footer-contact">
             <a href="https://maps.google.com/?q=WQ8Q%2BJ5V%20Cauayan%20City" target="_blank" rel="noopener">
               <i class="bi bi-geo-alt" aria-hidden="true"></i>
-              <span>Mabini St., District I, Cauayan City, Isabela</span>
+              <span>Mabini Street, District I, Cauayan City, Isabela</span>
             </a>
-            <span><i class="bi bi-pin-map" aria-hidden="true"></i> WQ8Q+J5V, Cauayan City</span>
             <span><i class="bi bi-clock" aria-hidden="true"></i> 24/7 System Access</span>
           </div>
           <div class="dashboard-footer-aside">
@@ -297,7 +369,7 @@
   ?>
   <?= $this->renderSection('portal_overlays') ?>
 
-  <div id="dashboard-modal-portal" aria-hidden="true" role="region" aria-label="Modal dialogs"></div>
+  <div id="dashboard-modal-portal" aria-hidden="true"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
@@ -308,10 +380,19 @@
       return window.gradeLevelLabels[key] ?? ('Grade ' + key);
     };
   </script>
-  <script src="<?= asset_url('js/mobile-tables.js') ?>?v=<?= $jsV('mobile-tables.js') ?>"></script>
+  <script src="<?= asset_url('js/admin-filter-bar.js') ?>?v=<?= $jsV('admin-filter-bar.js') ?>"></script>
+<script src="<?= asset_url('js/mascot.js') ?>?v=<?= $jsV('mascot.js') ?>"></script>
+<script src="<?= asset_url('js/mascot-tour.js') ?>?v=<?= $jsV('mascot-tour.js') ?>"></script>
+<script src="<?= asset_url('js/mascot-welcome.js') ?>?v=<?= $jsV('mascot-welcome.js') ?>"></script>
+<script src="<?= asset_url('js/mobile-tables.js') ?>?v=<?= $jsV('mobile-tables.js') ?>"></script>
   <script src="<?= asset_url('js/admin-table-enhancements.js') ?>?v=<?= $jsV('admin-table-enhancements.js') ?>"></script>
   <script src="<?= asset_url('js/dashboard-modals.js') ?>?v=<?= $jsV('dashboard-modals.js') ?>"></script>
   <script src="<?= asset_url('js/modal-system.js') ?>?v=<?= $jsV('modal-system.js') ?>"></script>
+  <script src="<?= asset_url('js/psgc-data.js') ?>?v=<?= $jsV('psgc-data.js') ?>"></script>
+  <script src="<?= asset_url('js/location-selector.js') ?>?v=<?= $jsV('location-selector.js') ?>"></script>
+  <script src="<?= asset_url('js/phone-input.js') ?>?v=<?= $jsV('phone-input.js') ?>"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.5.13/dist/cropper.min.js"></script>
+  <script src="<?= asset_url('js/student-photo-crop.js') ?>?v=<?= $jsV('student-photo-crop.js') ?>"></script>
   <script>
     // Load notification counts
     <?php if (auth()->user()): ?>
@@ -408,6 +489,15 @@
   <?php if (isset($role) && in_array($role, ['student', 'teacher'], true)): ?>
     <?= view('partials/platform_rating_logout_modal') ?>
   <?php endif; ?>
+
+  <?= view('partials/mascot_dock', ['dockContext' => 'dashboard']) ?>
+
+  <?php
+  // The first-login welcome modal, rendered after the dock so it paints above it
+  // (z-index 1090 vs 1050). It returns an empty string when an admin has switched
+  // it off, so this line is safe to leave in place.
+  ?>
+  <?= view('partials/welcome_modal') ?>
 
 </body>
 </html>

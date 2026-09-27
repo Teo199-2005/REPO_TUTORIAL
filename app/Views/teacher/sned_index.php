@@ -1,6 +1,13 @@
 <?= $this->extend('dashboard_layout') ?>
 <?= $this->section('content') ?>
 
+<?php if (session()->getFlashdata('error')): ?>
+    <div class="alert alert-danger alert-dismissible fade show">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i><?= session()->getFlashdata('error') ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+<?php endif; ?>
+
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h1 class="h3 mb-0">SNED - Special Needs Education</h1>
@@ -57,6 +64,9 @@
                                 <td class="text-center">
                                     <a href="<?= base_url("teacher/sned/report-card/{$student['id']}") ?>" class="btn btn-sm btn-outline-primary" target="_blank" title="View SNED Report Card">
                                         <i class="bi bi-file-earmark-text"></i> Report Card
+                                    </a>
+                                    <a href="<?= base_url("teacher/sned/learner-development-report-pdf/{$student['id']}") ?>" class="btn btn-sm btn-outline-success" target="_blank" title="View Learner Development Report (values, conduct and character development)">
+                                        <i class="bi bi-person-heart"></i> Learner Development Report
                                     </a>
                                 </td>
                             </tr>

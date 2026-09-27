@@ -5,7 +5,7 @@
 .student-card {
     transition: all 0.3s ease;
     cursor: pointer;
-    border: 2px solid #e9ecef;
+    border: var(--hairline);
     min-height: 120px;
 }
 .student-card:hover {
@@ -35,7 +35,7 @@
     border: 1px solid #dee2e6;
     padding: 4px 8px;
     border-radius: 4px;
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
     margin: 2px;
     min-width: 60px;
     background-color: #f8f9fa;
@@ -47,7 +47,6 @@
 }
 .status-btn.active {
     font-weight: bold;
-    border-width: 2px;
     transform: scale(1.05);
 }
 .status-present.active { border-color: #28a745; background-color: #d4edda; color: #155724; }
@@ -62,10 +61,34 @@
     margin-top: 20px;
 }
 
+/* Attendance summary widgets (matches dashboard stat tiles) */
+.att-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem 1rem;
+}
+.att-summary-grid .card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.att-summary-grid .card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+.att-summary-grid .dash-icon-tile {
+    width: 44px;
+    height: 44px;
+}
+.att-summary-grid .dash-icon-tile i {
+    font-size: 1.2rem;
+}
+
 @media (max-width: 768px) {
     .grid-container {
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
         gap: 10px;
+    }
+    .att-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 </style>
@@ -84,11 +107,11 @@
             <button type="button" class="btn btn-outline-secondary btn-sm" id="listViewBtn" onclick="toggleView('list')">
                 <i class="bi bi-list"></i>
             </button>
-            <a href="<?= base_url('teacher/attendance/history') ?>" class="btn btn-warning btn-sm" style="font-weight: 600; box-shadow: 0 2px 4px rgba(255,193,7,0.3);">
+            <a href="<?= base_url('teacher/attendance/history') ?>" class="btn btn-warning btn-sm" style="font-weight: 700; box-shadow: 0 2px 4px rgba(255,193,7,0.3);">
                 <i class="bi bi-clock-history me-1"></i>View History
             </a>
         </div>
-        <select class="form-select" id="sectionFilter" style="width: 220px; font-weight: 500; border: 2px solid #0d6efd;">
+        <select class="form-select" id="sectionFilter" style="width: 220px; font-weight: 400;">
             <option value="">All Sections</option>
             <?php 
             $sections = [];
@@ -123,37 +146,49 @@
 
 
 <?php if (!empty($students)): ?>
-    <!-- Attendance Summary -->
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="card bg-success text-white">
-                <div class="card-body text-center">
-                    <h5 id="presentCount">0</h5>
-                    <small>Present</small>
+    <!-- Attendance Summary (minimalist stat tiles, same style as other pages) -->
+    <div class="att-summary-grid mb-4">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body d-flex align-items-center gap-3 py-3">
+                <div class="dash-icon-tile dash-icon-tile--emerald" aria-hidden="true">
+                    <i class="bi bi-person-check-fill"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div class="text-muted small">Present</div>
+                    <div class="fw-bold" style="font-size:1.15rem; line-height:1.2;" id="presentCount">0</div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card bg-danger text-white">
-                <div class="card-body text-center">
-                    <h5 id="absentCount">0</h5>
-                    <small>Absent</small>
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body d-flex align-items-center gap-3 py-3">
+                <div class="dash-icon-tile dash-icon-tile--rose" aria-hidden="true">
+                    <i class="bi bi-person-x-fill"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div class="text-muted small">Absent</div>
+                    <div class="fw-bold" style="font-size:1.15rem; line-height:1.2;" id="absentCount">0</div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card bg-warning text-dark">
-                <div class="card-body text-center">
-                    <h5 id="lateCount">0</h5>
-                    <small>Late</small>
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body d-flex align-items-center gap-3 py-3">
+                <div class="dash-icon-tile dash-icon-tile--amber" aria-hidden="true">
+                    <i class="bi bi-alarm-fill"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div class="text-muted small">Late</div>
+                    <div class="fw-bold" style="font-size:1.15rem; line-height:1.2;" id="lateCount">0</div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card bg-info text-white">
-                <div class="card-body text-center">
-                    <h5 id="excusedCount">0</h5>
-                    <small>Excused</small>
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-body d-flex align-items-center gap-3 py-3">
+                <div class="dash-icon-tile dash-icon-tile--cyan" aria-hidden="true">
+                    <i class="bi bi-envelope-check-fill"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div class="text-muted small">Excused</div>
+                    <div class="fw-bold" style="font-size:1.15rem; line-height:1.2;" id="excusedCount">0</div>
                 </div>
             </div>
         </div>

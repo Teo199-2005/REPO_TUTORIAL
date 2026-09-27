@@ -24,7 +24,7 @@
     <a href="<?= base_url('teacher/announcements') ?>" class="btn btn-sm btn-outline-primary"><i class="bi bi-megaphone me-2"></i>Announcements</a>
     <a href="<?= base_url('teacher/analytics') ?>" class="btn btn-sm btn-outline-primary"><i class="bi bi-graph-up me-2"></i>Analytics</a>
     <?php if (!empty($hasSnedSection)): ?>
-      <a href="<?= base_url('teacher/sned') ?>" class="btn btn-sm btn-primary" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none;"><i class="bi bi-universal-access me-2"></i>SNED</a>
+      <a href="<?= base_url('teacher/sned') ?>" class="btn btn-sm btn-primary" style="background: var(--color-primary); border-color: var(--color-primary);"><i class="bi bi-universal-access me-2"></i>SNED</a>
     <?php endif; ?>
   </div>
 </div>
@@ -163,7 +163,7 @@
             >
           <?php endif; ?>
           <div style="position:absolute; left:10px; bottom:8px; color:white;">
-            <div style="font-weight:900; font-size:1.05rem; line-height:1;">Featured</div>
+            <div style="font-weight: 700; font-size:1.05rem; line-height:1;">Featured</div>
             <div style="font-size:0.82rem; opacity:0.95;">Teacher Dashboard</div>
             <?php if (empty($featuredPosterTeacherUrl)): ?>
               <div style="font-size:0.78rem; opacity:0.9;">(No poster uploaded yet)</div>

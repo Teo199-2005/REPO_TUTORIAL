@@ -12,11 +12,11 @@ class StudentModel extends Model
     protected $useSoftDeletes = true;
     protected $protectFields = true;
     protected $allowedFields = [
-        'student_id', 'user_id', 'lrn', 'student_type', 'first_name', 'middle_name', 'last_name', 'suffix',
+        'student_id', 'user_id', 'lrn', 'student_type', 'previous_school', 'previous_school_year', 'first_name', 'middle_name', 'last_name', 'suffix',
         'gender', 'date_of_birth', 'place_of_birth', 'nationality', 'religion',
         'height_cm', 'weight_kg', 'ethnicity', 'bmi', 'nutrition_status',
         'contact_number', 'phone', 'email', 'address', 'emergency_contact_name',
-        'emergency_contact_number', 'emergency_contact_relationship', 'photo_path',
+        'emergency_contact_number', 'emergency_contact_relationship', 'photo_path', 'id_photo_path',
         'enrollment_status', 'grade_level', 'section_id', 'school_year', 'temp_password', 'can_view_report_card'
     ];
 

@@ -13,6 +13,33 @@
     </a>
 </div>
 
+<?php /* A timetable is the one teacher page where a picture of a calendar says more
+         than a bubble pinned in the corner can, so this page earns the
+         portal-schedules artwork and a full line of its own rather than relying on
+         the dock alone.
+
+         The two are independent on purpose. The poster is decorative and returns
+         '' when the file is absent; mascot_say() carries the meaning and falls back
+         to plain readable text. Either one can go missing without taking the other
+         with it. */ ?>
+<?php
+$schedulePoster = mascot_poster_banner('portal-schedules', ['alt' => '']);
+?>
+<div class="schedule-intro<?= $schedulePoster === '' ? ' schedule-intro--solo' : '' ?>">
+    <?php if ($schedulePoster !== ''): ?>
+        <div class="schedule-intro__art"><?= $schedulePoster ?></div>
+    <?php endif; ?>
+    <div class="schedule-intro__say">
+        <?= mascot_say([
+            'pose'  => 'laptop',
+            'title' => 'Your teaching schedule',
+            'text'  => 'Set the week here and the portal keeps it for you. Tap a cell to change what you teach in that slot, then save. Anything the office changes appears here too.',
+            'align' => 'left',
+            'size'  => 150,
+        ]) ?>
+    </div>
+</div>
+
 <?php if ($error = session('error')): ?>
     <div class="alert alert-danger alert-dismissible fade show">
         <?= esc($error) ?>

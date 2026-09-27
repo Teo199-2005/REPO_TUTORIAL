@@ -35,7 +35,7 @@
         </div>
       </div>
       <div class="table-responsive">
-        <table class="table table-striped table-hover mb-0">
+        <table class="table table-hover align-middle mb-0 admin-table" data-js-paged="1">
           <thead>
             <tr>
               <th style="width: 40px;"></th>

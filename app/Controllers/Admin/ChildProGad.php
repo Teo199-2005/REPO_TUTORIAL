@@ -14,7 +14,7 @@ class ChildProGad extends BaseController
 
     public function index(): string
     {
-        helper(['childpro_gad', 'asset', 'admin_access']);
+        helper(['childpro_gad', 'asset', 'admin_access', 'mascot']);
 
         $tabs = [];
         foreach (self::VALID_TABS as $tab) {
@@ -23,18 +23,49 @@ class ChildProGad extends BaseController
                 'hero'     => $hero,
                 'sections' => childpro_gad_sections_get($tab),
                 'heroUrl'  => childpro_gad_media_url($hero['image']),
+                // What Tappy currently says on the public page for this tab, so the
+                // form opens showing the wording that is actually live rather than
+                // an empty box the admin has to guess at.
+                'mascot'   => self::mascotStateFor($tab),
             ];
         }
 
         return view('admin/childpro_gad', [
-            'title' => 'CHILDPRO / GAD Management — CSCS SMS',
-            'tabs'  => $tabs,
+            'title'       => 'CHILDPRO / GAD Management — CSCS Tap n Track',
+            'tabs'        => $tabs,
+            'mascotPoses' => mascot_pose_choices(),
         ]);
+    }
+
+    /**
+     * Tappy's message for one public tab: the administrator's own wording when
+     * they have set any, otherwise the built-in line plus a note that it is the
+     * default. The note is what tells an admin why saving nothing seems to do
+     * nothing.
+     *
+     * @return array{pose: string, title: string, text: string, isCustom: bool, defaults: array{title: string, text: string, pose: string}}
+     */
+    private static function mascotStateFor(string $tab): array
+    {
+        $custom = mascot_line_override_get($tab);
+        $builtin = mascot_line_for($tab);
+
+        return [
+            'pose'     => $custom['pose'] ?? $builtin['pose'],
+            'title'    => $custom['title'] ?? '',
+            'text'     => $custom['text'] ?? '',
+            'isCustom' => $custom !== null,
+            'defaults' => [
+                'title' => $builtin['title'],
+                'text'  => $builtin['text'],
+                'pose'  => $builtin['pose'],
+            ],
+        ];
     }
 
     public function update(): \CodeIgniter\HTTP\RedirectResponse
     {
-        helper(['childpro_gad', 'admin_access']);
+        helper(['childpro_gad', 'admin_access', 'mascot']);
 
         if (! is_any_admin()) {
             return redirect()->to(base_url('login'));
@@ -144,6 +175,48 @@ class ChildProGad extends BaseController
         }
 
         childpro_gad_sections_save($tab, $sections);
+
+        // --- Tappy's message on the public page for this tab ---
+        // The tab name is the segment the public page runs on (/childpro, /gad),
+        // which is the same key mascot_line_for() looks up, so what is written
+        // here is what a visitor actually sees. Saving blank fields clears the
+        // override and puts the built-in wording back.
+        $mascotTitle = trim((string) $this->request->getPost('mascot_title'));
+        $mascotText  = trim((string) $this->request->getPost('mascot_text'));
+        $mascotPose  = trim((string) $this->request->getPost('mascot_pose'));
+
+        if ($mascotTitle !== '' && mb_strlen($mascotTitle) > 60) {
+            $mascotTitle = mb_substr($mascotTitle, 0, 60);
+        }
+        if ($mascotText !== '' && mb_strlen($mascotText) > 240) {
+            $mascotText = mb_substr($mascotText, 0, 240);
+        }
+
+        // An unknown pose is ignored rather than stored, so a stale form (or a
+        // hand-made POST) cannot leave the public page with a missing character.
+        if ($mascotPose !== '' && ! array_key_exists($mascotPose, mascot_pose_choices())) {
+            $mascotPose = '';
+        }
+
+        mascot_line_override_save($tab, [
+            'pose'  => $mascotPose,
+            'title' => $mascotTitle,
+            'text'  => $mascotText,
+        ]);
+
+        audit_event('settings.childpro_gad_updated', [
+            'category'      => 'settings',
+            'status'        => 'success',
+            'resource_type' => 'setting',
+            'resource_id'   => 'childpro_gad',
+            'description'   => childpro_gad_tab_label($tab) . ' page content updated',
+            'metadata'      => [
+                'tab' => (string) $tab,
+                // Recorded so the activity log shows whether Tappy's message was
+                // changed, which is otherwise invisible in a diff of the page copy.
+                'mascot_message_custom' => $mascotTitle !== '' || $mascotText !== '',
+            ],
+        ]);
 
         return redirect()->back()->with('success', childpro_gad_tab_label($tab) . ' page updated successfully.');
     }

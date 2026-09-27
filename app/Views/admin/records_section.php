@@ -14,7 +14,7 @@
         <div class="card-body text-center py-5">
             <i class="bi bi-inbox fs-1 text-muted"></i>
             <h5 class="mt-3">No Students</h5>
-            <p class="text-muted">No students with grades in this section</p>
+            <p class="text-muted">No students are currently enrolled in this section for School Year <?= $schoolYear ?></p>
         </div>
     </div>
 <?php else: ?>
@@ -26,9 +26,16 @@
                         <div class="student-card">
                             <div class="fw-bold"><?= esc($student['first_name'] . ' ' . $student['last_name']) ?></div>
                             <small class="text-muted"><?= esc($student['lrn']) ?></small>
-                            <a href="<?= base_url('admin/records/view/' . $student['id'] . '?year=' . $schoolYear) ?>" class="btn btn-primary btn-sm mt-2 w-100">
-                                <i class="bi bi-file-earmark-text"></i> View Report Card
-                            </a>
+                            <?php $isDevelopmental = in_array($student['grading_type'] ?? ($gradingType ?? 'numerical'), ['non_numerical', 'custom']); ?>
+                            <?php if ($isDevelopmental): ?>
+                                <a href="<?= base_url('admin/records/sned-report-card/' . $student['id'] . '?year=' . $schoolYear) ?>" class="btn btn-success btn-sm mt-2 w-100">
+                                    <i class="bi bi-file-earmark-text"></i> View Report Card (Developmental)
+                                </a>
+                            <?php else: ?>
+                                <a href="<?= base_url('admin/records/view/' . $student['id'] . '?year=' . $schoolYear) ?>" class="btn btn-primary btn-sm mt-2 w-100">
+                                    <i class="bi bi-file-earmark-text"></i> View Report Card
+                                </a>
+                            <?php endif; ?>
                         </div>
                     </div>
                 <?php endforeach; ?>

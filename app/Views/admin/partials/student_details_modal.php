@@ -9,6 +9,10 @@
         <tr><td>LRN:</td><td><?= esc($student['lrn'] ?? 'N/A') ?></td></tr>
         <tr><td>Full Name:</td><td><?= esc($student['first_name'] . ' ' . ($student['middle_name'] ?? '') . ' ' . $student['last_name'] . ' ' . ($student['suffix'] ?? '')) ?></td></tr>
         <tr><td>Student Type:</td><td><?= esc($student['student_type'] ?? 'N/A') ?></td></tr>
+        <?php if (in_array($student['student_type'] ?? '', ['Transferee', 'transferee'], true)): ?>
+        <tr><td>Previous School:</td><td><?= esc($student['previous_school'] ?? 'N/A') ?></td></tr>
+        <tr><td>School Year Last Attended:</td><td><?= esc($student['previous_school_year'] ?? 'N/A') ?></td></tr>
+        <?php endif; ?>
         <tr><td>Gender:</td><td><?= esc($student['gender'] ?? 'N/A') ?></td></tr>
         <tr><td>Date of Birth:</td><td><?= $student['date_of_birth'] ? date('M j, Y', strtotime($student['date_of_birth'])) : 'N/A' ?></td></tr>
         <tr><td>Place of Birth:</td><td><?= esc($student['place_of_birth'] ?? 'N/A') ?></td></tr>
@@ -137,7 +141,7 @@
 }
 
 .student-details-table td:first-child {
-  font-weight: 600;
+  font-weight: 700;
   color: #374151;
   width: 35%;
 }
@@ -195,7 +199,7 @@
 }
 
 .subject-name {
-  font-weight: 600;
+  font-weight: 700;
   color: #1e293b;
   font-size: 0.9rem;
   margin-bottom: 0.25rem;
@@ -205,7 +209,7 @@
 }
 
 .subject-code {
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   color: #64748b;
   margin-bottom: 0.25rem;
 }
@@ -224,7 +228,7 @@
 }
 
 .document-item {
-  border: 2px solid #e2e8f0;
+  border: var(--hairline);
   border-radius: 12px;
   padding: 1rem;
   background: #ffffff;
@@ -241,7 +245,7 @@
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
   color: #374151;
 }
 

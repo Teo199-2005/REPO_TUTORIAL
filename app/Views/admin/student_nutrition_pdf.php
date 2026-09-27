@@ -2,56 +2,42 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>CSCS Student Nutrition Report</title>
+    <title><?= esc(school_name()) ?> - Student Nutrition / BMI Report</title>
     <style>
-        body {
-            font-family: Arial, Helvetica, sans-serif;
-            margin: 0;
-            padding: 16px;
-            color: #000;
-            font-size: 8px;
-            line-height: 1.3;
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 16px;
-            border-bottom: 2px solid #000;
-            padding-bottom: 12px;
-        }
-        .logo { width: 64px; height: 64px; margin: 0 auto 8px; }
-        .school-name { font-size: 16px; font-weight: bold; text-transform: uppercase; }
-        .report-title { font-size: 12px; font-weight: bold; margin: 8px 0 4px; }
-        .report-info { font-size: 9px; margin: 2px 0; }
-        .data-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-        .data-table th, .data-table td { border: 1px solid #000; padding: 4px; text-align: left; vertical-align: top; }
-        .data-table th { background-color: #f0f0f0; font-weight: bold; }
-        .footer {
-            margin-top: 12px;
-            padding-top: 8px;
-            border-top: 1px solid #000;
-            text-align: center;
-            font-size: 7px;
-        }
+<?= view('reports/_report_css', ['pageSize' => 'A4 landscape']) ?>
+
+/* The 11-column health table needs a compact body; the letterhead, rules
+   and footer follow the shared report family. */
+.report-info { font-size: 8.5pt; text-align: center; margin-top: 0.6mm; }
+
+table.data-table { width: 100%; border: 1pt solid #000; margin-top: 2.5mm; }
+table.data-table th, table.data-table td {
+    border: 0.5pt solid #000; padding: 1mm 1.4mm; font-size: 8pt;
+    text-align: left; vertical-align: top;
+}
+table.data-table th {
+    background: #EDEDED; font-weight: bold; text-transform: uppercase;
+    font-size: 7.5pt; letter-spacing: 0.2pt; white-space: nowrap;
+}
+table.data-table thead { display: table-header-group; }
+table.data-table tr { page-break-inside: avoid; }
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="logo">
-            <?php
-            $logoB64 = school_logo_base64();
-            if ($logoB64 !== '') {
-                echo '<img src="data:image/png;base64,' . esc($logoB64, 'attr') . '" alt="Logo" style="width:64px;height:64px;display:block;margin:0 auto;">';
-            } else {
-                echo '<div style="width:64px;height:64px;border:2px solid #000;border-radius:50%;margin:0 auto;line-height:60px;text-align:center;font-weight:bold;">CSCS</div>';
-            }
-            ?>
-        </div>
-        <div class="school-name">Cauayan South Central School</div>
-        <div class="report-title">Student nutrition / BMI report</div>
-        <div class="report-info">School year: <?= esc($schoolYear) ?></div>
-        <div class="report-info">Generated: <?= esc($reportDate) ?></div>
-        <div class="report-info">Filters: <?= esc($filtersSummary) ?></div>
-    </div>
+<?php
+$logoB64 = school_logo_base64();
+$sealUri = deped_seal_data_uri();
+$schoolYearPretty = str_replace('-', '–', (string) $schoolYear);
+?>
+<?= view('reports/_letterhead', [
+    'schoolName'  => school_name(),
+    'reportTitle' => 'Student Nutrition / BMI Report',
+    'schoolYear'  => $schoolYearPretty,
+    'logoB64'     => $logoB64,
+    'sealUri'     => $sealUri,
+]) ?>
+<div class="report-info">Generated: <?= esc($reportDate) ?></div>
+<div class="report-info">Filters: <?= esc($filtersSummary) ?></div>
 
     <table class="data-table">
         <thead>
@@ -104,9 +90,9 @@
         </tbody>
     </table>
 
-    <div class="footer">
-        <p>For school health screening and planning only — not a medical diagnosis. Confidential.</p>
-        <p>Cauayan South Central School | <?= esc(date('F j, Y \a\t g:i A')) ?></p>
-    </div>
+<div class="foot">
+    For school health screening and planning only &mdash; not a medical diagnosis. Confidential.<br>
+    <?= esc(school_name()) ?> &middot; Generated <?= date('F j, Y \a\t g:i A') ?>
+</div>
 </body>
 </html>

@@ -19,7 +19,7 @@ class Dashboard extends BaseController
         if (!$this->auth->user()->inGroup('parent')) {
             return redirect()->to(base_url('/'));
         }
-        return view('parent/dashboard', ['title' => 'Parent Dashboard - CSCS SMS']);
+        return view('parent/dashboard', ['title' => 'Parent Dashboard - CSCS Tap n Track']);
     }
 
     public function children()
@@ -27,7 +27,7 @@ class Dashboard extends BaseController
         if (!$this->auth->user()->inGroup('parent')) {
             return redirect()->to(base_url('/'));
         }
-        return view('parent/children', ['title' => 'My Children - CSCS SMS']);
+        return view('parent/children', ['title' => 'My Children - CSCS Tap n Track']);
     }
 
     public function childGrades($studentId)
@@ -35,7 +35,7 @@ class Dashboard extends BaseController
         if (!$this->auth->user()->inGroup('parent')) {
             return redirect()->to(base_url('/'));
         }
-        return view('parent/grades', ['title' => 'Child Grades - CSCS SMS', 'studentId' => $studentId]);
+        return view('parent/grades', ['title' => 'Child Grades - CSCS Tap n Track', 'studentId' => $studentId]);
     }
 
     public function announcements()
@@ -52,11 +52,11 @@ class Dashboard extends BaseController
                    CASE WHEN ar.id IS NOT NULL THEN 1 ELSE 0 END as is_read
             FROM announcements a
             LEFT JOIN announcement_reads ar ON ar.announcement_id = a.id AND ar.user_id = ?
-            WHERE a.target_roles IN ('parent', 'all')
+            WHERE a.deleted_at IS NULL AND a.target_roles IN ('parent', 'all')
             ORDER BY a.created_at DESC
         ", [$userId])->getResultArray();
         
-        return view('parent/announcements', ['title' => 'Announcements - CSCS SMS', 'announcements' => $announcements]);
+        return view('parent/announcements', ['title' => 'Announcements - CSCS Tap n Track', 'announcements' => $announcements]);
     }
 
     public function viewAnnouncement($id)

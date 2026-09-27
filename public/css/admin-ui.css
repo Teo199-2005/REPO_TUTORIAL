@@ -1,0 +1,457 @@
+/* ==========================================================================
+   CSCS Tap n Track — Admin UI standard
+   --------------------------------------------------------------------------
+   The single source of truth for how admin screens look. Every admin page
+   (filters, tables, modals, buttons, headings, empty states, pagination)
+   should be built from the classes defined here rather than inventing
+   page-local Bootstrap combinations.
+
+   Why this file exists
+   --------------------
+   A survey of app/Views/admin found 43 different font sizes, 78 hard-coded hex
+   colours (mixing Bootstrap 4 #007bff, Bootstrap 5 #0d6efd and the brand
+   tokens), 20 different <table class> strings, ~40 button variants, 4 modal
+   variants and 1,557 lines of page-local <style>. Those tokens in app.css
+   :root already existed; the views were simply bypassing them.
+
+   Rules
+   -----
+   1. Colours come from the app.css tokens, never a literal hex.
+   2. Type comes from the six-step scale below, never an ad-hoc rem value.
+   3. Icons follow one vocabulary (see the "Icon vocabulary" block).
+   4. Every rule is scoped under .dashboard-app so the public landing page,
+      student portal and teacher portal are never affected.
+
+   Loaded from dashboard_layout.php with the usual filemtime cache-buster.
+   ========================================================================== */
+
+.dashboard-app {
+  /* --- Type scale: six sizes. Replaces 43 one-off values. --------------- */
+  --fs-xs: 0.8125rem;  /* 13px — badges, meta text, table captions (floor) */
+  --fs-sm: 0.875rem;   /* 14px — table cells, hints, secondary text */
+  --fs-base: 1rem;     /* 16px — body, form labels, inputs, buttons */
+  --fs-md: 1.125rem;   /* 18px — card titles */
+  --fs-lg: 1.25rem;    /* 20px — page title */
+  --fs-xl: 1.5rem;     /* 24px — summary / stat values */
+
+  /* --- Semantic aliases used by the components below ------------------- */
+  --admin-surface: var(--color-surface);
+  --admin-border: var(--color-border);
+  --admin-muted: var(--color-text-muted);
+  --admin-heading: var(--color-heading);
+  --admin-text: var(--color-text);
+
+  --admin-radius: var(--radius-md);
+  --admin-radius-lg: var(--radius-lg);
+  --admin-shadow: var(--shadow-sm);
+  --admin-shadow-card: var(--shadow-md);
+
+  --admin-icon: 1.1em;      /* icons inherit their text size */
+  --admin-tap: 2.375rem;    /* 38px — comfortable pointer target */
+}
+
+/* ==========================================================================
+   Page header
+   Every admin page uses the same title block: icon tile, title, subtitle and
+   right-aligned actions.
+   ========================================================================== */
+.dashboard-app .admin-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.dashboard-app .admin-page-header__lead {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.dashboard-app .admin-page-header__icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+
+/* ==========================================================================
+   Filter bar
+   The standard: 4 primary filters always visible, everything else behind
+   "More Filters". Auto-submits — there is no Apply button.
+   Rendered by views/admin/partials/filter_bar.php.
+   ========================================================================== */
+.dashboard-app .admin-filter-bar {
+  background: var(--color-bg);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-lg);
+  box-shadow: var(--admin-shadow);
+  padding: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.dashboard-app .admin-filter-bar .row { row-gap: 0.75rem; }
+
+.dashboard-app .admin-filter-bar .form-label {
+  display: block;
+  font-size: var(--fs-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--admin-muted);
+  margin-bottom: 0.3rem;
+}
+
+.dashboard-app .admin-filter-bar .form-label i {
+  color: var(--admin-muted);
+  font-size: var(--admin-icon);
+  opacity: 0.75;
+}
+
+.dashboard-app .admin-filter-bar .form-control,
+.dashboard-app .admin-filter-bar .form-select {
+  font-size: var(--fs-sm);
+  min-height: var(--admin-tap);
+  border-color: var(--color-border-dark);
+  border-radius: var(--admin-radius);
+}
+
+.dashboard-app .admin-filter-bar .form-control:focus,
+.dashboard-app .admin-filter-bar .form-select:focus {
+  border-color: var(--color-primary-light);
+  box-shadow: 0 0 0 0.2rem rgba(30, 64, 175, 0.12);
+}
+
+.dashboard-app .admin-filter-bar .btn { min-height: var(--admin-tap); }
+
+/* The "More Filters" toggle sits at the end of the primary row. */
+.dashboard-app .admin-filter-bar__more { white-space: nowrap; }
+
+.dashboard-app .admin-filter-bar__more .badge {
+  font-size: var(--fs-xs);
+  vertical-align: 1px;
+}
+
+.dashboard-app .admin-filter-bar__advanced {
+  border-top: 1px solid var(--admin-border);
+  padding-top: var(--spacing-sm);
+  margin-top: 0.25rem;
+}
+
+/* Applied-filter summary shown under the bar when anything is active. */
+.dashboard-app .admin-filter-active {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: var(--fs-sm);
+  color: var(--admin-muted);
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--admin-border);
+}
+
+
+/* ==========================================================================
+   Tables
+   One class for every admin table: .admin-table
+   ========================================================================== */
+.dashboard-app .admin-table { margin-bottom: 0; }
+
+.dashboard-app .admin-table thead th {
+  background: var(--color-surface);
+  color: var(--admin-heading);
+  font-size: var(--fs-xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--admin-border);
+  padding: 0.7rem 0.75rem;
+}
+
+.dashboard-app .admin-table tbody td {
+  font-size: var(--fs-sm);
+  color: var(--admin-text);
+  padding: 0.7rem 0.75rem;
+  vertical-align: middle;
+}
+
+.dashboard-app .admin-table tbody tr:hover > * {
+  background-color: var(--color-surface);
+}
+
+/* Row-action buttons stay compact and evenly sized. */
+.dashboard-app .admin-table .admin-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+
+.dashboard-app .admin-table .admin-row-actions .btn {
+  min-width: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-sm);
+}
+
+.dashboard-app .admin-table td.text-end { white-space: nowrap; }
+
+/* ==========================================================================
+   Empty state
+   One shape for "nothing to show": icon, sentence, hint, optional action.
+   ========================================================================== */
+.dashboard-app .admin-empty {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: var(--admin-muted);
+}
+
+.dashboard-app .admin-empty__icon {
+  font-size: 2.5rem;
+  color: var(--color-border-dark);
+  display: block;
+  margin-bottom: 0.6rem;
+}
+
+.dashboard-app .admin-empty__title {
+  font-size: var(--fs-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--admin-heading);
+  margin: 0 0 0.25rem;
+}
+
+.dashboard-app .admin-empty__hint {
+  font-size: var(--fs-sm);
+  margin: 0;
+}
+
+/* ==========================================================================
+   Pagination (server-side only — see admin-table-enhancements.js note)
+   ========================================================================== */
+.dashboard-app .admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--color-bg);
+  font-size: var(--fs-sm);
+  color: var(--admin-muted);
+}
+
+.dashboard-app .admin-pagination .pagination { margin-bottom: 0; }
+
+.dashboard-app .admin-pagination .page-link {
+  color: var(--admin-text);
+  border-color: var(--admin-border);
+
+/* ==========================================================================
+   Modals
+   One shape: .admin-modal on .modal-content — header / body / footer.
+   ========================================================================== */
+.dashboard-app .modal-content.admin-modal {
+  border: 0;
+  border-radius: var(--admin-radius-lg);
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+}
+
+.dashboard-app .admin-modal .modal-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--admin-border);
+  background: var(--color-bg);
+}
+
+.dashboard-app .admin-modal .modal-title {
+  font-size: var(--fs-md);
+  font-weight: var(--font-weight-bold);
+  color: var(--admin-heading);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dashboard-app .admin-modal .modal-title i { color: var(--color-primary); }
+
+.dashboard-app .admin-modal .modal-body {
+  padding: 1.25rem;
+  font-size: var(--fs-sm);
+  color: var(--admin-text);
+}
+
+.dashboard-app .admin-modal .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.85rem 1.25rem;
+  border-top: 1px solid var(--admin-border);
+  background: var(--color-surface);
+}
+
+.dashboard-app .admin-modal .modal-footer .form-label {
+  margin-right: auto;
+  margin-bottom: 0;
+  font-size: var(--fs-xs);
+  color: var(--admin-muted);
+}
+
+/* ==========================================================================
+   Buttons
+   Five permitted combinations. Anything else is a bug.
+     .admin-btn-primary   create / confirm   (solid primary)
+     .admin-btn-secondary cancel / neutral   (outline secondary)
+     .admin-btn-danger    destructive        (solid danger)
+     .admin-btn-utility   view / download    (outline primary)
+     .admin-btn-reset     clear filters      (outline secondary, icon only state)
+   ========================================================================== */
+.dashboard-app .btn {
+  font-size: var(--fs-sm);
+  font-weight: var(--font-weight-semibold);
+  border-radius: var(--admin-radius);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 2.25rem;
+}
+
+.dashboard-app .btn i { font-size: var(--admin-icon); }
+
+.dashboard-app .admin-btn-primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.dashboard-app .admin-btn-primary:hover,
+.dashboard-app .admin-btn-primary:focus {
+  background: var(--color-primary-dark);
+  border-color: var(--color-primary-dark);
+  color: #fff;
+}
+
+.dashboard-app .admin-btn-danger {
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+  color: #fff;
+}
+
+.dashboard-app .admin-btn-danger:hover,
+.dashboard-app .admin-btn-danger:focus {
+  filter: brightness(0.92);
+  color: #fff;
+}
+
+.dashboard-app .admin-btn-utility,
+.dashboard-app .admin-btn-secondary {
+  background: transparent;
+}
+
+/* ==========================================================================
+   Icon vocabulary
+   One icon per meaning, used everywhere:
+     search bi-search            add bi-plus-circle
+     filter bi-funnel-fill       more filters bi-sliders
+     reset bi-arrow-counterclockwise   close bi-x-lg
+     edit bi-pencil-square       view bi-eye
+     delete bi-trash3            archive bi-archive
+     restore bi-arrow-counterclockwise  download bi-download
+     save bi-check-circle        print bi-printer
+     success bi-check-circle     failure bi-x-circle
+     warning bi-exclamation-triangle  info bi-info-circle
+   ========================================================================== */
+.dashboard-app .admin-icon-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #e8f0fe;
+  color: var(--color-primary);
+  font-size: 0.85rem;
+}
+
+.dashboard-app .admin-icon-badge--muted { background: #f1f5f9; color: var(--admin-muted); }
+
+/* ==========================================================================
+   Reduced motion — respect the user's system preference.
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-app .admin-filter-bar,
+  .dashboard-app .btn { transition: none !important; }
+}
+
+  min-width: 2.25rem;
+  text-align: center;
+}
+
+.dashboard-app .admin-pagination .page-item.active .page-link {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.dashboard-app .admin-pagination .page-item.disabled .page-link {
+  color: var(--admin-muted);
+  background: var(--color-surface);
+}
+
+.dashboard-app .admin-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: var(--fs-xs);
+  font-weight: var(--font-weight-semibold);
+  background: #e8f1fd;
+  color: var(--color-primary);
+  border: 1px solid #c3d8fb;
+}
+
+.dashboard-app .admin-chip i { font-size: 0.9em; }
+
+@media (max-width: 991.98px) {
+  .dashboard-app .admin-filter-bar .form-control,
+  .dashboard-app .admin-filter-bar .form-select { min-height: 2.75rem; }
+}
+
+  height: 46px;
+  border-radius: var(--admin-radius-lg);
+  background: #e8f0fe;
+  color: var(--color-primary);
+  font-size: 1.35rem;
+}
+
+.dashboard-app .admin-page-header__title {
+  font-size: var(--fs-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--admin-heading);
+  margin: 0 0 0.15rem;
+  line-height: var(--line-height-tight);
+}
+
+.dashboard-app .admin-page-header__subtitle {
+  font-size: var(--fs-sm);
+  color: var(--admin-muted);
+  margin: 0;
+}
+
+.dashboard-app .admin-page-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}

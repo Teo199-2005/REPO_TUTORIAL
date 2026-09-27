@@ -19,7 +19,7 @@ class Messages extends BaseController
             return redirect()->to(base_url('/'));
         }
         return view('teacher/messages', [
-            'title' => 'Messages - CSCS SMS',
+            'title' => 'Messages - CSCS Tap n Track',
         ]);
     }
 }

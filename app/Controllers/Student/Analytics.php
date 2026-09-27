@@ -41,6 +41,18 @@ class Analytics extends BaseController
         $studentWithSection = $studentModel->getStudentWithSection((int) $student['id']);
         $sectionId = $studentWithSection['section_id'] ?? null;
 
+        $db = \Config\Database::connect();
+        $section = $sectionId
+            ? $db->table('sections')->where('id', (int) $sectionId)->get()->getRowArray()
+            : null;
+
+        // Non-numerical sections (Grade 1 CAMIA, SNED, SSES, ...) are assessed
+        // with developmental-domain symbols (P/AP/D/B/NO-NA), not 0-100 grades,
+        // so the numeric widgets could only ever report zeros for them. Build a
+        // symbol-based payload instead.
+        $isDomainMode = $section !== null
+            && in_array((string) ($section['grading_type'] ?? 'numerical'), ['non_numerical', 'custom'], true);
+
         $subjects = [];
         if ($sectionId) {
             $subjectModel = new SubjectModel();
@@ -74,11 +86,14 @@ class Analytics extends BaseController
             'totalPages' => $totalPages,
         ];
 
-        // Get term trends for all terms
-        $analytics['termTrends'] = $this->buildTermTrendsFromDb($student, $subjects, $schoolYear);
+        // Get term trends for all terms (numeric sections only - a developmental
+        // student has symbols per quarter instead of term grades)
+        $analytics['termTrends'] = $isDomainMode
+            ? []
+            : $this->buildTermTrendsFromDb($student, $subjects, $schoolYear);
 
         return view('student/analytics', [
-            'title' => 'My Analytics - CSCS SMS',
+            'title' => 'My Analytics - CSCS Tap n Track',
             'student' => $studentWithSection,
             'subjects' => $subjects,
             'analytics' => $analytics,
@@ -86,7 +101,211 @@ class Analytics extends BaseController
             'currentTerm' => $currentTerm,
             'selectedTerm' => $termFilter,
             'attendanceFilter' => $attendanceFilter,
+            'section' => $section,
+            'isDomainMode' => $isDomainMode,
+            'domainAnalytics' => $isDomainMode
+                ? $this->buildDomainAnalytics($student, (int) $section['id'], (int) ($section['grade_level'] ?? 0), $schoolYear)
+                : [],
         ]);
+    }
+
+    /**
+     * Symbol-based analytics for a student in a non-numerical (developmental)
+     * section: how many of the section's performance indicators are assessed,
+     * which symbols were given, mastery (P + AP among rated indicators) and how
+     * many indicators are covered per quarter.
+     *
+     * Counting is driven by the indicators themselves rather than raw row
+     * counts, so these widgets always agree with the developmental progress
+     * table on the My Grades page. Indicators that are no longer part of the
+     * section's domain list but still carry symbols are included too, so a
+     * student's progress is never silently hidden.
+     */
+    private function buildDomainAnalytics(array $student, int $sectionId, int $gradeLevel, string $schoolYear): array
+    {
+        $db = \Config\Database::connect();
+
+        $categoryModel = new \App\Models\SnedCategoryModel();
+        $domains = $categoryModel->getActiveCategories($sectionId, $gradeLevel);
+
+        $fieldModel     = new \App\Models\SnedCategoryFieldModel();
+        $fieldDomain    = [];
+        $fieldsByDomain = [];
+        foreach ($domains as $domain) {
+            $domainId = (int) $domain['id'];
+            $fieldsByDomain[$domainId] = $fieldModel->getCategoryFields($domainId);
+            foreach ($fieldsByDomain[$domainId] as $field) {
+                $fieldDomain[(int) $field['id']] = $domainId;
+            }
+        }
+
+        // The student's symbols. When the current school year has none, fall
+        // back to the student's latest recorded year so symbols written before
+        // the year setting was corrected are never hidden.
+        $rows = $db->table('sned_grades')
+            ->where('student_id', (int) $student['id'])
+            ->where('school_year', $schoolYear)
+            ->get()->getResultArray();
+
+        if ($rows === []) {
+            $latestYear = $db->table('sned_grades')
+                ->select('school_year')
+                ->where('student_id', (int) $student['id'])
+                ->orderBy('id', 'DESC')
+                ->limit(1)
+                ->get()->getRowArray();
+            if ($latestYear && (string) $latestYear['school_year'] !== (string) $schoolYear) {
+                $rows = $db->table('sned_grades')
+                    ->where('student_id', (int) $student['id'])
+                    ->where('school_year', $latestYear['school_year'])
+                    ->get()->getResultArray();
+            }
+        }
+
+        $domainTotals = [];
+        foreach ($domains as $domain) {
+            $domainId = (int) $domain['id'];
+            $domainTotals[$domainId] = [
+                'name'     => (string) ($domain['name'] ?? ''),
+                'total'    => count($fieldsByDomain[$domainId] ?? []),
+                'assessed' => 0, 'observed' => 0,
+                'P' => 0, 'AP' => 0, 'D' => 0, 'B' => 0, 'NO' => 0,
+            ];
+        }
+
+        // field_id => [quarter => symbol]
+        $symbolByField   = [];
+        $symbols         = ['P' => 0, 'AP' => 0, 'D' => 0, 'B' => 0, 'NO' => 0];
+        $quarterCoverage = [1 => 0, 2 => 0, 3 => 0, 4 => 0];
+
+        foreach ($rows as $row) {
+            $symbol = strtoupper(trim((string) ($row['grade_symbol'] ?? '')));
+            // NO/NA counts as observed but never towards mastery.
+            $bucket = $symbol === 'NO/NA'
+                ? 'NO'
+                : (in_array($symbol, ['P', 'AP', 'D', 'B'], true) ? $symbol : null);
+            $q   = (int) ($row['quarter'] ?? 0);
+            $fid = (int) ($row['field_id'] ?? 0);
+
+            if ($bucket === null || $fid <= 0 || $q < 1 || $q > 4) {
+                continue;
+            }
+
+            $symbolByField[$fid][$q] = $symbol;
+            $symbols[$bucket]++;
+            $quarterCoverage[$q]++;
+
+            $domainId = $fieldDomain[$fid] ?? 0;
+            if (isset($domainTotals[$domainId])) {
+                $domainTotals[$domainId][$bucket]++;
+                if ($bucket === 'NO') {
+                    $domainTotals[$domainId]['observed']++;
+                }
+            }
+        }
+
+        // Indicators carrying symbols but missing from the section's current
+        // domain list (unticked domain, deactivated indicator, older setup).
+        $spareFieldIds = array_values(array_diff(array_keys($symbolByField), array_keys($fieldDomain)));
+        if ($spareFieldIds !== []) {
+            $spareFields = $db->table('sned_category_fields')
+                ->whereIn('id', $spareFieldIds)
+                ->get()->getResultArray();
+
+            $spareCategoryIds = [];
+            foreach ($spareFields as $spareField) {
+                $spareCategoryIds[(int) $spareField['category_id']] = true;
+            }
+
+            $spareNames = [];
+            if ($spareCategoryIds !== []) {
+                $spareCategories = $db->table('sned_categories')
+                    ->whereIn('id', array_keys($spareCategoryIds))
+                    ->get()->getResultArray();
+                foreach ($spareCategories as $spareCategory) {
+                    $spareNames[(int) $spareCategory['id']] = (string) ($spareCategory['name'] ?? '');
+                }
+            }
+
+            foreach ($spareFields as $spareField) {
+                $fid = (int) $spareField['id'];
+                $cid = (int) $spareField['category_id'];
+                if (! isset($spareNames[$cid])) {
+                    continue;
+                }
+                if (! isset($domainTotals[$cid])) {
+                    $domainTotals[$cid] = [
+                        'name'     => $spareNames[$cid],
+                        'total'    => 0,
+                        'assessed' => 0, 'observed' => 0,
+                        'P' => 0, 'AP' => 0, 'D' => 0, 'B' => 0, 'NO' => 0,
+                    ];
+                }
+                $domainTotals[$cid]['total']++;
+                foreach ($symbolByField[$fid] as $spareSymbol) {
+                    $spareBucket = $spareSymbol === 'NO/NA' ? 'NO' : $spareSymbol;
+                    if (! isset($symbols[$spareBucket])) {
+                        continue;
+                    }
+                    $domainTotals[$cid][$spareBucket]++;
+                    if ($spareBucket === 'NO') {
+                        $domainTotals[$cid]['observed']++;
+                    }
+                }
+                $fieldDomain[$fid] = $cid;
+            }
+        }
+
+        $totalIndicators = 0;
+        foreach ($domainTotals as $domainTotal) {
+            $totalIndicators += $domainTotal['total'];
+        }
+
+        // Distinct indicators that received at least one symbol.
+        $assessed = 0;
+        foreach (array_keys($symbolByField) as $assessedFieldId) {
+            $assessed++;
+            $cid = $fieldDomain[$assessedFieldId] ?? 0;
+            if (isset($domainTotals[$cid])) {
+                $domainTotals[$cid]['assessed']++;
+            }
+        }
+
+        $domainList = [];
+        foreach ($domainTotals as $domainTotal) {
+            $rated = $domainTotal['P'] + $domainTotal['AP'] + $domainTotal['D'] + $domainTotal['B'];
+            $domainList[] = [
+                'name'        => $domainTotal['name'],
+                'total'       => $domainTotal['total'],
+                'assessed'    => $domainTotal['assessed'],
+                'observed'    => $domainTotal['observed'],
+                'proficient'  => $domainTotal['P'],
+                'approaching' => $domainTotal['AP'],
+                'developing'  => $domainTotal['D'],
+                'beginning'   => $domainTotal['B'],
+                'mastery'     => $rated > 0
+                    ? round((($domainTotal['P'] + $domainTotal['AP']) / $rated) * 100, 1)
+                    : 0.0,
+            ];
+        }
+
+        $masteryBase = $symbols['P'] + $symbols['AP'] + $symbols['D'] + $symbols['B'];
+
+        return [
+            'domains'         => $domainList,
+            'symbols'         => $symbols,
+            'totalIndicators' => $totalIndicators,
+            'assessed'        => $assessed,
+            'observed'        => $symbols['NO'],
+            'masteryRate'     => $masteryBase > 0
+                ? round((($symbols['P'] + $symbols['AP']) / $masteryBase) * 100, 1)
+                : 0.0,
+            'completionRate'  => $totalIndicators > 0
+                ? round(($assessed / $totalIndicators) * 100, 1)
+                : 0.0,
+            'quarterCoverage' => $quarterCoverage,
+            'quartersDone'    => count(array_filter($quarterCoverage)),
+        ];
     }
 
     /**

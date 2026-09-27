@@ -44,9 +44,9 @@ class GradeModel extends Model
 
     // Callbacks
     protected $allowCallbacks = true;
-    protected $beforeInsert = ['setDateRecorded'];
+    protected $beforeInsert = ['setDateRecorded', 'applyReportCardFloor'];
     protected $afterInsert = [];
-    protected $beforeUpdate = ['setDateRecorded'];
+    protected $beforeUpdate = ['setDateRecorded', 'applyReportCardFloor'];
     protected $afterUpdate = [];
     protected $beforeFind = [];
     protected $afterFind = [];
@@ -61,6 +61,34 @@ class GradeModel extends Model
         if (isset($data['data']['grade']) && !empty($data['data']['grade'])) {
             $data['data']['date_recorded'] = date('Y-m-d H:i:s');
         }
+        return $data;
+    }
+
+    /**
+     * Keep every stored numeric grade on the report card scale.
+     *
+     * The Enter Grades page clamps the box as the teacher leaves it and the
+     * controller clamps again, but the model is the last gate before the row
+     * exists: a stray 44 or 59 becomes 60 (and anything over 100 becomes 100)
+     * so no writer - including a future one - can file an off-scale grade.
+     * Symbol grades (P, AP, D, B, NO/NA) are not numeric and pass untouched.
+     */
+    protected function applyReportCardFloor(array $data)
+    {
+        if (! isset($data['data']['grade'])) {
+            return $data;
+        }
+
+        if (! function_exists('clamp_report_card_grade')) {
+            helper('grade');
+        }
+
+        $floored = clamp_report_card_grade($data['data']['grade']);
+
+        if ($floored !== null) {
+            $data['data']['grade'] = $floored;
+        }
+
         return $data;
     }
 

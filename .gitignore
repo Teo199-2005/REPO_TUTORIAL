@@ -32,6 +32,26 @@ Thumbs.db
 # Node modules (if using)
 node_modules/
 
+# Database backups — dumps live under writable/backups (outside the web root)
+# and must never be committed. The directory guards stay in the repository.
+/writable/backups/*
+!/writable/backups/.htaccess
+!/writable/backups/index.html
+
+# Live database exports. lphs_sms_live_import.sql is a 0.6 MB dump of the
+# production school database and contains ~350 real student and staff email
+# addresses. It is a local migration aid only — the live server runs against its
+# own database and never needs this file. Never commit it.
+/lphs_sms_live_import.sql
+*.sql
+!/tests/**/*.sql
+
+# Accidental double-nested upload directory. `public/public/uploads/...` is
+# produced when an upload path is built with a leading "public/" segment while
+# the helper already prefixes FCPATH. It is unreachable in normal operation and
+# holds real student ID photos, so it must not be committed either.
+/public/public/
+
 # Database backups
 *.sql
 *.db
@@ -39,3 +59,20 @@ node_modules/
 # Temporary files
 *.tmp
 *.temp
+
+# PHPUnit build output (coverage, testdox, junit + PHPUnit cache) — regenerated
+# by `vendor/bin/phpunit`, so it must never be committed.
+/build/
+
+# Local diagnostics / scratch artifacts — these are throwaway probes, one-shot
+# scripts and their outputs (some dump DB rows to a browser). Never commit.
+/writable/_*.php
+/writable/*.txt
+/writable/*.log
+/writable/*.err
+/*_diag.php
+/check_*.php
+/zz_*.txt
+/fix_*.ps1
+/fix_*.py
+/*_layout-check-*.png

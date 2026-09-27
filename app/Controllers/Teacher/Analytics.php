@@ -37,7 +37,7 @@ class Analytics extends BaseController
             helper('school_year');
 
             return view('teacher/analytics', [
-                'title' => 'Class Analytics - CSCS SMS',
+                'title' => 'Class Analytics - CSCS Tap n Track',
                 'error' => 'Teacher record not found',
                 'schoolYear' => get_current_school_year(),
                 'currentTerm' => get_current_term(),
@@ -78,8 +78,15 @@ class Analytics extends BaseController
             $analytics = $emptyAnalytics;
         }
 
+        // Non-numerical sections (Grade 1 CAMIA, SNED, SSES, ...) are assessed
+        // with developmental-domain symbols (P/AP/D/B/NO-NA), not numeric
+        // grades — the whole numeric pipeline reports zeros for them, so build
+        // a symbol-based analytics payload instead.
+        $isDomainMode = isset($teacherSection['id'], $teacherSection['grading_type'])
+            && ($teacherSection['grading_type'] ?? 'numerical') === 'non_numerical';
+
         return view('teacher/analytics', [
-            'title' => 'Class Analytics - CSCS SMS',
+            'title' => 'Class Analytics - CSCS Tap n Track',
             'teacher' => $teacher,
             'myStudents' => $myStudents,
             'mySubjects' => $mySubjects,
@@ -88,7 +95,179 @@ class Analytics extends BaseController
             'currentTerm' => $currentTerm,
             'teacherSection' => $teacherSection,
             'analyticsSectionCount' => $sectionCount,
+            'isDomainMode' => $isDomainMode,
+            'domainAnalytics' => $isDomainMode
+                ? $this->buildDomainAnalytics($myStudents, (int) $teacherSection['id'], $schoolYear)
+                : [],
         ]);
+    }
+
+    /**
+     * Symbol-based analytics for a non-numerical section.
+     *
+     * Aggregates sned_grades for the section's students over the developmental
+     * domains configured for the section (the ones ticked on the Sections page,
+     * falling back to every shared domain). NO/NA entries count as observed
+     * (towards completion) but never towards mastery.
+     */
+    private function buildDomainAnalytics(array $students, int $sectionId, string $schoolYear): array
+    {
+        helper('grade_level');
+        $db = \Config\Database::connect();
+
+        $empty = [
+            'domains' => [], 'students' => [],
+            'symbols' => ['P' => 0, 'AP' => 0, 'D' => 0, 'B' => 0, 'NO' => 0],
+            'totalIndicators' => 0, 'assessed' => 0, 'observed' => 0,
+            'masteryRate' => 0.0, 'completionRate' => 0.0,
+            'quarterCoverage' => [1 => 0, 2 => 0, 3 => 0, 4 => 0],
+        ];
+
+        if ($students === []) {
+            return $empty;
+        }
+
+        // The section's own domains: the ticked subset, or every shared domain.
+        $selectedIds = function_exists('section_selected_domain_ids')
+            ? section_selected_domain_ids($sectionId)
+            : null;
+
+        $categoryModel = new \App\Models\SnedCategoryModel();
+        $section = $db->table('sections')->where('id', $sectionId)->get()->getRowArray();
+        if ($selectedIds === null) {
+            $domains = $categoryModel->getActiveCategories($sectionId, (int) ($section['grade_level'] ?? 0));
+        } elseif ($selectedIds !== []) {
+            $domains = $db->table('sned_categories')
+                ->whereIn('id', $selectedIds)
+                ->where('is_active', 1)
+                ->orderBy('display_order', 'ASC')
+                ->get()->getResultArray();
+        } else {
+            $domains = [];
+        }
+
+        if ($domains === []) {
+            return $empty;
+        }
+
+        $fieldModel = new \App\Models\SnedCategoryFieldModel();
+        $fieldDomain = [];
+        $domainTotals = [];
+        foreach ($domains as $domain) {
+            $fields = $fieldModel->getCategoryFields((int) $domain['id']);
+            $domainTotals[(int) $domain['id']] = [
+                'name'   => $domain['name'],
+                'total'  => count($fields),
+                'assessed' => 0, 'observed' => 0, 'P' => 0, 'AP' => 0, 'D' => 0, 'B' => 0, 'NO' => 0,
+            ];
+            foreach ($fields as $field) {
+                $fieldDomain[(int) $field['id']] = (int) $domain['id'];
+            }
+        }
+
+        $studentIds = array_map(static fn ($s) => (int) $s['id'], $students);
+        $rows = $db->table('sned_grades')
+            ->whereIn('student_id', $studentIds)
+            ->where('school_year', $schoolYear)
+            ->get()->getResultArray();
+
+        $studentStats = [];
+        foreach ($students as $s) {
+            $studentStats[(int) $s['id']] = [
+                'name' => trim(($s['first_name'] ?? '') . ' ' . ($s['last_name'] ?? '')),
+                'assessed' => 0, 'observed' => 0,
+                'P' => 0, 'AP' => 0, 'D' => 0, 'B' => 0, 'NO' => 0,
+            ];
+        }
+
+        $symbols = ['P' => 0, 'AP' => 0, 'D' => 0, 'B' => 0, 'NO' => 0];
+        $quarterCoverage = [1 => 0, 2 => 0, 3 => 0, 4 => 0];
+
+        foreach ($rows as $row) {
+            $symbol   = strtoupper(trim((string) ($row['grade_symbol'] ?? '')));
+            $sid      = (int) $row['student_id'];
+            $domainId = (int) ($fieldDomain[(int) $row['field_id']] ?? 0);
+            $q        = (int) ($row['quarter'] ?? 0);
+
+            if ($symbol === '') {
+                continue;
+            }
+
+            // NO/NA counts towards completion (the indicator was observed) but
+            // never towards mastery.
+            $bucket = $symbol === 'NO/NA'
+                ? 'NO'
+                : (in_array($symbol, ['P', 'AP', 'D', 'B'], true) ? $symbol : null);
+            if ($bucket === null) {
+                continue;
+            }
+
+            if (isset($studentStats[$sid])) {
+                $studentStats[$sid]['assessed']++;
+                $studentStats[$sid][$bucket]++;
+                if ($bucket === 'NO') {
+                    $studentStats[$sid]['observed']++;
+                }
+            }
+            if (isset($domainTotals[$domainId])) {
+                $domainTotals[$domainId]['assessed']++;
+                $domainTotals[$domainId][$bucket]++;
+                if ($bucket === 'NO') {
+                    $domainTotals[$domainId]['observed']++;
+                }
+            }
+            $symbols[$bucket]++;
+            if (isset($quarterCoverage[$q])) {
+                $quarterCoverage[$q]++;
+            }
+        }
+
+        $totalIndicators = array_sum(array_column($domainTotals, 'total'));
+        $assessed        = $symbols['P'] + $symbols['AP'] + $symbols['D'] + $symbols['B'] + $symbols['NO'];
+        $observed        = $symbols['NO'];
+        $masteryBase     = $assessed - $observed;
+
+        $masteryOf = static function (array $s): float {
+            $base = $s['P'] + $s['AP'] + $s['D'] + $s['B'];
+            return $base > 0 ? round((($s['P'] + $s['AP']) / $base) * 100, 1) : 0.0;
+        };
+
+        $domainList = [];
+        foreach ($domainTotals as $d) {
+            $domainList[] = [
+                'name'        => $d['name'],
+                'total'       => $d['total'],
+                'assessed'    => $d['assessed'],
+                'observed'    => $d['observed'],
+                'proficient'  => $d['P'],
+                'approaching' => $d['AP'],
+                'developing'  => $d['D'],
+                'beginning'   => $d['B'],
+                'mastery'     => $masteryOf($d),
+            ];
+        }
+
+        $studentList = [];
+        foreach ($studentStats as $s) {
+            $s['mastery'] = $masteryOf($s);
+            $studentList[] = $s;
+        }
+
+        return [
+            'domains' => $domainList,
+            'students' => $studentList,
+            'symbols' => $symbols,
+            'totalIndicators' => $totalIndicators,
+            'assessed' => $assessed,
+            'observed' => $observed,
+            'masteryRate' => $masteryBase > 0
+                ? round((($symbols['P'] + $symbols['AP']) / $masteryBase) * 100, 1)
+                : 0.0,
+            'completionRate' => $totalIndicators > 0
+                ? round(($assessed / $totalIndicators) * 100, 1)
+                : 0.0,
+            'quarterCoverage' => $quarterCoverage,
+        ];
     }
 
     /**
@@ -341,6 +520,7 @@ class Analytics extends BaseController
                 ['term' => 'T1', 'average' => 0],
                 ['term' => 'T2', 'average' => 0],
                 ['term' => 'T3', 'average' => 0],
+                ['term' => 'T4', 'average' => 0],
             ];
         }
 
@@ -351,7 +531,7 @@ class Analytics extends BaseController
         $suPh = implode(',', array_fill(0, count($subjectIds), '?'));
 
         $trends = [];
-        for ($t = 1; $t <= 3; $t++) {
+        for ($t = 1; $t <= 4; $t++) {
             $sql = "SELECT AVG(g.grade) as a FROM grades g
                 WHERE g.school_year = ? AND g.term = ?
                 AND g.student_id IN ({$stPh}) AND g.subject_id IN ({$suPh})";
@@ -457,8 +637,26 @@ class Analytics extends BaseController
         }
 
         if ($analytics['classAverage'] == 0 && empty($analytics['subjectAverages'])) {
-            $analytics = $this->getEmptyAnalytics(count($myStudents));
+            // Swap in the empty template but KEEP the real attendance data — a
+            // non-numerical section has no numeric grades, so without this the
+            // exported PDF reported 0.0% attendance even with records present.
+            $emptyAnalytics = $this->getEmptyAnalytics(count($myStudents));
+            if (($analytics['attendanceStats']['total'] ?? 0) > 0) {
+                $emptyAnalytics['attendanceStats'] = $analytics['attendanceStats'];
+                $emptyAnalytics['attendanceRecords'] = $analytics['attendanceRecords'];
+                $emptyAnalytics['attendanceRate'] = $analytics['attendanceRate'];
+            }
+            $emptyAnalytics['termTrends'] = $analytics['termTrends'];
+            $emptyAnalytics['studentsGradedForDistribution'] = (int) ($analytics['studentsGradedForDistribution'] ?? 0);
+            $analytics = $emptyAnalytics;
         }
+
+        // Non-numerical sections (Grade 1 CAMIA, SNED, SSES, ...) are assessed
+        // with developmental-domain symbols, so the PDF renders the
+        // symbol-based report instead of the numeric grade pipeline.
+        $teacherSection = $scope['primarySection'];
+        $isDomainMode = isset($teacherSection['id'], $teacherSection['grading_type'])
+            && ($teacherSection['grading_type'] ?? 'numerical') === 'non_numerical';
 
         $data = [
             'teacher' => $teacher,
@@ -467,6 +665,11 @@ class Analytics extends BaseController
             'analytics' => $analytics,
             'schoolYear' => $schoolYear,
             'currentTerm' => $currentTerm,
+            'teacherSection' => $teacherSection,
+            'isDomainMode' => $isDomainMode,
+            'domainAnalytics' => $isDomainMode
+                ? $this->buildDomainAnalytics($myStudents, (int) $teacherSection['id'], $schoolYear)
+                : [],
             'reportDate' => date('F j, Y', time()),
             'reportTime' => date('g:i A', time()),
         ];
@@ -474,7 +677,7 @@ class Analytics extends BaseController
         $html = view('teacher/analytics_pdf', $data);
 
         $options = new Options();
-        $options->set('defaultFont', 'Helvetica');
+        $options->set('defaultFont', 'Times');
         $options->set('isRemoteEnabled', false);
         $options->set('isHtml5ParserEnabled', true);
         $options->set('isPhpEnabled', false);
@@ -526,7 +729,17 @@ class Analytics extends BaseController
         $analytics['attendanceRate'] = $analytics['attendanceStats']['attendanceRate'];
 
         if ($analytics['classAverage'] == 0 && empty($analytics['subjectAverages'])) {
-            $analytics = $this->getEmptyAnalytics(count($myStudents));
+            // Keep the real attendance data when swapping in the empty
+            // template (same fix as exportPdf) so announcements report the
+            // actual attendance instead of zeros.
+            $emptyAnalytics = $this->getEmptyAnalytics(count($myStudents));
+            if (($analytics['attendanceStats']['total'] ?? 0) > 0) {
+                $emptyAnalytics['attendanceStats'] = $analytics['attendanceStats'];
+                $emptyAnalytics['attendanceRecords'] = $analytics['attendanceRecords'];
+                $emptyAnalytics['attendanceRate'] = $analytics['attendanceRate'];
+            }
+            $emptyAnalytics['termTrends'] = $analytics['termTrends'];
+            $analytics = $emptyAnalytics;
         }
 
         $announcementModel = model('AnnouncementModel');

@@ -5,7 +5,7 @@
 <link href="<?= asset_url('css/school-about.css') ?>" rel="stylesheet" />
 <style>
 #landing {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Times New Roman', Times, serif;
   line-height: 1.6;
 }
 #landing .landing-section-inner {
@@ -61,7 +61,7 @@
   color: #fff !important;
   margin-bottom: 0.9rem;
   font-size: clamp(2rem, 5.4vw, 4rem) !important;
-  letter-spacing: -0.03em !important;
+  letter-spacing: 0 !important;
   line-height: 1.06 !important;
   text-shadow: 0 14px 36px rgba(2, 6, 23, 0.45);
 }
@@ -91,12 +91,24 @@
 <div id="landing">
   <section class="about-page-hero" aria-label="About Cauayan South Central School">
     <div class="landing-section-inner">
+      <?php /* Tappy introduces the school, with a sticker in the corner. Both hide until the artwork is pasted in. */ ?>
+      <div class="mascot-hero-sticker" style="position:relative;">
+        <?= mascot_sticker(['name' => 'sticker-tip', 'alt' => '', 'size' => 64, 'loading' => 'eager']) ?>
+      </div>
       <h1 class="section-title">About Our School</h1>
       <p class="section-subtitle">Learn about Cauayan South Central School, our leadership, and our commitment to quality basic education.</p>
+      <div class="mascot-hero-art">
+        <?= mascot_img(['name' => 'reading', 'alt' => 'Tappy reading a book', 'size' => 190, 'loading' => 'eager']) ?>
+      </div>
       <div class="about-page-accent gsap-scale-in" aria-hidden="true"></div>
     </div>
   </section>
 
+  <?php /* The mascot band divider used to sit here, above the gradient rule below.
+           It was the only placement left on the site and it was not earning its
+           space, so it is gone. The plain gradient divider that follows carries
+           the section break on its own, which is what mascot_band_divider() was
+           layered over in the first place. */ ?>
   <div class="section-divider"></div>
 
   <?= $this->include('partials/school_about_sections') ?>

@@ -105,9 +105,18 @@ if (! function_exists('portal_nav_student_sections')) {
     /**
      * @return list<array{title: string, items: list<array{href:string,icon:string,label:string,badge?:string}>}>
      */
-    function portal_nav_student_sections(): array
+    function portal_nav_student_sections(?array $student = null): array
     {
-        return [
+        // While the student has not completed BMI + profile photo + 2x2 ID
+        // photo, My Profile is the only unlocked sidebar page — the Dashboard
+        // is locked too (the server side gate lives in
+        // App\Filters\StudentAccessFilter).
+        $complete = $student === null ? true : student_profile_complete($student);
+        $openHrefs = $student === null || $complete ? [] : [
+            base_url('student/profile'),
+        ];
+
+        $sections = [
             [
                 'title' => 'Overview',
                 'items' => [
@@ -132,11 +141,26 @@ if (! function_exists('portal_nav_student_sections')) {
             [
                 'title' => 'Account',
                 'items' => [
+                    portal_nav_item(base_url('student/id-cards'), 'bi-credit-card-2-front', 'ID Card'),
                     portal_nav_item(base_url('student/platform-rating'), 'bi-stars', 'Rate platform'),
                     portal_nav_item(base_url('student/profile'), 'bi-person-circle', 'Profile'),
                 ],
             ],
         ];
+
+        if (! $complete) {
+            foreach ($sections as &$section) {
+                foreach ($section['items'] as &$item) {
+                    if (! in_array($item['href'], $openHrefs, true)) {
+                        $item['locked'] = true;
+                    }
+                }
+                unset($item);
+            }
+            unset($section);
+        }
+
+        return $sections;
     }
 }
 
@@ -238,6 +262,8 @@ if (! function_exists('portal_nav_admin_category_map')) {
             'childpro_gad'         => 'System',
             'programs_projects'    => 'System',
             'platform_ratings'     => 'System',
+            'audit_log'            => 'Administration',
+            'backups'              => 'Administration',
             'profile'              => 'Account',
         ];
     }
@@ -261,7 +287,7 @@ if (! function_exists('portal_nav_admin_sections')) {
         ];
 
         $shortLabels = [
-            'pending_applications' => 'Pending',
+            'pending_applications' => 'Pending Student',
             'sections'             => 'Sections',
             'student_nutrition'    => 'Nutrition / BMI',
             'announcements'        => 'Announcements',
@@ -272,6 +298,7 @@ if (! function_exists('portal_nav_admin_sections')) {
             'landing_page'         => 'Landing page',
             'childpro_gad'         => 'CHILDPRO / GAD',
             'programs_projects'    => 'Programs & Projects',
+            'backups'              => 'Backup & Restore',
         ];
 
         $grouped = [];

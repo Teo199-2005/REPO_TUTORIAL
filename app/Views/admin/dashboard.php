@@ -1,6 +1,7 @@
 <?= $this->extend('dashboard_layout') ?>
 
 <?= $this->section('portal_overlays') ?>
+<style><?= view('partials/password_requirements_style') ?></style>
 <!-- Outside .main-content so backdrop stacks above fixed sidebar + sticky top bar -->
 <div id="createAdminModal" class="custom-modal-overlay create-admin-modal-overlay" style="display: none;">
   <div class="create-admin-shell" role="dialog" aria-modal="true" aria-labelledby="createAdminModalTitle">
@@ -70,11 +71,15 @@
           <label for="adminPassword" class="form-label small fw-semibold text-secondary">Password</label>
           <div class="input-group">
             <span class="input-group-text create-admin-input-icon"><i class="bi bi-key"></i></span>
-            <input type="password" class="form-control" id="adminPassword" name="password" placeholder="Minimum 6 characters" required autocomplete="new-password">
+            <input type="password" class="form-control" id="adminPassword" name="password"
+                   placeholder="<?= esc(password_policy_summary()) ?>"
+                   minlength="<?= password_policy_min_length() ?>" pattern="(?=.*\d).{<?= password_policy_min_length() ?>,}"
+                   required autocomplete="new-password" data-password-indicator>
             <button class="btn btn-outline-secondary" type="button" id="togglePassword" title="Show password">
               <i class="bi bi-eye"></i>
             </button>
           </div>
+          <?= view('partials/password_requirements', ['compact' => true]) ?>
         </div>
         <div class="mb-3">
           <label for="adminConfirmPassword" class="form-label small fw-semibold text-secondary">Confirm password</label>
@@ -255,97 +260,222 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <?php /* Removed feature tiles grid as requested */ ?>
 
+<!-- Executive summary: Quick stats KPI cards -->
+<?php
+  $pendingCount    = (int)($pending_enrollments ?? 0);
+  $pendingSeverity = $pendingCount === 0 ? 'green' : ($pendingCount <= 10 ? 'yellow' : 'red');
+  $regEnabled      = (bool)($registrationEnabled ?? true);
+  $gradingOn       = (bool)($gradingEnabled ?? true);
+  $teacherTotal    = (int)($total_teachers ?? 0);
+  $summaryUpdated  = ($enrollmentLastUpdated ?? null)
+    ? esc(date('M j, Y g:i A', strtotime($enrollmentLastUpdated)))
+    : '—';
+?>
+<div class="admin-dash-summary-head">
+  <h6 class="card-title mb-0 fw-semibold"><i class="bi bi-grid-1x2 me-1"></i> Quick stats</h6>
+  <small class="admin-dash-updated"><i class="bi bi-clock-history"></i> Snapshot · Updated <?= $summaryUpdated ?></small>
+</div>
+<div class="admin-dash-summary-grid">
+  <!-- 1 · Pending Applications -->
+  <a href="<?= base_url('admin/students/pending') ?>" class="admin-dash-sum-card admin-dash-sum-tappable">
+    <div class="admin-dash-sum-icon admin-dash-sum-icon--<?= $pendingSeverity ?>" aria-hidden="true"><i class="bi bi-inbox"></i></div>
+    <div class="admin-dash-sum-body">
+      <span class="admin-dash-sum-label">Pending Applications
+        <i class="bi bi-info-circle" title="Enrollment applications waiting for review. Click this card to open the review page."></i>
+      </span>
+      <span class="admin-dash-sum-value admin-dash-sum-value--<?= $pendingSeverity ?>" data-counter="<?= $pendingCount ?>"><?= $pendingCount ?></span>
+      <span class="admin-dash-sum-helper">
+        <?= $pendingCount === 0 ? 'No applications awaiting review' : ($pendingCount <= 10 ? 'Applications awaiting your review' : 'High volume — review soon') ?>
+      </span>
+    </div>
+  </a>
+
+  <!-- 2 · Enrollment Status -->
+  <div class="admin-dash-sum-card">
+    <div class="admin-dash-sum-icon admin-dash-sum-icon--<?= $regEnabled ? 'green' : 'red' ?>" aria-hidden="true">
+      <i class="bi <?= $regEnabled ? 'bi-door-open' : 'bi-door-closed' ?>"></i>
+    </div>
+    <div class="admin-dash-sum-body">
+      <span class="admin-dash-sum-label">Enrollment Status
+        <i class="bi bi-info-circle" title="Controls whether new student registrations are accepted. Toggle from the header buttons above."></i>
+      </span>
+      <span class="admin-dash-sum-badge admin-dash-sum-badge--<?= $regEnabled ? 'open' : 'closed' ?>">
+        <span class="admin-dash-stat-dot"></span><?= $regEnabled ? 'Open' : 'Closed' ?>
+      </span>
+      <span class="admin-dash-sum-helper">Enrollment period · SY <?= esc($schoolYear ?? get_current_school_year()) ?></span>
+    </div>
+  </div>
+
+  <!-- 3 · Grade Encoding -->
+  <div class="admin-dash-sum-card">
+    <div class="admin-dash-sum-icon admin-dash-sum-icon--<?= $gradingOn ? 'cyan' : 'slate' ?>" aria-hidden="true"><i class="bi bi-pencil-square"></i></div>
+    <div class="admin-dash-sum-body">
+      <span class="admin-dash-sum-label">Grade Encoding
+        <i class="bi bi-info-circle" title="Controls whether teachers can enter grades. Toggle from the header buttons above."></i>
+      </span>
+      <span class="admin-dash-sum-badge admin-dash-sum-badge--<?= $gradingOn ? 'open' : 'closed' ?>">
+        <span class="admin-dash-stat-dot"></span><?= $gradingOn ? 'Enabled' : 'Disabled' ?>
+      </span>
+      <span class="admin-dash-sum-helper">
+        <?= $gradingOn ? "Available to {$teacherTotal} teacher" . ($teacherTotal === 1 ? '' : 's') : "Paused for {$teacherTotal} teacher" . ($teacherTotal === 1 ? '' : 's') ?>
+      </span>
+    </div>
+  </div>
+
+  <!-- 4 · Current School Year -->
+  <div class="admin-dash-sum-card admin-dash-sum-card--accent">
+    <div class="admin-dash-sum-icon admin-dash-sum-icon--blue" aria-hidden="true"><i class="bi bi-calendar-check"></i></div>
+    <div class="admin-dash-sum-body">
+      <span class="admin-dash-sum-label">Current School Year
+        <i class="bi bi-info-circle" title="The active academic period used across enrollment and grading."></i>
+      </span>
+      <span class="admin-dash-sum-value admin-dash-sum-value--sy">SY <?= esc($schoolYear ?? get_current_school_year()) ?></span>
+      <span class="admin-dash-sum-helper">
+        Term <?= esc((string)($currentTerm ?? get_current_term())) ?>
+        <span class="admin-dash-sum-dots" title="Terms in the school year; filled dot = current term">
+          <span class="<?= (int)($currentTerm ?? 1) >= 1 ? 'active' : '' ?>"></span>
+          <span class="<?= (int)($currentTerm ?? 1) >= 2 ? 'active' : '' ?>"></span>
+          <span class="<?= (int)($currentTerm ?? 1) >= 3 ? 'active' : '' ?>"></span>
+        </span>
+        · <span class="admin-dash-sum-status-on">Active</span>
+      </span>
+    </div>
+  </div>
+</div>
+
 <!-- Top Row: 2 Charts -->
 <div class="admin-dash-grid admin-dash-grid--top">
   <div class="admin-dash-widget admin-dash-widget--enrollment">
-    <div class="card h-100 admin-dash-card">
+    <div class="card h-100 admin-dash-enroll-card">
       <div class="card-header py-2">
-        <div class="d-flex justify-content-between align-items-center">
+        <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
           <div>
-            <h6 class="card-title mb-0 fw-semibold">Enrolled Students</h6>
-            <small class="text-muted">Kindergarten – Grade 6 (selected school year)</small>
+            <h6 class="card-title mb-0 fw-semibold"><i class="bi bi-people me-1"></i>Enrolled Students</h6>
+            <small class="text-muted">Kindergarten – Grade 6 Enrollment Distribution</small>
           </div>
-          <div class="chart-controls">
-            <label for="yearFilter" class="small text-muted me-2">School Year:</label>
-            <select id="yearFilter" class="form-select form-select-sm" style="width: auto;" onchange="updateEnrollmentChart()">
-              <?php foreach ($availableYears as $year): ?>
-                <option value="<?= $year ?>" <?= $year == $selectedYear ? 'selected' : '' ?>><?= $year ?></option>
-              <?php endforeach; ?>
-            </select>
+          <div class="text-end">
+            <div class="chart-controls admin-dash-year-picker">
+              <i class="bi bi-calendar3" aria-hidden="true"></i>
+              <select id="yearFilter" class="form-select form-select-sm" aria-label="School year" onchange="updateEnrollmentChart()">
+                <?php foreach ($availableYears as $year): ?>
+                  <option value="<?= $year ?>" <?= $year == $selectedYear ? 'selected' : '' ?>><?= $year ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <small class="admin-dash-updated d-block mt-1">
+              <i class="bi bi-clock-history"></i> Updated <?= ($enrollmentLastUpdated ?? null) ? esc(date('M j, Y g:i A', strtotime($enrollmentLastUpdated))) : '—' ?>
+            </small>
           </div>
         </div>
       </div>
       <div class="card-body py-2">
-        <div class="text-center mb-2">
-          <div class="admin-dash-total-value text-primary" id="totalEnrollment">0</div>
-          <small class="text-muted">Total Students</small>
+        <?php
+          // Legend data: nonzero grades only; color order matches the JS doughnut palette
+          $enrollPalette = ['#1e3a8a', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#a5b4fc', '#7c3aed', '#64748b'];
+          $enrollLegendItems = [];
+          $enrollColorIndex = 0;
+          foreach ($enrollmentByGrade as $grade => $count) {
+            if ($count <= 0) {
+              continue;
+            }
+            $enrollLegendItems[] = [
+              'label' => grade_level_label((int) $grade),
+              'count' => $count,
+              'pct'   => $enrollmentTotal > 0 ? round(($count / $enrollmentTotal) * 100, 1) : 0,
+              'color' => $enrollPalette[$enrollColorIndex % count($enrollPalette)],
+            ];
+            $enrollColorIndex++;
+          }
+          usort($enrollLegendItems, static fn (array $a, array $b): int => $b['count'] <=> $a['count']);
+        ?>
+
+        <!-- KPI row -->
+        <div class="admin-dash-kpi-row">
+          <div class="admin-dash-kpi">
+            <span class="admin-dash-kpi-num" id="totalEnrollment"><?= (int) $enrollmentTotal ?></span>
+            <span class="admin-dash-total-label">Total Students</span>
+          </div>
+          <div class="admin-dash-kpi">
+            <span class="admin-dash-kpi-num"><?= (int) $enrollmentActiveGrades ?></span>
+            <span class="admin-dash-total-label">Active Grade Levels</span>
+          </div>
+          <div class="admin-dash-kpi">
+            <span class="admin-dash-kpi-num admin-dash-kpi-num--sm"><?= $enrollmentTopGrade ? esc($enrollmentTopGrade['label']) : '—' ?></span>
+            <span class="admin-dash-total-label">Largest Grade<?= $enrollmentTopGrade ? ' · ' . (int) $enrollmentTopGrade['count'] : '' ?></span>
+          </div>
+          <div class="admin-dash-kpi">
+            <?php if ($enrollmentGrowth === null): ?>
+              <span class="admin-dash-kpi-num admin-dash-kpi-num--muted">—</span>
+              <span class="admin-dash-total-label">No prior year</span>
+            <?php else: ?>
+              <span class="admin-dash-kpi-num <?= $enrollmentGrowth >= 0 ? 'text-success' : 'text-danger' ?>">
+                <i class="bi bi-arrow-<?= $enrollmentGrowth >= 0 ? 'up' : 'down' ?>-right"></i><?= abs($enrollmentGrowth) ?>%
+              </span>
+              <span class="admin-dash-total-label">Enrollment Growth</span>
+            <?php endif; ?>
+          </div>
         </div>
-        <div class="chart-container admin-dash-chart admin-dash-chart--sm">
-          <canvas id="enrollmentChart"></canvas>
-        </div>
+
+        <?php if ((int) $enrollmentTotal <= 0): ?>
+          <!-- Empty state -->
+          <div class="admin-dash-enroll-empty text-center py-4">
+            <i class="bi bi-people" aria-hidden="true"></i>
+            <p class="mb-2">No enrollment data available for the selected school year.</p>
+            <a href="<?= base_url('admin/students/create') ?>" class="btn btn-sm btn-primary">
+              <i class="bi bi-person-plus me-1"></i>Add Student
+            </a>
+          </div>
+        <?php else: ?>
+          <!-- Doughnut + legend (chart left, breakdown right on desktop) -->
+          <div class="admin-dash-enroll-split">
+            <div class="chart-container admin-dash-chart">
+              <canvas id="enrollmentChart"></canvas>
+            </div>
+            <div class="admin-dash-enroll-legend-wrap">
+              <button class="btn btn-sm admin-dash-legend-toggle d-md-none w-100 mb-1" type="button" data-bs-toggle="collapse" data-bs-target="#enrollLegend" aria-expanded="false" aria-controls="enrollLegend">
+                <i class="bi bi-pie-chart me-1"></i>Legend <i class="bi bi-chevron-down"></i>
+              </button>
+              <div class="collapse d-md-block" id="enrollLegend">
+                <div class="admin-dash-enroll-legend">
+                  <?php foreach ($enrollLegendItems as $item): ?>
+                    <div class="admin-dash-legend-badge">
+                      <span class="admin-dash-legend-dot" style="background: <?= $item['color'] ?>;"></span>
+                      <span class="admin-dash-legend-name"><?= esc($item['label']) ?></span>
+                      <span class="admin-dash-legend-meta"><?= (int) $item['count'] ?> · <?= $item['pct'] ?>%</span>
+                    </div>
+                  <?php endforeach; ?>
+                </div>
+              </div>
+            </div>
+          </div>
+        <?php endif; ?>
+
+        <?php if ((int) $enrollmentTotal > 0): ?>
+          <!-- Insights -->
+          <div class="admin-dash-enroll-insights">
+            <div class="admin-dash-insight">
+              <small>Highest</small>
+              <strong><?= $enrollmentTopGrade ? esc($enrollmentTopGrade['label']) : '—' ?></strong>
+            </div>
+            <div class="admin-dash-insight">
+              <small>Lowest</small>
+              <strong><?= $enrollmentLowGrade ? esc($enrollmentLowGrade['label']) : '—' ?></strong>
+            </div>
+            <div class="admin-dash-insight">
+              <small>Total Enrollment</small>
+              <strong><?= (int) $enrollmentTotal ?></strong>
+            </div>
+            <div class="admin-dash-insight">
+              <small>Distribution</small>
+              <strong><?= $enrollmentTopGrade ? esc($enrollmentTopGrade['label']) . ' leads · ' . round(($enrollmentTopGrade['count'] / max(1, $enrollmentTotal)) * 100) . '%' : '—' ?></strong>
+            </div>
+          </div>
+        <?php endif; ?>
       </div>
     </div>
   </div>
 
-  <div class="admin-dash-widget admin-dash-widget--stats">
-    <div class="card h-100 admin-dash-card">
-      <div class="card-header py-2">
-        <h6 class="card-title mb-0 fw-semibold"><i class="bi bi-grid-1x2 me-1"></i> Quick stats</h6>
-        <small class="text-muted">Snapshot</small>
-      </div>
-      <div class="card-body py-2 h-100">
-        <div class="admin-dash-stat-grid">
-          <div class="admin-dash-stat-cell">
-            <div class="p-3 rounded-3 border text-center flex-fill">
-              <div class="text-warning mb-1">
-                <i class="bi bi-hourglass-split fs-3"></i>
-              </div>
-              <div class="fw-bold fs-1 text-dark" style="line-height: 1;">
-                <?= (int)($pending_enrollments ?? 0) ?>
-              </div>
-              <small class="text-muted d-block">Pending applications</small>
-            </div>
-          </div>
-
-          <div class="admin-dash-stat-cell">
-            <div class="p-3 rounded-3 border text-center flex-fill">
-              <div class="text-primary mb-1">
-                <i class="bi bi-unlock fs-3"></i>
-              </div>
-              <span class="badge fs-5 px-3 py-2 <?= ($registrationEnabled ?? true) ? 'bg-success' : 'bg-danger' ?>">
-                <?= ($registrationEnabled ?? true) ? 'Registration open' : 'Registration closed' ?>
-              </span>
-              <small class="text-muted d-block mt-1">Enrollment setting</small>
-            </div>
-          </div>
-
-          <div class="admin-dash-stat-cell">
-            <div class="p-3 rounded-3 border text-center flex-fill">
-              <div class="text-info mb-1">
-                <i class="bi bi-pencil-square fs-3"></i>
-              </div>
-              <span class="badge fs-5 px-3 py-2 <?= ($gradingEnabled ?? true) ? 'bg-success' : 'bg-secondary' ?>">
-                <?= ($gradingEnabled ?? true) ? 'Grading enabled' : 'Grading disabled' ?>
-              </span>
-              <small class="text-muted d-block mt-1">Grade setting</small>
-            </div>
-          </div>
-
-          <div class="admin-dash-stat-cell">
-            <div class="p-3 rounded-3 border text-center flex-fill">
-              <div class="text-secondary mb-1">
-                <i class="bi bi-calendar-check fs-3"></i>
-              </div>
-              <div class="fw-bold fs-1 text-dark" style="line-height: 1;">
-                <?= (int)($currentTerm ?? 0) ?>
-              </div>
-              <small class="text-muted d-block">Current term</small>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+  <!-- Quick stats relocated to the executive summary row above -->
 </div>
 
 <!-- Bottom Row -->
@@ -353,31 +483,43 @@ document.addEventListener('DOMContentLoaded', function() {
   <div class="admin-dash-widget">
     <div class="card h-100 admin-dash-card">
       <div class="card-header py-2">
-        <h6 class="card-title mb-0 fw-semibold">Recent Enrollment Applications</h6>
+        <div class="d-flex justify-content-between align-items-center gap-2">
+          <h6 class="card-title mb-0 fw-semibold"><i class="bi bi-clipboard2-check me-1"></i>Recent Enrollment Applications</h6>
+          <a href="<?= base_url('admin/students/pending') ?>" class="admin-dash-stat-link">
+            View all <i class="bi bi-arrow-right-short"></i>
+          </a>
+        </div>
       </div>
-      <div class="card-body py-2 admin-dash-scroll">
+      <div class="card-body py-2">
         <?php if (!empty($recentEnrollments)): ?>
-          <div class="list-group list-group-flush">
+          <div class="admin-dash-app-list">
             <?php foreach (array_slice($recentEnrollments, 0, 5) as $enrollment): ?>
-              <div class="list-group-item px-0 py-2 border-0 border-bottom">
-                <div class="d-flex justify-content-between align-items-start">
-                  <div class="flex-grow-1">
-                    <div class="fw-semibold text-dark mb-1" style="font-size: 0.85rem;">
-                      <?= esc(($enrollment['last_name'] ?? '') . ', ' . ($enrollment['first_name'] ?? '')) ?>
-                    </div>
-                    <div class="text-muted small"><?= esc(grade_level_label((int) ($enrollment['grade_level'] ?? 0))) ?></div>
-                  </div>
-                  <?php 
-                  $statusClass = match($enrollment['enrollment_status']) {
-                    'enrolled' => 'bg-success-subtle text-success-emphasis',
-                    'pending' => 'bg-warning-subtle text-warning-emphasis', 
-                    'rejected' => 'bg-danger-subtle text-danger-emphasis',
-                    'approved' => 'bg-info-subtle text-info-emphasis',
-                    default => 'bg-secondary-subtle text-secondary-emphasis'
-                  };
-                  ?>
-                  <span class="badge <?= $statusClass ?> ms-2 small"><?= ucfirst($enrollment['enrollment_status']) ?></span>
-                </div>
+              <?php
+                $statusMeta = match($enrollment['enrollment_status']) {
+                  'enrolled' => ['icon' => 'bi-check-circle-fill',   'class' => 'is-enrolled'],
+                  'pending'  => ['icon' => 'bi-hourglass-split',     'class' => 'is-pending'],
+                  'rejected' => ['icon' => 'bi-x-circle-fill',       'class' => 'is-rejected'],
+                  'approved' => ['icon' => 'bi-patch-check-fill',    'class' => 'is-approved'],
+                  default    => ['icon' => 'bi-question-circle-fill','class' => 'is-default'],
+                };
+                $firstName = trim((string)($enrollment['first_name'] ?? ''));
+                $lastName  = trim((string)($enrollment['last_name'] ?? ''));
+                $initials  = mb_substr($firstName, 0, 1) . mb_substr($lastName, 0, 1);
+                $initials  = ($initials !== '') ? strtoupper($initials) : '';
+              ?>
+              <div class="admin-dash-app-item <?= $statusMeta['class'] ?>">
+                <span class="admin-dash-avatar" aria-hidden="true">
+                  <?= $initials !== '' ? esc($initials) : '<i class="bi bi-person-fill"></i>' ?>
+                </span>
+                <span class="admin-dash-app-meta">
+                  <span class="admin-dash-app-name"><?= esc($lastName . ', ' . $firstName) ?></span>
+                  <span class="admin-dash-app-grade">
+                    <i class="bi bi-mortarboard"></i><?= esc(grade_level_label((int) ($enrollment['grade_level'] ?? 0))) ?>
+                  </span>
+                </span>
+                <span class="admin-dash-app-status">
+                  <i class="bi <?= $statusMeta['icon'] ?>"></i><?= ucfirst($enrollment['enrollment_status']) ?>
+                </span>
               </div>
             <?php endforeach; ?>
           </div>
@@ -398,9 +540,9 @@ document.addEventListener('DOMContentLoaded', function() {
   <div class="admin-dash-widget">
     <div class="card h-100 admin-dash-card">
       <div class="card-header py-2">
-        <div class="d-flex justify-content-between align-items-center">
-          <h6 class="card-title mb-0 fw-semibold">Enrollment by Grade Level</h6>
-          <small class="text-muted">Kindergarten – Grade 6</small>
+        <div class="d-flex justify-content-between align-items-center gap-2">
+          <h6 class="card-title mb-0 fw-semibold"><i class="bi bi-bar-chart-line me-1"></i>Enrollment by Grade Level</h6>
+          <small class="admin-dash-card-subtitle">Kindergarten – Grade 6</small>
         </div>
       </div>
       <div class="card-body py-2">
@@ -414,24 +556,31 @@ document.addEventListener('DOMContentLoaded', function() {
   <div class="admin-dash-widget">
     <div class="card h-100 admin-dash-card">
       <div class="card-header py-2">
-        <div class="d-flex justify-content-between align-items-center">
-          <h6 class="card-title mb-0 fw-semibold">Recent Announcements</h6>
-          <a href="<?= base_url('admin/announcements') ?>" class="btn btn-sm btn-outline-primary px-2 py-1">
-            <i class="bi bi-gear"></i> Manage
+        <div class="d-flex justify-content-between align-items-center gap-2">
+          <h6 class="card-title mb-0 fw-semibold"><i class="bi bi-megaphone me-1"></i>Recent Announcements</h6>
+          <a href="<?= base_url('admin/announcements') ?>" class="admin-dash-stat-link">
+            Manage <i class="bi bi-gear"></i>
           </a>
         </div>
       </div>
-      <div class="card-body py-2 admin-dash-scroll">
+      <div class="card-body py-2">
         <?php if (!empty($recentAnnouncements)): ?>
-          <div class="list-group list-group-flush">
-            <?php foreach (array_slice($recentAnnouncements, 0, 4) as $announcement): ?>
-              <div class="list-group-item px-0 py-2 border-0 border-bottom">
-                <div class="d-flex w-100 justify-content-between align-items-start mb-1">
-                  <h6 class="mb-1 fw-semibold text-dark" style="font-size: 0.85rem;"><?= esc($announcement['title']) ?></h6>
-                  <small class="text-muted ms-2"><?= $announcement['created_at'] ? date('M j, Y', strtotime($announcement['created_at'])) : 'N/A' ?></small>
+          <div class="admin-dash-ann-list">
+            <?php foreach (array_slice($recentAnnouncements, 0, 3) as $announcement): ?>
+              <div class="admin-dash-ann-item">
+                <span class="admin-dash-ann-icon" aria-hidden="true"><i class="bi bi-megaphone-fill"></i></span>
+                <div class="admin-dash-ann-meta">
+                  <div class="admin-dash-ann-top">
+                    <h6 class="admin-dash-ann-title"><?= esc($announcement['title']) ?></h6>
+                    <span class="admin-dash-ann-date">
+                      <i class="bi bi-calendar3"></i><?= $announcement['created_at'] ? date('M j, Y', strtotime($announcement['created_at'])) : 'N/A' ?>
+                    </span>
+                  </div>
+                  <p class="admin-dash-ann-body"><?= esc(strip_tags($announcement['body'])) ?></p>
+                  <span class="admin-dash-ann-target">
+                    <i class="bi bi-bullseye"></i>Target: <?= esc(ucwords(str_replace('_', ' ', (string)($announcement['target_roles'] ?? '')))) ?>
+                  </span>
                 </div>
-                <p class="mb-1 small text-muted"><?= esc(substr(strip_tags($announcement['body']), 0, 70)) ?>...</p>
-                <small class="text-primary">Target: <?= esc($announcement['target_roles']) ?></small>
               </div>
             <?php endforeach; ?>
           </div>
@@ -452,17 +601,28 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <?php if (! empty($adminStaffList) && function_exists('is_master_admin') && is_master_admin()): ?>
 <div class="card border-0 shadow-sm mt-4">
-  <div class="card-header py-2 d-flex justify-content-between align-items-center">
+  <div class="card-header py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
     <h6 class="mb-0 fw-semibold"><i class="bi bi-people me-2"></i>Admin staff</h6>
-    <small class="text-muted">Page access for restricted admin accounts</small>
+    <div class="d-flex align-items-center gap-2">
+      <small class="text-muted d-none d-md-inline">Page access for restricted admin accounts</small>
+      <button type="button" id="staffDeleteBtn" class="btn btn-sm btn-outline-danger" disabled
+              onclick="openStaffDeleteModal()">
+        <i class="bi bi-trash me-1"></i>Delete selected
+        <span id="staffDeleteCount" class="badge bg-danger ms-1 d-none">0</span>
+      </button>
+    </div>
   </div>
   <div class="card-body py-2">
     <div class="table-responsive">
-      <table class="table table-sm align-middle mb-0">
-        <thead><tr><th>Email</th><th>Name</th><th></th></tr></thead>
+      <table class="table table-sm align-middle mb-0" data-no-enhance="1">
+        <thead><tr>
+          <th style="width: 36px;"><input type="checkbox" class="form-check-input" id="staffSelectAll" aria-label="Select all admin staff"></th>
+          <th>Email</th><th>Name</th><th></th>
+        </tr></thead>
         <tbody>
           <?php foreach ($adminStaffList as $row): ?>
             <tr>
+              <td><input type="checkbox" class="form-check-input staff-row-cb" value="<?= (int) ($row['id'] ?? 0) ?>" aria-label="Select <?= esc($row['email'] ?? 'account') ?>"></td>
               <td><?= esc($row['email'] ?? '') ?></td>
               <td><?= esc(trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''))) ?></td>
               <td class="text-end">
@@ -475,6 +635,131 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
   </div>
 </div>
+
+<!-- Confirm deletion of selected admin staff -->
+<div class="modal fade" id="staffDeleteModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-3">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title fw-bold"><i class="bi bi-trash me-2"></i>Delete Admin Staff Accounts</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Are you sure you want to <strong>DELETE</strong> <span id="staffDeleteModalCount">0</span> selected admin staff account(s)?</p>
+        <ul class="mb-2 small text-muted">
+          <li>Their login accounts will be deactivated immediately</li>
+          <li>Their page access settings will be cleared</li>
+        </ul>
+        <div class="alert alert-warning mb-0"><i class="bi bi-exclamation-triangle"></i> This action cannot be undone from this page.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger" id="staffDeleteConfirmBtn"><i class="bi bi-trash me-2"></i>Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+// ---- Admin staff checkbox selection & bulk deletion ----
+const STAFF_CSRF_NAME = '<?= csrf_token() ?>';
+const STAFF_CSRF_HASH = '<?= csrf_hash() ?>';
+
+function staffSelectedIds() {
+  return Array.from(document.querySelectorAll('.staff-row-cb:checked'))
+    .map(cb => parseInt(cb.value, 10))
+    .filter(v => !isNaN(v) && v > 0);
+}
+
+function staffUpdateBulkButtons() {
+  const ids = staffSelectedIds();
+  const btn = document.getElementById('staffDeleteBtn');
+  const count = document.getElementById('staffDeleteCount');
+  if (btn) btn.disabled = ids.length === 0;
+  if (count) {
+    count.textContent = ids.length;
+    count.classList.toggle('d-none', ids.length === 0);
+  }
+  const selectAll = document.getElementById('staffSelectAll');
+  const boxes = document.querySelectorAll('.staff-row-cb');
+  if (selectAll && boxes.length > 0) {
+    const checked = Array.from(boxes).filter(cb => cb.checked).length;
+    selectAll.checked = checked === boxes.length;
+    selectAll.indeterminate = checked > 0 && checked < boxes.length;
+  }
+}
+
+function openStaffDeleteModal() {
+  const ids = staffSelectedIds();
+  if (ids.length === 0) {
+    showToast('warning', 'Select at least one admin staff account first.');
+    return;
+  }
+  const counter = document.getElementById('staffDeleteModalCount');
+  if (counter) counter.textContent = ids.length;
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('staffDeleteModal')).show();
+}
+
+function staffPost(url, payload) {
+  return fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+      'X-CSRF-TOKEN': STAFF_CSRF_HASH
+    },
+    body: JSON.stringify({ ...(payload || {}), [STAFF_CSRF_NAME]: STAFF_CSRF_HASH })
+  }).then(response => response.json().catch(() => ({ success: false, error: 'Server returned an unexpected response.' })));
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  const selectAll = document.getElementById('staffSelectAll');
+  if (selectAll) {
+    selectAll.addEventListener('change', function () {
+      document.querySelectorAll('.staff-row-cb').forEach(cb => { cb.checked = selectAll.checked; });
+      staffUpdateBulkButtons();
+    });
+  }
+  document.querySelectorAll('.staff-row-cb').forEach(cb => {
+    cb.addEventListener('change', staffUpdateBulkButtons);
+  });
+
+  const confirmBtn = document.getElementById('staffDeleteConfirmBtn');
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', function () {
+      const ids = staffSelectedIds();
+      if (ids.length === 0) {
+        bootstrap.Modal.getInstance(document.getElementById('staffDeleteModal'))?.hide();
+        return;
+      }
+
+      confirmBtn.disabled = true;
+      confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Deleting...';
+
+      staffPost('<?= base_url('admin/dashboard/staff-delete-batch') ?>', { ids: ids })
+        .then(data => {
+          bootstrap.Modal.getInstance(document.getElementById('staffDeleteModal'))?.hide();
+          if (data && data.success) {
+            showToast('success', data.message || 'Admin staff account(s) deleted.');
+            setTimeout(() => location.reload(), 1800);
+          } else {
+            showToast('danger', (data && (data.error || data.message)) || 'Deletion failed.');
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<i class="bi bi-trash me-2"></i>Delete';
+          }
+        })
+        .catch(error => {
+          console.error('Staff deletion error:', error);
+          bootstrap.Modal.getInstance(document.getElementById('staffDeleteModal'))?.hide();
+          showToast('danger', 'Unable to reach the server. Please check your connection and try again.');
+          confirmBtn.disabled = false;
+          confirmBtn.innerHTML = '<i class="bi bi-trash me-2"></i>Delete';
+        });
+    });
+  }
+
+  staffUpdateBulkButtons();
+});
+</script>
 <?php endif; ?>
 
 </div>
@@ -505,7 +790,7 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .announcement-title {
-  font-weight: 600;
+  font-weight: 700;
   color: #495057;
   margin-bottom: 0.5rem;
 }
@@ -529,8 +814,8 @@ document.addEventListener('DOMContentLoaded', function() {
   color: #495057;
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 500;
+  font-size: 0.8125rem;
+  font-weight: 400;
 }
 
 /* Custom Modal Styles */
@@ -551,7 +836,7 @@ document.addEventListener('DOMContentLoaded', function() {
 .custom-modal-container {
   background: #ffffff;
   border-radius: 16px;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.10), 0 24px 56px -8px rgba(15, 23, 42, 0.16);
   max-width: 500px;
   width: 90%;
   max-height: 90vh;
@@ -568,7 +853,6 @@ document.addEventListener('DOMContentLoaded', function() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 3px solid #1e40af;
 }
 
 .custom-modal-header * {
@@ -643,45 +927,152 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <!-- Chart.js for enrollment charts -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2" defer></script>
 <script>
 let enrollmentChartInstance;
+
+// Chart.js draws on a canvas, so no CSS cascade can reach it: the platform
+// typeface has to be handed to Chart.js explicitly, otherwise axis ticks,
+// legends and centre labels fall back to Chart.js' own default stack.
+// Chart.js is loaded with `defer` above, so it is parsed after this inline
+// block; DOMContentLoaded fires once the deferred bundle has run.
+window.addEventListener('DOMContentLoaded', function () {
+  if (typeof Chart === 'undefined') return;
+  if (Chart.defaults.font) {
+    Chart.defaults.font.family = "'Times New Roman', Times, 'Liberation Serif', 'DejaVu Serif', serif";
+    Chart.defaults.font.weight = 400;
+  } else if (Chart.defaults.global) {
+    Chart.defaults.global.defaultFontFamily = "'Times New Roman', Times, 'Liberation Serif', 'DejaVu Serif', serif";
+    Chart.defaults.global.defaultFontWeight = 'normal';
+  }
+});
 
 // Enrollment data by grade level (Kinder – Grade 6)
 const enrollmentByGrade = <?= json_encode($enrollmentChartValues ?? []) ?>;
 const gradeChartLabels = <?= json_encode($enrollmentChartLabels ?? []) ?>;
+const enrollCenterGrade = <?= json_encode(($enrollmentActiveGrades ?? 0) === 1 && !empty($enrollmentTopGrade) ? $enrollmentTopGrade['label'] : null) ?>;
+const enrollCenterSY = 'SY <?= esc($schoolYear ?? get_current_school_year()) ?>';
+
+// Must match the palette used for the PHP legend badges (nonzero grades, in order)
+const ENROLL_PALETTE = ['#1e3a8a', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#a5b4fc', '#7c3aed', '#64748b'];
 
 function initializeCharts() {
-  // Enrollment Pie Chart
-  const enrollmentCtx = document.getElementById('enrollmentChart').getContext('2d');
-  const totalEnrollment = enrollmentByGrade.reduce((a, b) => a + b, 0);
-  document.getElementById('totalEnrollment').textContent = totalEnrollment;
-  
-  enrollmentChartInstance = new Chart(enrollmentCtx, {
-    type: 'pie',
-    data: {
-      labels: gradeChartLabels,
-      datasets: [{
-        data: enrollmentByGrade,
-        backgroundColor: ['#7c3aed', '#1e3a8a', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#dbeafe'],
-        borderWidth: 0
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: 'right',
-          labels: { padding: 10, font: { size: 11 } }
-        },
-        tooltip: {
-          callbacks: {
-            label: (ctx) => `${ctx.label}: ${ctx.raw} students`
+  const canvas = document.getElementById('enrollmentChart');
+
+  // Include every grade level: slices with students get palette colors,
+  // empty ones get a light gray so the doughnut always looks complete.
+  const items = [];
+  (enrollmentByGrade || []).forEach((value, index) => {
+    items.push({
+      label: gradeChartLabels[index] || `Grade ${index}`,
+      value: value,
+      active: value > 0
+    });
+  });
+  const total = items.reduce((sum, item) => sum + item.value, 0);
+  const activeItems = items.filter((item) => item.active);
+  const singleGrade = activeItems.length === 1;
+
+  const totalEl = document.getElementById('totalEnrollment');
+  if (totalEl) totalEl.textContent = total;
+
+  // Empty state is rendered server-side — nothing to draw
+  if (!canvas || activeItems.length === 0) return;
+
+  // Assign colors: active slices follow the legend palette, inactive ones gray
+  let colorIndex = 0;
+  items.forEach((item) => {
+    item.color = item.active
+      ? ENROLL_PALETTE[colorIndex++ % ENROLL_PALETTE.length]
+      : '#e5eaf0';
+  });
+
+  // Center text: count, "Total Students", and the grade name (single-grade) or SY
+  const centerLabel = singleGrade ? activeItems[0].label : enrollCenterSY;
+  const centerText = {
+    id: 'enrollCenterText',
+    afterDraw(chart) {
+      const { ctx, chartArea } = chart;
+      const meta = chart.getDatasetMeta(0);
+      if (!meta || !meta.data.length) return;
+      const x = (chartArea.left + chartArea.right) / 2;
+      const y = (chartArea.top + chartArea.bottom) / 2;
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#0f172a';
+      ctx.font = '700 20px Times New Roman, Times, serif';
+      ctx.fillText(String(total), x, y - 10);
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '700 8.5px Times New Roman, Times, serif';
+      ctx.fillText('TOTAL STUDENTS', x, y + 6);
+      if (centerLabel) {
+        ctx.fillStyle = singleGrade ? '#1d4ed8' : '#64748b';
+        ctx.font = '700 9.5px Times New Roman, Times, serif';
+        ctx.fillText(centerLabel, x, y + 19);
+      }
+      ctx.restore();
+    }
+  };
+
+  const buildChart = () => {
+    if (window.ChartDataLabels) {
+      Chart.register(ChartDataLabels);
+      Chart.defaults.set('plugins.datalabels', { display: false });
+    }
+
+    enrollmentChartInstance = new Chart(canvas, {
+      type: 'doughnut',
+      plugins: [centerText],
+      data: {
+        labels: items.map((item) => item.label),
+        datasets: [{
+          data: items.map((item) => item.value),
+          backgroundColor: items.map((item) => item.color),
+          borderColor: '#ffffff',
+          borderWidth: 2,
+          hoverOffset: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        // Bigger hole when data is sparse so a lone slice reads as a ring, not a blob
+        cutout: singleGrade ? '72%' : '62%',
+        animation: { animateRotate: true, animateScale: true, duration: 800, easing: 'easeOutQuart' },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const pct = total > 0 ? Math.round((ctx.raw / total) * 100) : 0;
+                const state = ctx.raw === 0 ? ' — no students yet' : '';
+                return ` ${ctx.label}: ${ctx.raw} student${ctx.raw === 1 ? '' : 's'} (${pct}%)${state}`;
+              }
+            }
+          },
+          datalabels: {
+            // Percentage labels only on slices that actually have students
+            display: (ctx) => {
+              const value = ctx.dataset.data[ctx.dataIndex];
+              return value > 0 && total > 0 && (value / total) >= 0.08;
+            },
+            formatter: (value) => total > 0 ? Math.round((value / total) * 100) + '%' : '',
+            color: '#ffffff',
+            textShadowBlur: 4,
+            textShadowColor: 'rgba(15, 23, 42, 0.35)',
+            font: { weight: '700', size: 10 }
           }
         }
       }
-    }
-  });
+    });
+  };
+
+  if (document.readyState === 'complete' || window.Chart) {
+    buildChart();
+  } else {
+    window.addEventListener('load', buildChart);
+  }
 }
 
 // Initialize Grade Level Chart
@@ -753,10 +1144,32 @@ function updateEnrollmentChart() {
   }, 300);
 }
 
+// Animated counters for the Quick stats summary cards
+function animateSummaryCounters() {
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.querySelectorAll('[data-counter]').forEach((el) => {
+    const target = parseInt(el.dataset.counter, 10) || 0;
+    if (reduceMotion || target === 0) {
+      el.textContent = target;
+      return;
+    }
+    const duration = 700;
+    const start = performance.now();
+    const step = (now) => {
+      const progress = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      el.textContent = Math.round(target * eased);
+      if (progress < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+}
+
 // Initialize all charts when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
   initializeCharts();
   initializeGradeChart();
+  animateSummaryCounters();
   
   const yearFilter = document.getElementById('yearFilter');
   if (yearFilter) {

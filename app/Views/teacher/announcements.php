@@ -39,7 +39,11 @@
               <div class="flex-grow-1">
                 <div class="d-flex align-items-center gap-2 mb-2">
                   <?php if (!$rec['is_read']): ?>
-                    <span class="badge bg-danger">New</span>
+                    <?php if (mascot_exists('sticker-new')): ?>
+                      <?= mascot_sticker_for('new', ['class' => 'mascot-chip mascot-chip--sm', 'alt' => 'New']) ?>
+                    <?php else: ?>
+                      <span class="badge bg-danger">New</span>
+                    <?php endif; ?>
                   <?php endif; ?>
                   <h6 class="mb-0 <?= !$rec['is_read'] ? 'fw-bold' : '' ?>"><?= esc($rec['title']) ?></h6>
                 </div>
@@ -110,7 +114,11 @@
           <div class="d-flex justify-content-between align-items-start mb-2">
             <div class="d-flex align-items-center gap-2">
               <?php if (!$announcement['is_read']): ?>
-                <span class="badge bg-danger">New</span>
+                <?php if (mascot_exists('sticker-new')): ?>
+                  <?= mascot_sticker_for('new', ['class' => 'mascot-chip mascot-chip--sm', 'alt' => 'New']) ?>
+                <?php else: ?>
+                  <span class="badge bg-danger">New</span>
+                <?php endif; ?>
               <?php endif; ?>
               <h6 class="mb-1 <?= !$announcement['is_read'] ? 'fw-bold' : '' ?>"><?= esc($announcement['title']) ?></h6>
             </div>
@@ -155,7 +163,6 @@
 }
 .unread-announcement {
   background-color: #e7f3ff;
-  border-left: 4px solid #0d6efd;
   padding-left: 12px;
 }
 </style>

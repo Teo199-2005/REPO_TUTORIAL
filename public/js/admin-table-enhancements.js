@@ -13,9 +13,30 @@
   }
 
   function enhanceTable(table, idx) {
+    if (table.dataset.tableEnhanced === '1') return;
+    if (table.dataset.noEnhance === '1') return;
+    // Small info / dashboard tables (admin staff list, recent lists):
+    // never inject checkboxes / pagination toolbar into them.
+    if (table.rows.length <= 12) return;
+    if (table.querySelector('[colspan]')) return;
+
+    // Paging policy
+    // -------------
+    // The admin standard is SERVER-side pagination: a page of results has to be
+    // linkable, bookmarkable and combinable with the filter bar's query string.
+    // A table opts IN to the injected pager with data-js-paged="1", and is
+    // otherwise only given checkboxes and column sorting — never a second,
+    // competing pager. Anything else is left alone rather than guessing.
+    var wantsJsPager = table.dataset.jsPaged === '1';
+
     var thead = table.tHead;
     var tbody = table.tBodies && table.tBodies[0];
     if (!thead || !tbody || !thead.rows[0]) return;
+
+    var headerRow = thead.rows[0];
+    // Table already has its own checkbox column (pending approvals):
+    // do NOT inject a second auto checkbox, just add sort/pagination.
+    var hasOwnCheckbox = !!headerRow.querySelector('input[type="checkbox"]');
 
     var rows = Array.from(tbody.rows);
     if (rows.length === 0) return;
@@ -27,23 +48,26 @@
       row.dataset.originalIndex = String(i);
     });
 
-    var headerRow = thead.rows[0];
-    var selectTh = document.createElement('th');
-    selectTh.className = 'table-select-col';
-    selectTh.innerHTML = '<input type="checkbox" class="table-select-all" aria-label="Select all rows">';
-    headerRow.insertBefore(selectTh, headerRow.firstChild);
+    if (!hasOwnCheckbox) {
+      var selectTh = document.createElement('th');
+      selectTh.className = 'table-select-col';
+      selectTh.innerHTML = '<input type="checkbox" class="table-select-all" aria-label="Select all rows">';
+      headerRow.insertBefore(selectTh, headerRow.firstChild);
 
-    rows.forEach(function (row) {
-      var cell = document.createElement('td');
-      cell.className = 'table-select-col';
-      cell.innerHTML = '<input type="checkbox" class="table-select-row" aria-label="Select row">';
-      row.insertBefore(cell, row.firstChild);
-    });
+      rows.forEach(function (row) {
+        var cell = document.createElement('td');
+        cell.className = 'table-select-col';
+        cell.innerHTML = '<input type="checkbox" class="table-select-row" aria-label="Select row">';
+        row.insertBefore(cell, row.firstChild);
+      });
+    }
 
+    var checkboxColIndex = hasOwnCheckbox ? 0 : 1;
     var skipTitles = new Set(['actions', 'action', '']);
     var sortableHeaders = [];
     Array.from(headerRow.cells).forEach(function (th, colIndex) {
-      if (colIndex === 0) return;
+      if (!hasOwnCheckbox && colIndex === 0) return;
+      if (hasOwnCheckbox && colIndex === checkboxColIndex) return;
       var title = (th.textContent || '').trim().toLowerCase();
       if (skipTitles.has(title)) return;
       th.classList.add('sortable');
@@ -51,6 +75,11 @@
       th.insertAdjacentHTML('beforeend', '<span class="sort-indicator">↕</span>');
       sortableHeaders.push(th);
     });
+
+    // Client-side paging is opt-in only. Tables that already render a
+    // server-side pager keep their checkboxes and column sorting but are NOT
+    // given a second, competing pager. See the policy note above.
+    if (!wantsJsPager) return;
 
     var pageContainer = document.querySelector('.dashboard-page-container');
     if (!pageContainer) return;
@@ -81,6 +110,7 @@
     var currentRows = rows.slice();
 
     function updateSelectAllState() {
+      if (hasOwnCheckbox) return;
       var visibleRows = currentRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
       var checkboxes = visibleRows.map(function (r) { return r.querySelector('.table-select-row'); }).filter(Boolean);
       var allChecked = checkboxes.length > 0 && checkboxes.every(function (c) { return c.checked; });
@@ -163,19 +193,21 @@
       });
     });
 
-    table.querySelector('.table-select-all').addEventListener('change', function (e) {
-      var visibleRows = currentRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-      visibleRows.forEach(function (r) {
-        var cb = r.querySelector('.table-select-row');
-        if (cb) cb.checked = e.target.checked;
+    if (!hasOwnCheckbox) {
+      table.querySelector('.table-select-all').addEventListener('change', function (e) {
+        var visibleRows = currentRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+        visibleRows.forEach(function (r) {
+          var cb = r.querySelector('.table-select-row');
+          if (cb) cb.checked = e.target.checked;
+        });
       });
-    });
 
-    tbody.addEventListener('change', function (e) {
-      if (e.target && e.target.classList.contains('table-select-row')) {
-        updateSelectAllState();
-      }
-    });
+      tbody.addEventListener('change', function (e) {
+        if (e.target && e.target.classList.contains('table-select-row')) {
+          updateSelectAllState();
+        }
+      });
+    }
 
     pageSizeEl.addEventListener('change', function () {
       pageSize = parseInt(pageSizeEl.value, 10) || 25;

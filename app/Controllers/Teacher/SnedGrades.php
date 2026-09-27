@@ -36,9 +36,11 @@ class SnedGrades extends BaseController
         $schoolYear = get_current_school_year();
 
         // Find non-numerical sections for this teacher
+        // (whereIn, NOT where('... IN', ...) — the latter produces
+        // invalid SQL: `grading_type` `IN` = ('non_numerical','custom')).
         $nonNumericalSections = $db->table('sections')
             ->select('sections.*')
-            ->where('sections.grading_type IN', ['non_numerical', 'custom'])
+            ->whereIn('sections.grading_type', ['non_numerical', 'custom'])
             ->where('sections.is_active', 1)
             ->where('sections.adviser_id', $teacher['id'])
             ->get()
@@ -48,7 +50,7 @@ class SnedGrades extends BaseController
         foreach ($nonNumericalSections as $section) {
             // Get students in this section
             $students = $db->table('students')
-                ->select('id, first_name, middle_name, last_name, suffix, student_id as lrn, grade_level, enrollment_status')
+                ->select('id, first_name, middle_name, last_name, suffix, lrn, grade_level, enrollment_status')
                 ->where('section_id', $section['id'])
                 ->where('enrollment_status', 'enrolled')
                 ->orderBy('last_name', 'ASC')
@@ -114,7 +116,7 @@ class SnedGrades extends BaseController
         }
 
         $students = $db->table('students')
-            ->select('id, first_name, middle_name, last_name, suffix, student_id as lrn')
+            ->select('id, first_name, middle_name, last_name, suffix, lrn')
             ->where('section_id', $sectionId)
             ->where('enrollment_status', 'enrolled')
             ->orderBy('last_name', 'ASC')
@@ -295,42 +297,48 @@ class SnedGrades extends BaseController
             return redirect()->to(base_url('/'));
         }
 
-        $studentModel = new StudentModel();
-        $student = $studentModel->find($studentId);
+        try {
+            $studentModel = new StudentModel();
+            $student = $studentModel->find($studentId);
 
-        // Verify student belongs to a non-numerical section
-        $sectionModel = new \App\Models\SectionModel();
-        $section = $sectionModel->find($student['section_id'] ?? 0);
-        if (!$student || !$section || !in_array($section['grading_type'] ?? 'numerical', ['non_numerical', 'custom'])) {
-            return redirect()->to(base_url('teacher/sned'))->with('error', 'Invalid SNED student');
+            // Verify student belongs to a non-numerical section
+            $sectionModel = new \App\Models\SectionModel();
+            $section = $sectionModel->find($student['section_id'] ?? 0);
+            if (!$student || !$section || !in_array($section['grading_type'] ?? 'numerical', ['non_numerical', 'custom'])) {
+                return redirect()->to(base_url('teacher/sned'))->with('error', 'Invalid SNED student');
+            }
+
+            $schoolYear = get_current_school_year();
+            $categoryModel = new SnedCategoryModel();
+            $gradeModel = new SnedGradeModel();
+
+            $categories = $categoryModel->getAllCategoriesWithFields((int) $section['id'], (int) ($section['grade_level'] ?? 0));
+            $allGrades = $gradeModel->getStudentAllGrades($studentId, $schoolYear);
+
+            // Load dynamic grading symbols for this section
+            $db = \Config\Database::connect();
+            $gradingSymbols = $db->table('section_grading_symbols')
+                ->where('section_id', $section['id'])
+                ->where('is_active', 1)
+                ->orderBy('display_order', 'ASC')
+                ->get()
+                ->getResultArray();
+
+            return view('teacher/sned_report_card', [
+                'student' => $student,
+                'section' => $section,
+                'categories' => $categories,
+                'allGrades' => $allGrades,
+                'schoolYear' => $schoolYear,
+                'quarters' => sned_quarters(),
+                'gradeSymbols' => $gradingSymbols,
+                'reportDate' => date('F j, Y'),
+            ]);
+        } catch (\Throwable $e) {
+            log_message('error', 'SNED report card (HTML) failed for student ' . $studentId . ': ' . $e->getMessage());
+            return redirect()->to(base_url('teacher/sned'))
+                ->with('error', 'Could not open the report card: ' . $e->getMessage());
         }
-
-        $schoolYear = get_current_school_year();
-        $categoryModel = new SnedCategoryModel();
-        $gradeModel = new SnedGradeModel();
-
-        $categories = $categoryModel->getAllCategoriesWithFields($section['id']);
-        $allGrades = $gradeModel->getStudentAllGrades($studentId, $schoolYear);
-
-        // Load dynamic grading symbols for this section
-        $db = \Config\Database::connect();
-        $gradingSymbols = $db->table('section_grading_symbols')
-            ->where('section_id', $section['id'])
-            ->where('is_active', 1)
-            ->orderBy('display_order', 'ASC')
-            ->get()
-            ->getResultArray();
-
-        return view('teacher/sned_report_card', [
-            'student' => $student,
-            'section' => $section,
-            'categories' => $categories,
-            'allGrades' => $allGrades,
-            'schoolYear' => $schoolYear,
-            'quarters' => sned_quarters(),
-            'gradeSymbols' => $gradingSymbols,
-            'reportDate' => date('F j, Y'),
-        ]);
     }
 
     public function reportCardPdf($studentId)
@@ -339,54 +347,130 @@ class SnedGrades extends BaseController
             return redirect()->to(base_url('/'));
         }
 
-        $studentModel = new StudentModel();
-        $student = $studentModel->find($studentId);
+        try {
+            $studentModel = new StudentModel();
+            $student = $studentModel->find($studentId);
 
-        // Verify student belongs to a non-numerical section
-        $sectionModel = new \App\Models\SectionModel();
-        $section = $sectionModel->find($student['section_id'] ?? 0);
-        if (!$student || !$section || !in_array($section['grading_type'] ?? 'numerical', ['non_numerical', 'custom'])) {
-            return redirect()->to(base_url('teacher/sned'))->with('error', 'Invalid SNED student');
+            // Verify student belongs to a non-numerical section
+            $sectionModel = new \App\Models\SectionModel();
+            $section = $sectionModel->find($student['section_id'] ?? 0);
+            if (!$student || !$section || !in_array($section['grading_type'] ?? 'numerical', ['non_numerical', 'custom'])) {
+                return redirect()->to(base_url('teacher/sned'))->with('error', 'Invalid SNED student');
+            }
+
+            $schoolYear = get_current_school_year();
+            $categoryModel = new SnedCategoryModel();
+            $gradeModel = new SnedGradeModel();
+
+            $categories = $categoryModel->getAllCategoriesWithFields((int) $section['id'], (int) ($section['grade_level'] ?? 0));
+            $allGrades = $gradeModel->getStudentAllGrades($studentId, $schoolYear);
+
+            // Load dynamic grading symbols for this section
+            $db = \Config\Database::connect();
+            $gradingSymbols = $db->table('section_grading_symbols')
+                ->where('section_id', $section['id'])
+                ->where('is_active', 1)
+                ->orderBy('display_order', 'ASC')
+                ->get()
+                ->getResultArray();
+
+            $html = view('teacher/sned_report_card_pdf', [
+                'student' => $student,
+                'section' => $section,
+                'categories' => $categories,
+                'allGrades' => $allGrades,
+                'schoolYear' => $schoolYear,
+                'quarters' => sned_quarters(),
+                'gradeSymbols' => $gradingSymbols,
+                'reportDate' => date('F j, Y'),
+                'logoBase64' => $this->getLogoBase64(),
+            ]);
+
+            $options = new \Dompdf\Options();
+            $options->set('defaultFont', 'Times');
+            $options->set('isRemoteEnabled', false);
+            $options->set('isHtml5ParserEnabled', true);
+            $options->set('isPhpEnabled', false);
+
+            $dompdf = new \Dompdf\Dompdf($options);
+            $dompdf->loadHtml($html);
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->render();
+            $sectionName = preg_replace('/\s+/', '_', $section['section_name'] ?? 'SNED');
+            $filename = "Report_Card_" . $sectionName . "_" . preg_replace('/\s+/', '_', $student['first_name']) . "_" . preg_replace('/\s+/', '_', $student['last_name']) . ".pdf";
+            // false = display the PDF in the browser instead of forcing a download.
+            return $this->sendPdfInline($dompdf, $filename, false);
+        } catch (\Throwable $e) {
+            log_message('error', 'SNED report card PDF failed for student ' . $studentId . ': ' . $e->getMessage());
+            return redirect()->to(base_url('teacher/sned'))
+                ->with('error', 'Could not generate the report card PDF: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Learner Development Report PDF — non-numerical sections.
+     *
+     * A separate document from the Academic Report Card: learner behaviour,
+     * conduct, values and character development in the 2026 three-term
+     * layout, with no subject grades, averages, ranking or final rating. The
+     * SNED progress report above keeps the full developmental-domain view.
+     */
+    public function learnerDevelopmentReportPdf($studentId)
+    {
+        if (!$this->auth->loggedIn() || !$this->auth->user()->inGroup('teacher')) {
+            return redirect()->to(base_url('/'));
         }
 
-        $schoolYear = get_current_school_year();
-        $categoryModel = new SnedCategoryModel();
-        $gradeModel = new SnedGradeModel();
+        try {
+            $db = \Config\Database::connect();
+            $student = $db->table('students')
+                ->select("students.*, sections.section_name, sections.grading_type, CONCAT(teachers.first_name, ' ', teachers.last_name) AS adviser_name")
+                ->join('sections', 'sections.id = students.section_id', 'left')
+                ->join('teachers', 'teachers.id = sections.adviser_id', 'left')
+                ->where('students.id', $studentId)
+                ->get()
+                ->getRowArray();
 
-        $categories = $categoryModel->getAllCategoriesWithFields($section['id']);
-        $allGrades = $gradeModel->getStudentAllGrades($studentId, $schoolYear);
+            if (!$student || !in_array($student['grading_type'] ?? 'numerical', ['non_numerical', 'custom'], true)) {
+                return redirect()->to(base_url('teacher/sned'))->with('error', 'Invalid non-numerical student');
+            }
 
-        // Load dynamic grading symbols for this section
-        $db = \Config\Database::connect();
-        $gradingSymbols = $db->table('section_grading_symbols')
-            ->where('section_id', $section['id'])
-            ->where('is_active', 1)
-            ->orderBy('display_order', 'ASC')
-            ->get()
-            ->getResultArray();
+            $section = [
+                'id'           => (int) $student['section_id'],
+                'section_name' => (string) ($student['section_name'] ?? ''),
+                'grading_type' => (string) $student['grading_type'],
+                'grade_level'  => (int) ($student['grade_level'] ?? 0),
+            ];
 
-        $html = view('teacher/sned_report_card_pdf', [
-            'student' => $student,
-            'section' => $section,
-            'categories' => $categories,
-            'allGrades' => $allGrades,
-            'schoolYear' => $schoolYear,
-            'quarters' => sned_quarters(),
-            'gradeSymbols' => $gradingSymbols,
-            'reportDate' => date('F j, Y'),
-            'logoBase64' => $this->getLogoBase64(),
-        ]);
+            $schoolYear = get_current_school_year();
 
-        $dompdf = new \Dompdf\Dompdf();
-        $dompdf->loadHtml($html);
-        $dompdf->setPaper('legal', 'portrait');
-        $dompdf->render();
-        $sectionName = preg_replace('/\s+/', '_', $section['section_name'] ?? 'SNED');
-        $filename = "Report_Card_" . $sectionName . "_" . preg_replace('/\s+/', '_', $student['first_name']) . "_" . preg_replace('/\s+/', '_', $student['last_name']) . ".pdf";
-        $dompdf->stream($filename, [
-            'Attachment' => true
-        ]);
-        exit();
+            $html = view('teacher/learner_development_report_pdf', [
+                'student'    => $student,
+                'section'    => $section,
+                'schoolYear' => $schoolYear,
+                'reportDate' => date('F j, Y'),
+                'logoBase64' => school_logo_base64(),
+                'report'     => learner_development_report_data($student, $section, $schoolYear),
+            ]);
+
+            $options = new \Dompdf\Options();
+            $options->set('defaultFont', 'Times');
+            $options->set('isRemoteEnabled', false);
+            $options->set('isHtml5ParserEnabled', true);
+            $options->set('isPhpEnabled', false);
+
+            $dompdf = new \Dompdf\Dompdf($options);
+            $dompdf->loadHtml($html);
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->render();
+
+            // false = display the PDF in the browser instead of forcing a download.
+            return $this->sendPdfInline($dompdf, learner_development_pdf_filename($student, $section), false);
+        } catch (\Throwable $e) {
+            log_message('error', 'Learner development report PDF failed for student ' . $studentId . ': ' . $e->getMessage());
+            return redirect()->to(base_url('teacher/sned'))
+                ->with('error', 'Could not generate the learner development report: ' . $e->getMessage());
+        }
     }
 
     private function getLogoBase64()

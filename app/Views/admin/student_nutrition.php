@@ -2,91 +2,114 @@
 <?= $this->section('content') ?>
 <?php helper('nutrition'); ?>
 
-<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
-  <div>
-    <h1 class="h3 mb-1">Student nutrition / BMI</h1>
-    <p class="text-muted small mb-0">Enrolled students — filter by grade, section, or screening category. Export respects current filters.</p>
-    <p class="small text-muted mb-0"><strong>Active filters:</strong> <?= esc($filtersSummary) ?></p>
-  </div>
-  <div class="d-flex gap-2">
-    <?php
-    $pdfParams = array_filter([
-        'grade_level'       => $filter_grade !== null && $filter_grade !== '' ? (string) $filter_grade : null,
-        'section_id'        => $filter_section !== null && $filter_section !== '' ? (string) $filter_section : null,
-        'nutrition_status'  => $filter_status !== null && $filter_status !== '' ? (string) $filter_status : null,
-        'q'                 => isset($filter_q) && $filter_q !== null && trim((string) $filter_q) !== '' ? trim((string) $filter_q) : null,
-    ], static fn ($v) => $v !== null && $v !== '');
-    $pdfUrl = base_url('admin/student-nutrition/export-pdf') . ($pdfParams !== [] ? '?' . http_build_query($pdfParams) : '');
-    ?>
-    <a href="<?= esc($pdfUrl) ?>" class="btn btn-primary" target="_blank" rel="noopener">
-      <i class="bi bi-file-earmark-pdf me-1"></i> Export PDF
-    </a>
-  </div>
-</div>
+<?php
+  // Filter state is resolved first so both the header (export link, active
+  // filter summary) and the filter bar below read from the same values.
+  $nutFilterValues = [
+    'grade_level'      => (string) ($filter_grade ?? ''),
+    'section_id'       => (string) ($filter_section ?? ''),
+    'nutrition_status' => (string) ($filter_status ?? ''),
+    'q'                => (string) ($filter_q ?? ''),
+  ];
 
-<form class="card border-0 shadow-sm mb-4" method="get" action="<?= base_url('admin/student-nutrition') ?>">
-  <div class="card-body row g-3 align-items-end">
-    <div class="col-md-2">
-      <label class="form-label">Grade</label>
-      <select name="grade_level" class="form-select">
-        <option value="">All</option>
-        <?php foreach (grade_level_options() as $g): ?>
-          <option value="<?= $g ?>" <?= (string) ($filter_grade ?? '') === (string) $g ? 'selected' : '' ?>><?= esc(grade_level_label($g)) ?></option>
-        <?php endforeach; ?>
-      </select>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Section</label>
-      <select name="section_id" class="form-select">
-        <option value="">All sections</option>
-        <?php foreach ($sections as $sec): ?>
-          <option value="<?= (int) $sec['id'] ?>" <?= (string) ($filter_section ?? '') === (string) $sec['id'] ? 'selected' : '' ?>>
-            G<?= esc((string) $sec['grade_level']) ?> — <?= esc($sec['section_name']) ?>
-          </option>
-        <?php endforeach; ?>
-      </select>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Nutrition status</label>
-      <select name="nutrition_status" class="form-select">
-        <?php foreach (nutrition_status_filter_options() as $val => $lab): ?>
-          <option value="<?= esc((string) $val) ?>" <?= (string) ($filter_status ?? '') === (string) $val ? 'selected' : '' ?>><?= esc($lab) ?></option>
-        <?php endforeach; ?>
-      </select>
-    </div>
-    <div class="col-md-2">
-      <label class="form-label">Search</label>
-      <input type="text" name="q" class="form-control" placeholder="Name or LRN" value="<?= esc((string) ($filter_q ?? '')) ?>">
-    </div>
-    <div class="col-md-2 d-flex gap-2">
-      <button type="submit" class="btn btn-primary flex-grow-1">Apply</button>
-      <a href="<?= base_url('admin/student-nutrition') ?>" class="btn btn-outline-secondary">Reset</a>
-    </div>
-  </div>
-</form>
+  $nutActive = admin_filter_count_active(
+    $nutFilterValues,
+    ['grade_level', 'section_id', 'nutrition_status', 'q']
+  );
+
+  $nutPdfParams = admin_filter_query($nutFilterValues, ['grade_level', 'section_id', 'nutrition_status', 'q']);
+  $nutPdfUrl    = base_url('admin/student-nutrition/export-pdf')
+    . ($nutPdfParams !== [] ? '?' . http_build_query($nutPdfParams) : '');
+
+  $nutSubtitle = 'Enrolled students, their BMI and nutrition screening. The export respects the filters below.';
+  if ($nutActive['total'] > 0) {
+    $nutSubtitle .= ' ' . (string) ($filtersSummary ?? '');
+  }
+
+  echo view('admin/partials/page_header', ['pageHeader' => [
+    'icon'     => 'bi-heart-pulse',
+    'title'    => 'Student nutrition / BMI',
+    'subtitle' => $nutSubtitle,
+    'actions'  => '<a class="btn btn-outline-primary" href="' . esc($nutPdfUrl) . '" target="_blank" rel="noopener">'
+      . '<i class="bi bi-file-earmark-pdf"></i> Export PDF</a>',
+  ]]);
+?>
+
+<!-- Filters — shared admin standard -->
+<?php
+  $nutGradeOptions = [admin_filter_option('', 'All grade levels')];
+  foreach (grade_level_options() as $g) {
+    $nutGradeOptions[] = admin_filter_option((string) $g, grade_level_label($g));
+  }
+
+  $nutSectionOptions = [admin_filter_option('', 'All sections')];
+  foreach ($sections as $sec) {
+    $nutSectionOptions[] = admin_filter_option(
+      (string) $sec['id'],
+      'G' . $sec['grade_level'] . ' — ' . $sec['section_name']
+    );
+  }
+
+  $nutStatusOptions = [];
+  foreach (nutrition_status_filter_options() as $val => $lab) {
+    $nutStatusOptions[] = admin_filter_option((string) $val, (string) $lab);
+  }
+
+  echo view('admin/partials/filter_bar', ['filterBar' => [
+    'action'      => base_url('admin/student-nutrition'),
+    'id'          => 'nutritionFilter',
+    'label'       => 'Filter the nutrition and BMI list',
+    'resetUrl'    => base_url('admin/student-nutrition'),
+    'activeCount' => $nutActive['total'],
+    'totalCount'  => $nutActive['total'],
+    'primary'     => [
+      [
+        'name' => 'q', 'label' => 'Search', 'icon' => 'bi-search', 'type' => 'search',
+        'value'       => admin_filter_value($nutFilterValues, 'q'),
+        'placeholder' => 'Name or LRN',
+      ],
+      [
+        'name' => 'grade_level', 'label' => 'Grade level', 'icon' => 'bi-mortarboard',
+        'value'   => admin_filter_value($nutFilterValues, 'grade_level'),
+        'options' => $nutGradeOptions,
+      ],
+      [
+        'name' => 'section_id', 'label' => 'Section', 'icon' => 'bi-people',
+        'value'   => admin_filter_value($nutFilterValues, 'section_id'),
+        'options' => $nutSectionOptions,
+      ],
+      [
+        'name' => 'nutrition_status', 'label' => 'Nutrition status', 'icon' => 'bi-heart-pulse',
+        'value'   => admin_filter_value($nutFilterValues, 'nutrition_status'),
+        'options' => $nutStatusOptions,
+      ],
+    ],
+    'advanced' => [],
+  ]]);
+?>
 
 <div class="card border-0 shadow-sm">
   <div class="card-body p-0">
     <div class="table-responsive">
-      <table class="table table-hover table-striped mb-0 align-middle">
+      <table class="table table-hover align-middle mb-0 admin-table" data-js-paged="1">
         <thead class="table-light">
           <tr>
-            <th>Name</th>
-            <th>LRN</th>
-            <th>Grade</th>
-            <th>Section</th>
-            <th>Age (y)</th>
-            <th>Sex</th>
-            <th>Height</th>
-            <th>Weight</th>
-            <th>BMI</th>
-            <th>Ethnicity</th>
-            <th>Status</th>
+            <th><i class="bi bi-person me-1 text-muted"></i>Name</th>
+            <th><i class="bi bi-hash me-1 text-muted"></i>LRN</th>
+            <th><i class="bi bi-mortarboard me-1 text-muted"></i>Grade</th>
+            <th><i class="bi bi-people me-1 text-muted"></i>Section</th>
+            <th><i class="bi bi-calendar3 me-1 text-muted"></i>Age (y)</th>
+            <th><i class="bi bi-gender-ambiguous me-1 text-muted"></i>Sex</th>
+            <th><i class="bi bi-arrows-vertical me-1 text-muted"></i>Height</th>
+            <th><i class="bi bi-speedometer2 me-1 text-muted"></i>Weight</th>
+            <th><i class="bi bi-calculator me-1 text-muted"></i>BMI</th>
+            <th><i class="bi bi-globe me-1 text-muted"></i>Ethnicity</th>
+            <th><i class="bi bi-activity me-1 text-muted"></i>Status</th>
           </tr>
         </thead>
         <tbody>
           <?php if ($students === []): ?>
-            <tr><td colspan="11" class="text-center text-muted py-4">No students match these filters.</td></tr>
+            <tr><td colspan="11" class="text-center text-muted py-4"><i class="bi bi-inbox me-2"></i>No students match these filters.</td></tr>
           <?php endif; ?>
           <?php foreach ($students as $s): ?>
             <?php

@@ -15,18 +15,22 @@ class TeacherModel extends Model
         'employee_id', 'user_id', 'first_name', 'middle_name', 'last_name', 'suffix',
         'gender', 'date_of_birth', 'contact_number', 'email', 'address',
         'department', 'position', 'specialization', 'date_hired',
-        'employment_status', 'photo_path', 'license_number',
+        'employment_status', 'personnel_edit_enabled', 'photo_path', 'license_number',
         'tin', 'personnel_category', 'fund_source', 'designation', 'nature_of_appointment',
         'baccalaureate_degree', 'prc_specialization', 'prc_major_units_percent', 'minor',
         'masters_degree', 'government_employee_no', 'hiring_arrangement', 'religion',
         'ethnic_group', 'item_status', 'civil_status', 'philsys_number', 'eligibility',
         'date_first_service', 'date_first_service_new_station',
+        'registration_status', 'registration_notes',
+        'registration_reviewed_at', 'registration_reviewed_by',
     ];
 
     protected bool $allowEmptyInserts = false;
     protected bool $updateOnlyChanged = true;
 
-    protected array $casts = [];
+    protected array $casts = [
+        'personnel_edit_enabled' => 'boolean'
+    ];
     protected array $castHandlers = [];
 
     // Dates
@@ -56,11 +60,11 @@ class TeacherModel extends Model
     public function getProfileUpdateRules($teacherId)
     {
         return [
-            'first_name' => 'required|max_length[100]',
-            'middle_name' => 'permit_empty|max_length[100]',
-            'last_name' => 'required|max_length[100]',
+            'first_name' => 'required|max_length[100]|regex_match[/^[\p{L}\p{M}\s.\x27\-]+$/u]',
+            'middle_name' => 'permit_empty|min_length[2]|max_length[100]|regex_match[/^[\p{L}\p{M}\s.\x27\-]+$/u]',
+            'last_name' => 'required|max_length[100]|regex_match[/^[\p{L}\p{M}\s.\x27\-]+$/u]',
             'email' => "required|valid_email|max_length[255]|is_unique[teachers.email,id,{$teacherId}]",
-            'contact_number' => 'permit_empty|max_length[20]',
+            'contact_number' => phone_validation_rule(),
             'address' => 'permit_empty|max_length[255]'
         ];
     }

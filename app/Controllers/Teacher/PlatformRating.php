@@ -28,7 +28,7 @@ class PlatformRating extends BaseController
         $row   = $model->findByUserId((int) $this->auth->id());
 
         return view('teacher/platform_rating', [
-            'title'               => 'Rate platform - CSCS SMS',
+            'title'               => 'Rate platform - CSCS Tap n Track',
             'rating'              => $row,
             'school_year'         => get_current_school_year(),
             'term_label'          => platform_rating_term_label(get_current_term()),

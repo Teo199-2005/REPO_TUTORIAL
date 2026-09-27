@@ -32,7 +32,7 @@ class Profile extends BaseController
         $student = $studentModel->getStudentWithSection((int) $student['id']);
 
         return view('student/profile', [
-            'title' => 'My Profile - CSCS SMS',
+            'title' => 'My Profile - CSCS Tap n Track',
             'student' => $student,
         ]);
     }
@@ -43,19 +43,29 @@ class Profile extends BaseController
             return redirect()->to(base_url('login'));
         }
 
+        // Normalise legacy phone formats before validation and the writes below.
+        phone_normalize_request($this->request, ['phone']);
+
         $rules = [
-            'first_name' => 'required|max_length[100]',
-            'middle_name' => 'max_length[100]',
-            'last_name' => 'required|max_length[100]',
+            'first_name' => 'required|max_length[100]|regex_match[/^[\p{L}\p{M}\s.\x27\-]+$/u]',
+            // Optional, but when supplied a middle name must be at least two
+            // characters (no lone letter) — the same policy the registration
+            // form applies. permit_empty also keeps a blank field valid.
+            'middle_name' => 'permit_empty|min_length[2]|max_length[100]|regex_match[/^[\p{L}\p{M}\s.\x27\-]+$/u]',
+            'last_name' => 'required|max_length[100]|regex_match[/^[\p{L}\p{M}\s.\x27\-]+$/u]',
             'email' => 'required|valid_email|max_length[255]',
-            'phone' => 'max_length[20]',
+            'phone' => phone_validation_rule(),
             'address' => 'max_length[500]',
             'height_cm' => 'permit_empty|decimal|greater_than_equal_to[80]|less_than_equal_to[250]',
             'weight_kg' => 'permit_empty|decimal|greater_than_equal_to[15]|less_than_equal_to[200]',
             'ethnicity' => 'permit_empty|max_length[120]',
+            'photo' => 'permit_empty|is_image[photo]|max_size[photo,2048]',
+            'id_photo' => 'permit_empty|is_image[id_photo]|max_size[id_photo,2048]',
         ];
 
-        if (!$this->validate($rules)) {
+        if (!$this->validate($rules, phone_validation_messages([
+            'phone' => 'Phone Number',
+        ]))) {
             return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
         }
 
@@ -108,6 +118,69 @@ class Profile extends BaseController
             'nutrition_status' => $nutrition['nutrition_status'],
         ];
 
+        // Optional profile photo upload — this photo is what appears on the
+        // student's digital ID card (admin ID cards page + student ID card page).
+        $photoFile = $this->request->getFile('photo');
+        if ($photoFile !== null && $photoFile->isValid() && ! $photoFile->hasMoved()) {
+            $allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
+            if (! in_array($photoFile->getMimeType(), $allowedMimes, true)) {
+                return redirect()->back()->withInput()->with('error', 'Profile photo must be a JPG, PNG, or WebP image.');
+            }
+
+            if ($photoFile->getSizeByUnit('mb') > 2) {
+                return redirect()->back()->withInput()->with('error', 'Profile photo must be 2MB or smaller.');
+            }
+
+            $photoDir = FCPATH . 'public' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'student_photos';
+            if (! is_dir($photoDir)) {
+                mkdir($photoDir, 0775, true);
+            }
+
+            $photoName = $photoFile->getRandomName();
+            $photoFile->move($photoDir, $photoName);
+
+            // Remove the previous photo so orphaned files don't pile up
+            if (! empty($student['photo_path'])) {
+                $oldPhoto = FCPATH . 'public' . DIRECTORY_SEPARATOR . 'uploads'
+                    . DIRECTORY_SEPARATOR . ltrim((string) $student['photo_path'], '/\\');
+                if (is_file($oldPhoto)) {
+                    @unlink($oldPhoto);
+                }
+            }
+
+            $data['photo_path'] = 'student_photos/' . $photoName;
+        }
+
+        // Optional 2x2 ID picture - SEPARATE from the circle profile photo;
+        // stored in its own directory and shown on the digital ID card.
+        $idPhotoFile = $this->request->getFile('id_photo');
+        if ($idPhotoFile !== null && $idPhotoFile->isValid() && ! $idPhotoFile->hasMoved()) {
+            $allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
+            if (! in_array($idPhotoFile->getMimeType(), $allowedMimes, true)) {
+                return redirect()->back()->withInput()->with('error', '2x2 ID picture must be a JPG, PNG, or WebP image.');
+            }
+
+            if ($idPhotoFile->getSizeByUnit('mb') > 2) {
+                return redirect()->back()->withInput()->with('error', '2x2 ID picture must be 2MB or smaller.');
+            }
+
+            $idPhotoDir = FCPATH . 'public' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'student_id_photos';
+            if (! is_dir($idPhotoDir)) {
+                mkdir($idPhotoDir, 0775, true);
+            }
+
+            $idPhotoName = $idPhotoFile->getRandomName();
+            $idPhotoFile->move($idPhotoDir, $idPhotoName);
+            if (! empty($student['id_photo_path'])) {
+                $oldIdPhoto = FCPATH . 'public' . DIRECTORY_SEPARATOR . 'uploads'
+                    . DIRECTORY_SEPARATOR . ltrim((string) $student['id_photo_path'], '/\\');
+                if (is_file($oldIdPhoto)) {
+                    @unlink($oldIdPhoto);
+                }
+            }
+
+            $data['id_photo_path'] = 'student_id_photos/' . $idPhotoName;
+        }
         $updateResult = $studentModel->update($student['id'], $data);
         
         if ($updateResult) {
@@ -121,7 +194,17 @@ class Profile extends BaseController
                     log_message('warning', 'Failed to update user email: ' . $e->getMessage());
                 }
             }
-            return redirect()->back()->with('success', 'Profile updated successfully!');
+            $alreadyComplete = student_profile_complete($student) || student_profile_complete(array_merge($student, $data));
+            audit_event('profile.updated', [
+                'category'      => 'account',
+                'status'        => 'success',
+                'resource_type' => 'student',
+                'resource_id'   => (string) ($student['id'] ?? ''),
+                'description'   => 'Student updated their own profile',
+                'metadata'      => ['profile_complete' => (bool) $alreadyComplete],
+            ]);
+
+                return redirect()->back()->with('success', $alreadyComplete ? 'Profile complete! Your portal is now fully unlocked.' : 'Profile updated successfully!');
         } else {
             return redirect()->back()->with('error', 'Failed to update profile.');
         }
@@ -135,11 +218,11 @@ class Profile extends BaseController
 
         $rules = [
             'current_password' => 'required',
-            'new_password' => 'required|min_length[8]',
+            'new_password' => password_validation_rule('new_password'),
             'confirm_password' => 'required|matches[new_password]'
         ];
 
-        if (!$this->validate($rules)) {
+        if (!$this->validate($rules, password_validation_messages('new_password'))) {
             return redirect()->back()->with('errors', $this->validator->getErrors());
         }
 
@@ -212,7 +295,7 @@ class Profile extends BaseController
                 ->where('user_id', $user->id)
                 ->where('type', 'email_password')
                 ->update([
-                    'secret' => $hashedPassword,
+                    // Keep the canonical format: secret = email, secret2 = hash.
                     'secret2' => $hashedPassword,
                     'updated_at' => date('Y-m-d H:i:s')
                 ]);
@@ -224,6 +307,15 @@ class Profile extends BaseController
 
             if ($result) {
                 log_message('info', 'Password updated successfully for user ID: ' . $user->id);
+                audit_event('account.password_changed', [
+                    'category'      => 'account',
+                    'status'        => 'success',
+                    'resource_type' => 'user',
+                    'resource_id'   => (string) $user->id,
+                    'description'   => 'Password changed from the student profile page',
+                    'metadata'      => ['method' => 'self_service'],
+                ]);
+
                 return redirect()->back()->with('success', 'Password changed successfully!');
             } else {
                 log_message('error', 'Failed to update password for user ID: ' . $user->id);

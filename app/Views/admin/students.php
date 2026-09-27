@@ -1,73 +1,159 @@
 <?php if (!isset($this)) { /* placeholder to ensure file exists */ } ?>
 <?= $this->extend('dashboard_layout') ?>
 <?= $this->section('content') ?>
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h1 class="h3">Manage Students</h1>
-  <div>
-    <a href="<?= base_url('admin/students/enroll') ?>" class="btn btn-primary me-2">
-      <i class="bi bi-plus-circle"></i> Enroll Student
-    </a>
-    <a href="<?= base_url('admin/dashboard') ?>" class="btn btn-outline-secondary">Back</a>
-  </div>
-</div>
+<style><?= view('partials/password_requirements_style') ?></style>
+<?php
+  // Export PDF carries every active filter through the query string, so the
+  // printed list matches what is on screen (all matching rows, not just this page).
+  $studentFilterValues = [
+    'search'       => trim((string) ($search ?? '')),
+    'grade'        => (string) ($gradeLevel ?? ''),
+    'section'      => (string) ($section ?? ''),
+    'assignment'   => (string) ($assignment ?? ''),
+    'status'       => (string) ($status ?? 'all'),
+    'gender'       => (string) ($gender ?? ''),
+    'student_type' => (string) ($studentType ?? ''),
+    'religion'     => (string) ($religion ?? ''),
+  ];
 
-<form class="row g-2 mb-3" method="get" id="filterForm" action="<?= base_url('admin/students') ?>">
-  <div class="col-auto">
-    <label class="form-label">Grade</label>
-    <select name="grade" class="form-select">
-      <option value="">All</option>
-      <?php foreach (grade_level_options() as $g): ?>
-        <option value="<?= $g ?>" <?= ($gradeLevel==$g?'selected':'') ?>><?= esc(grade_level_label($g)) ?></option>
-      <?php endforeach; ?>
-    </select>
-  </div>
-  <div class="col-auto">
-    <label class="form-label">Section</label>
-    <select name="section" class="form-select">
-      <option value="">All Sections</option>
-      <?php if (!empty($allSections)): ?>
-        <?php foreach ($allSections as $sec): ?>
-          <option value="<?= $sec['id'] ?>" <?= ($section == $sec['id'] ? 'selected' : '') ?>>
-            <?= esc($sec['section_name']) ?> (<?= esc(grade_level_label((int) $sec['grade_level'])) ?>)
-          </option>
-        <?php endforeach; ?>
-      <?php endif; ?>
-    </select>
-  </div>
-  <div class="col-auto">
-    <label class="form-label">Assignment</label>
-    <select name="assignment" class="form-select">
-      <option value="">All Students</option>
-      <option value="assigned" <?= ($assignment ?? '') == 'assigned' ? 'selected' : '' ?>>Assigned</option>
-      <option value="unassigned" <?= ($assignment ?? '') == 'unassigned' ? 'selected' : '' ?>>Unassigned</option>
-    </select>
-  </div>
-  <div class="col-auto">
-    <label class="form-label">Search</label>
-    <input type="text" name="search" class="form-control" value="<?= esc($search) ?>" placeholder="Name or LRN">
-  </div>
-  <div class="col-auto align-self-end">
-    <button type="submit" class="btn btn-primary">Filter</button>
-    <a href="<?= base_url('admin/students') ?>" class="btn btn-outline-secondary">Clear</a>
-    <button type="button" class="btn btn-outline-info ms-2" onclick="showEmergencyContacts()">
-      <i class="bi bi-person-lines-fill"></i> Emergency Contacts
-    </button>
-  </div>
-</form>
+  $studentFilterNames = ['search', 'grade', 'section', 'assignment', 'status', 'gender', 'student_type', 'religion'];
+
+  $studentActive = admin_filter_count_active($studentFilterValues, $studentFilterNames);
+
+  $pdfParams = admin_filter_query($studentFilterValues, $studentFilterNames, ['', 'all']);
+  $pdfUrl    = base_url('admin/students/export-pdf')
+    . ($pdfParams !== [] ? '?' . http_build_query($pdfParams) : '');
+
+  $studentHeaderActions = '<a class="btn btn-outline-secondary" href="' . base_url('admin/dashboard') . '">'
+    . '<i class="bi bi-arrow-left"></i> Back</a>'
+    . '<a class="btn btn-outline-primary" href="' . esc($pdfUrl) . '" target="_blank" rel="noopener">'
+    . '<i class="bi bi-file-earmark-pdf"></i> Export PDF</a>'
+    . '<a class="btn btn-primary admin-btn-primary" href="' . base_url('admin/students/enroll') . '">'
+    . '<i class="bi bi-plus-circle"></i> Enroll student</a>';
+
+  echo view('admin/partials/page_header', ['pageHeader' => [
+    'icon'     => 'bi-people-fill',
+    'title'    => 'Manage Students',
+    'subtitle' => 'Enrolled learners, their profile and their records',
+    'actions'  => $studentHeaderActions,
+  ]]);
+?>
+
+<?php
+  $studentGradeOptions = [admin_filter_option('', 'All grade levels')];
+  foreach (grade_level_options() as $g) {
+    $studentGradeOptions[] = admin_filter_option((string) $g, grade_level_label($g));
+  }
+
+  $studentSectionOptions = [admin_filter_option('', 'All sections')];
+  foreach (($allSections ?? []) as $sec) {
+    $studentSectionOptions[] = admin_filter_option(
+      (string) $sec['id'],
+      $sec['section_name'] . ' (' . grade_level_label((int) $sec['grade_level']) . ')'
+    );
+  }
+
+  $studentStatusChoiceList = [];
+  foreach (($statusOptions ?? ['all']) as $opt) {
+    $studentStatusChoiceList[] = admin_filter_option(
+      (string) $opt,
+      $opt === 'all' ? 'All statuses' : ucfirst((string) $opt)
+    );
+  }
+
+  $studentTypeChoiceList = [admin_filter_option('', 'All types')];
+  foreach (($studentTypeOptions ?? []) as $opt) {
+    $studentTypeChoiceList[] = admin_filter_option((string) $opt, ucfirst((string) $opt));
+  }
+
+  $studentReligionChoiceList = [admin_filter_option('', 'All religions')];
+  foreach (($religionOptions ?? []) as $opt) {
+    $studentReligionChoiceList[] = admin_filter_option((string) $opt, (string) $opt);
+  }
+
+  $advancedNames = ['status', 'gender', 'student_type', 'religion'];
+  $advancedCount = admin_filter_count_active($studentFilterValues, $advancedNames);
+
+  // The emergency-contacts sheet is a page action, not a filter, so it sits
+  // beside the filter bar rather than inside the form.
+  echo view('admin/partials/filter_bar', ['filterBar' => [
+    'action'      => base_url('admin/students'),
+    'id'          => 'studentFilter',
+    'label'       => 'Filter students',
+    'resetUrl'    => base_url('admin/students'),
+    'activeCount' => $advancedCount['total'],
+    'totalCount'  => $studentActive['total'],
+    'primary'     => [
+      [
+        'name' => 'search', 'label' => 'Search', 'icon' => 'bi-search', 'type' => 'search',
+        'value'       => admin_filter_value($studentFilterValues, 'search'),
+        'placeholder' => 'Name or LRN',
+      ],
+      [
+        'name' => 'grade', 'label' => 'Grade level', 'icon' => 'bi-mortarboard',
+        'value'   => admin_filter_value($studentFilterValues, 'grade'),
+        'options' => $studentGradeOptions,
+      ],
+      [
+        'name' => 'section', 'label' => 'Section', 'icon' => 'bi-people',
+        'value'   => admin_filter_value($studentFilterValues, 'section'),
+        'options' => $studentSectionOptions,
+      ],
+      [
+        'name' => 'assignment', 'label' => 'Section assignment', 'icon' => 'bi-diagram-2',
+        'value'   => admin_filter_value($studentFilterValues, 'assignment'),
+        'options' => [
+          admin_filter_option('', 'All students'),
+          admin_filter_option('assigned', 'Has a section'),
+          admin_filter_option('unassigned', 'No section yet'),
+        ],
+      ],
+    ],
+    'advanced'    => [
+      [
+        'name' => 'status', 'label' => 'Status', 'icon' => 'bi-activity',
+        'value'   => admin_filter_value($studentFilterValues, 'status', 'all'),
+        'options' => $studentStatusChoiceList,
+      ],
+      [
+        'name' => 'student_type', 'label' => 'Student type', 'icon' => 'bi-person-badge',
+        'value'   => admin_filter_value($studentFilterValues, 'student_type'),
+        'options' => $studentTypeChoiceList,
+      ],
+      [
+        'name' => 'gender', 'label' => 'Sex', 'icon' => 'bi-gender-ambiguous',
+        'value'   => admin_filter_value($studentFilterValues, 'gender'),
+        'options' => [
+          admin_filter_option('', 'All'),
+          admin_filter_option('Male', 'Male'),
+          admin_filter_option('Female', 'Female'),
+        ],
+      ],
+      [
+        'name' => 'religion', 'label' => 'Religion', 'icon' => 'bi-book',
+        'value'   => admin_filter_value($studentFilterValues, 'religion'),
+        'options' => $studentReligionChoiceList,
+      ],
+    ],
+  ]]);
+?>
+<button type="button" class="btn btn-outline-secondary mb-3" onclick="showEmergencyContacts()">
+  <i class="bi bi-person-lines-fill" aria-hidden="true"></i> Emergency contacts
+</button>
 
 <div class="card">
   <div class="card-body p-0">
     <?php if (!empty($students)): ?>
       <div class="table-responsive">
-        <table class="table table-striped table-hover mb-0">
+        <table class="table table-hover align-middle mb-0 admin-table">
           <thead>
             <tr>
-              <th>LRN</th>
-              <th>Name</th>
-              <th>Grade</th>
-              <th>Section</th>
-              <th>Status</th>
-              <th class="text-end">Actions</th>
+              <th><i class="bi bi-hash me-1 text-muted"></i>LRN</th>
+              <th><i class="bi bi-person me-1 text-muted"></i>Name</th>
+              <th><i class="bi bi-mortarboard me-1 text-muted"></i>Grade</th>
+              <th><i class="bi bi-people me-1 text-muted"></i>Section</th>
+              <th><i class="bi bi-activity me-1 text-muted"></i>Status</th>
+              <th class="text-end"><i class="bi bi-gear me-1 text-muted"></i>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -93,7 +179,19 @@
                     ?>
                   <?php endif; ?>
                 </td>
-                <td><span class="badge bg-success">Enrolled</span></td>
+                <td>
+                  <?php
+                  $stStatus = (string) ($st['enrollment_status'] ?? 'enrolled');
+                  $stStatusClass = match ($stStatus) {
+                    'enrolled' => 'bg-success',
+                    'approved' => 'bg-info text-dark',
+                    'graduated' => 'bg-primary',
+                    'dropped' => 'bg-danger',
+                    default => 'bg-secondary',
+                  };
+                  ?>
+                  <span class="badge <?= $stStatusClass ?>"><?= esc(ucfirst(str_replace('_', ' ', $stStatus))) ?></span>
+                </td>
                 <td class="text-end">
                   <div class="btn-group" role="group">
                     <button class="btn btn-sm btn-outline-primary" onclick="viewStudent(<?= $st['id'] ?>)" title="View Details">
@@ -113,13 +211,20 @@
         </table>
       </div>
     <?php else: ?>
-      <div class="p-4 text-center text-muted">
-        <?php if ($gradeLevel || $section || $search): ?>
-          No students found matching the selected filters.
-        <?php else: ?>
-          No enrolled students found.
-        <?php endif; ?>
-      </div>
+      <?= view('admin/partials/empty_state', ['emptyState' => [
+        'icon'   => 'bi-inbox',
+        'title'  => $studentActive['total'] > 0
+          ? 'No students match these filters'
+          : 'No enrolled students yet',
+        'hint'   => $studentActive['total'] > 0
+          ? 'Try clearing a filter, or widen the grade level and section.'
+          : 'Enrolled students will appear here once they are added.',
+        'action' => $studentActive['total'] > 0
+          ? '<a class="btn btn-outline-secondary" href="' . base_url('admin/students') . '">'
+            . '<i class="bi bi-arrow-counterclockwise"></i> Reset filters</a>'
+          : '<a class="btn btn-primary admin-btn-primary" href="' . base_url('admin/students/enroll') . '">'
+            . '<i class="bi bi-plus-circle"></i> Enroll student</a>',
+      ]]) ?>
     <?php endif; ?>
   </div>
   
@@ -202,29 +307,6 @@
     </div>
     <div class="document-viewer-body">
       <img id="documentViewerImage" src="" alt="Document" class="document-viewer-image">
-    </div>
-  </div>
-</div>
-
-<!-- Emergency Contacts Modal -->
-<div id="emergencyContactsModal" class="custom-modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="emergencyContactsModalLabel">
-  <div class="custom-modal-container">
-    <div class="custom-modal-header">
-      <h3 class="custom-modal-title">Emergency Contacts</h3>
-      <button type="button" class="custom-modal-close" onclick="closeEmergencyContactsModal()">
-        <i class="bi bi-x-lg"></i>
-      </button>
-    </div>
-    <div class="custom-modal-body">
-      <div class="mb-3">
-        <input type="text" id="emergencyContactSearch" class="form-control" placeholder="Search by LRN or student name..." oninput="filterEmergencyContacts()">
-      </div>
-      <div id="emergencyContactsList">
-        <div class="loading-spinner">
-          <div class="spinner"></div>
-          <p>Loading emergency contacts...</p>
-        </div>
-      </div>
     </div>
   </div>
 </div>
@@ -313,11 +395,12 @@
         </div>
         <div class="mb-3">
           <label class="form-label">Contact Number</label>
-          <input type="text" class="form-control" name="contact_number" id="editContactNumber">
+          <input type="text" class="form-control" name="contact_number" id="editContactNumber" maxlength="11" inputmode="numeric" pattern="^09[0-9]{9}" autocomplete="tel-national" placeholder="09XXXXXXXXX">
         </div>
         <div class="mb-3">
           <label class="form-label">Address</label>
-          <textarea class="form-control" name="address" id="editAddress" rows="2"></textarea>
+          <input type="hidden" name="address" id="editAddress" value="">
+          <div data-loc-group="address" data-loc-field="editAddress" data-loc-label="Address"></div>
         </div>
       </form>
     </div>
@@ -347,7 +430,7 @@
 .custom-modal-container {
   background: #ffffff;
   border-radius: 16px;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.10), 0 24px 56px -8px rgba(15, 23, 42, 0.16);
   max-width: 900px;
   width: 90%;
   max-height: 90vh;
@@ -363,7 +446,6 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 3px solid #1e40af;
 }
 
 .custom-modal-header * {
@@ -443,7 +525,6 @@
   width: 40px;
   height: 40px;
   border: 4px solid #e5e7eb;
-  border-top: 4px solid #3b82f6;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 1rem;
@@ -477,7 +558,7 @@
   border-radius: 12px;
   padding: 1.5rem;
   margin-bottom: 1.5rem;
-  border: 2px solid #e2e8f0;
+  border: var(--hairline);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
@@ -505,7 +586,7 @@
 }
 
 .student-info-table td:first-child {
-  font-weight: 600;
+  font-weight: 700;
   color: #374151;
   width: 35%;
 }
@@ -587,6 +668,19 @@
   object-fit: contain;
 }
 
+/* Emergency Contacts Modal */
+.emergency-contact-avatar {
+  font-size: 1.75rem;
+  color: #3b82f6;
+  display: inline-flex;
+  align-items: center;
+}
+
+#emergencyContactsPagination .page-link {
+  cursor: pointer;
+  user-select: none;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .custom-modal-container {
@@ -610,12 +704,8 @@
 // Store student data for quick access
 const studentsData = <?= json_encode($students) ?>;
 
-// Filter form functions
-function submitFilter() {
-  const form = document.getElementById('filterForm');
-  form.submit();
-}
-
+// Filter form helpers. The visible filter bar auto-submits through
+// public/js/admin-filter-bar.js, so only URL-driven shortcuts live here.
 function clearFilters() {
   window.location.href = '<?= base_url('admin/students') ?>';
 }
@@ -946,14 +1036,28 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Emergency Contacts Modal Functions
+const emergencyContactsState = {
+  search: '',
+  page: 1,
+  perPage: 25
+};
+
 function showEmergencyContacts() {
   const modal = document.getElementById('emergencyContactsModal');
   const contactsList = document.getElementById('emergencyContactsList');
+  const footerEl = document.getElementById('emergencyContactsFooter');
   const footer = document.querySelector('.modern-footer');
   
   if (footer) footer.style.display = 'none';
   modal.style.display = 'flex';
   document.body.style.overflow = 'hidden';
+  
+  // Reset search + pagination state each time the modal opens
+  emergencyContactsState.search = '';
+  emergencyContactsState.page = 1;
+  const searchInput = document.getElementById('emergencyContactSearch');
+  if (searchInput) searchInput.value = '';
+  if (footerEl) footerEl.style.display = 'none';
   
   // Show loading state
   contactsList.innerHTML = `
@@ -965,7 +1069,7 @@ function showEmergencyContacts() {
   
   // Load emergency contacts data
   setTimeout(() => {
-    loadEmergencyContacts();
+    renderEmergencyContacts();
   }, 500);
 }
 
@@ -978,74 +1082,135 @@ function closeEmergencyContactsModal() {
   document.body.style.overflow = '';
 }
 
-function loadEmergencyContacts() {
-  const contactsList = document.getElementById('emergencyContactsList');
+function getFilteredEmergencyContacts() {
+  const term = emergencyContactsState.search;
+  if (!term) return studentsData;
   
-  // Generate emergency contacts list from students data
+  return studentsData.filter(student => {
+    const lrn = String(student.lrn || '').toLowerCase();
+    const name = `${student.first_name || ''} ${student.last_name || ''}`.toLowerCase();
+    const contact = `${student.emergency_contact_name || ''} ${student.emergency_contact_number || ''} ${student.emergency_contact_relationship || ''}`.toLowerCase();
+    
+    return lrn.includes(term) || name.includes(term) || contact.includes(term);
+  });
+}
+
+function renderEmergencyContacts() {
+  const contactsList = document.getElementById('emergencyContactsList');
+  const filtered = getFilteredEmergencyContacts();
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / emergencyContactsState.perPage));
+  
+  if (emergencyContactsState.page > totalPages) {
+    emergencyContactsState.page = totalPages;
+  }
+  
+  const start = (emergencyContactsState.page - 1) * emergencyContactsState.perPage;
+  const pageItems = filtered.slice(start, start + emergencyContactsState.perPage);
+  
+  if (total === 0) {
+    contactsList.innerHTML = '<div class="alert alert-warning mb-0"><i class="bi bi-search me-1"></i> No students found matching your search.</div>';
+    updateEmergencyPaginationFooter(0, 1, 0, 0);
+    return;
+  }
+  
   let contactsHtml = '<div class="table-responsive">';
-  contactsHtml += '<table class="table table-striped" id="emergencyContactsTable">';
-  contactsHtml += '<thead><tr><th>Student</th><th>Emergency Contact</th></tr></thead>';
+  contactsHtml += '<table class="table table-hover align-middle mb-2 admin-table" id="emergencyContactsTable">';
+  contactsHtml += '<thead><tr><th><i class="bi bi-person me-1"></i>Student</th><th><i class="bi bi-telephone me-1"></i>Emergency Contact</th></tr></thead>';
   contactsHtml += '<tbody>';
   
-  studentsData.forEach(student => {
+  pageItems.forEach(student => {
     contactsHtml += `
-      <tr data-lrn="${student.lrn || ''}" data-name="${student.first_name} ${student.last_name}">
+      <tr>
         <td>
-          <strong>${student.first_name} ${student.last_name}</strong><br>
-          <small class="text-muted">${student.lrn || 'N/A'} - ${formatGradeLevel(student.grade_level)}</small>
+          <div class="d-flex align-items-center">
+            <span class="emergency-contact-avatar me-2"><i class="bi bi-person-circle"></i></span>
+            <div>
+              <div class="fw-semibold">${student.first_name} ${student.last_name}</div>
+              <small class="text-muted">${student.lrn || 'N/A'} · ${formatGradeLevel(student.grade_level)}</small>
+            </div>
+          </div>
         </td>
         <td>
-          <strong>Name:</strong> ${student.emergency_contact_name || 'N/A'}<br>
-          <strong>Number:</strong> ${student.emergency_contact_number || 'N/A'}<br>
-          <strong>Relationship:</strong> ${student.emergency_contact_relationship || 'N/A'}
+          <div><i class="bi bi-person-badge text-primary me-1"></i><span class="fw-semibold">Name:</span> ${student.emergency_contact_name || 'N/A'}</div>
+          <div><i class="bi bi-telephone-fill text-success me-1"></i><span class="fw-semibold">Number:</span> ${student.emergency_contact_number || 'N/A'}</div>
+          <div><i class="bi bi-people-fill text-warning me-1"></i><span class="fw-semibold">Relationship:</span> ${student.emergency_contact_relationship || 'N/A'}</div>
         </td>
       </tr>
     `;
   });
   
   contactsHtml += '</tbody></table></div>';
+  contactsList.innerHTML = contactsHtml;
   
-  if (studentsData.length === 0) {
-    contactsHtml = '<div class="alert alert-info"><i class="bi bi-info-circle"></i> No students found.</div>';
+  updateEmergencyPaginationFooter(total, totalPages, start, start + pageItems.length);
+}
+
+function updateEmergencyPaginationFooter(total, totalPages, from, to) {
+  const footerEl = document.getElementById('emergencyContactsFooter');
+  const countEl = document.getElementById('emergencyContactsCount');
+  const navEl = document.getElementById('emergencyContactsPagination');
+  
+  if (!footerEl || !countEl || !navEl) return;
+  
+  footerEl.style.display = 'flex';
+  
+  if (total === 0) {
+    countEl.innerHTML = 'Showing 0 of 0 rows';
+    navEl.innerHTML = '';
+    return;
   }
   
-  contactsList.innerHTML = contactsHtml;
+  countEl.innerHTML = `Showing ${from + 1}-${to} of ${total} row${total === 1 ? '' : 's'}`;
+  
+  const current = emergencyContactsState.page;
+  let pagesHtml = `<li class="page-item ${current <= 1 ? 'disabled' : ''}">
+    <a class="page-link" onclick="${current > 1 ? `goToEmergencyPage(${current - 1})` : 'return false;'}" aria-label="Previous">
+      <i class="bi bi-chevron-left"></i>
+    </a>
+  </li>`;
+  
+  const startPage = Math.max(1, current - 2);
+  const endPage = Math.min(totalPages, current + 2);
+  for (let i = startPage; i <= endPage; i++) {
+    pagesHtml += `<li class="page-item ${i === current ? 'active' : ''}">
+      <a class="page-link" onclick="goToEmergencyPage(${i})">${i}</a>
+    </li>`;
+  }
+  
+  pagesHtml += `<li class="page-item ${current >= totalPages ? 'disabled' : ''}">
+    <a class="page-link" onclick="${current < totalPages ? `goToEmergencyPage(${current + 1})` : 'return false;'}" aria-label="Next">
+      <i class="bi bi-chevron-right"></i>
+    </a>
+  </li>`;
+  
+  navEl.innerHTML = `<ul class="pagination pagination-sm mb-0">${pagesHtml}</ul>`;
+}
+
+function goToEmergencyPage(page) {
+  emergencyContactsState.page = page;
+  renderEmergencyContacts();
+}
+
+function changeEmergencyPerPage(value) {
+  emergencyContactsState.perPage = parseInt(value, 10) || 25;
+  emergencyContactsState.page = 1;
+  renderEmergencyContacts();
 }
 
 function filterEmergencyContacts() {
   const searchInput = document.getElementById('emergencyContactSearch');
-  const searchTerm = searchInput.value.toLowerCase().trim();
-  const table = document.getElementById('emergencyContactsTable');
-  
-  if (!table) return;
-  
-  const rows = table.querySelectorAll('tbody tr');
-  let visibleCount = 0;
-  
-  rows.forEach(row => {
-    const lrn = (row.getAttribute('data-lrn') || '').toLowerCase();
-    const name = (row.getAttribute('data-name') || '').toLowerCase();
-    const contactInfo = row.querySelector('td:last-child').textContent.toLowerCase();
-    
-    if (lrn.includes(searchTerm) || name.includes(searchTerm) || contactInfo.includes(searchTerm)) {
-      row.style.display = '';
-      visibleCount++;
-    } else {
-      row.style.display = 'none';
-    }
-  });
-  
-  // Show no results message if needed
-  const existingNoResults = document.getElementById('noResultsMessage');
-  if (existingNoResults) existingNoResults.remove();
-  
-  if (visibleCount === 0 && searchTerm !== '') {
-    const noResultsMsg = document.createElement('div');
-    noResultsMsg.id = 'noResultsMessage';
-    noResultsMsg.className = 'alert alert-warning mt-3';
-    noResultsMsg.innerHTML = '<i class="bi bi-search"></i> No students found matching your search.';
-    document.getElementById('emergencyContactsList').appendChild(noResultsMsg);
-  }
+  emergencyContactsState.search = (searchInput ? searchInput.value : '').toLowerCase().trim();
+  emergencyContactsState.page = 1;
+  renderEmergencyContacts();
+}
+
+function clearEmergencyContactSearch() {
+  const searchInput = document.getElementById('emergencyContactSearch');
+  if (searchInput) searchInput.value = '';
+  emergencyContactsState.search = '';
+  emergencyContactsState.page = 1;
+  renderEmergencyContacts();
 }
 
 // Edit Student - redirect to edit page
@@ -1087,13 +1252,20 @@ function buildEnrollStudentModal() {
             </div>
             <div class="col-md-4">
               <div class="mb-3">
-                <label class="form-label">Password *</label>
+                <label class="form-label" for="enrollPassword">Password *</label>
                 <div style="position: relative;">
-                  <input type="password" class="form-control" name="password" required minlength="8">
+                  <input type="password" class="form-control" name="password" id="enrollPassword"
+                         minlength="<?= password_policy_min_length() ?>" pattern="(?=.*\d).{<?= password_policy_min_length() ?>,}"
+                         autocomplete="new-password" required data-password-indicator>
                   <button type="button" id="toggleEnrollPassword" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); border: none; background: none; cursor: pointer; color: #6c757d;">
                     <i class="fas fa-eye" id="enrollEyeIcon"></i>
                   </button>
                 </div>
+                <div class="alert alert-info d-flex align-items-center gap-2 py-2 px-3 mt-2" role="note" style="font-size: .8rem;">
+                  <i class="bi bi-key-fill" aria-hidden="true"></i>
+                  <span><strong>Input your desired password.</strong> This is the password you will use to log in.</span>
+                </div>
+                <?= view('partials/password_requirements', ['compact' => true]) ?>
               </div>
             </div>
           </div>
@@ -1109,7 +1281,7 @@ function buildEnrollStudentModal() {
             <div class="col-md-3">
               <div class="mb-3">
                 <label class="form-label">Middle Name</label>
-                <input type="text" class="form-control" name="middle_name">
+                <input type="text" class="form-control" name="middle_name" minlength="2">
               </div>
             </div>
             <div class="col-md-3">
@@ -1134,7 +1306,7 @@ function buildEnrollStudentModal() {
             </div>
           </div>
           <div class="row">
-            <div class="col-md-4">
+            <div class="col-md-6">
               <div class="mb-3">
                 <label class="form-label">Gender *</label>
                 <select class="form-select" name="gender" required>
@@ -1144,16 +1316,17 @@ function buildEnrollStudentModal() {
                 </select>
               </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-6">
               <div class="mb-3">
                 <label class="form-label">Date of Birth *</label>
                 <input type="date" class="form-control" name="date_of_birth" required>
               </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-12">
               <div class="mb-3">
                 <label class="form-label">Place of Birth</label>
-                <input type="text" class="form-control" name="place_of_birth">
+                <input type="hidden" name="place_of_birth" id="modal_place_of_birth" value="">
+                <div data-loc-group="place_of_birth" data-loc-field="modal_place_of_birth" data-loc-label="Place of Birth"></div>
               </div>
             </div>
           </div>
@@ -1173,7 +1346,7 @@ function buildEnrollStudentModal() {
             <div class="col-md-4">
               <div class="mb-3">
                 <label class="form-label">Contact Number</label>
-                <input type="text" class="form-control" name="contact_number">
+                <input type="text" class="form-control" name="contact_number" maxlength="11" inputmode="numeric" pattern="^09[0-9]{9}" autocomplete="tel-national" placeholder="09XXXXXXXXX">
               </div>
             </div>
           </div>
@@ -1213,7 +1386,8 @@ function buildEnrollStudentModal() {
           </div>
           <div class="mb-3">
             <label class="form-label">Address</label>
-            <textarea class="form-control" name="address" rows="2"></textarea>
+            <input type="hidden" name="address" id="modal_address" value="">
+            <div data-loc-group="address" data-loc-field="modal_address" data-loc-label="Address"></div>
           </div>
           <hr>
           <h6 class="text-primary mb-3">Required Documents</h6>
@@ -1257,23 +1431,23 @@ function buildEnrollStudentModal() {
             <div class="col-md-6">
               <div class="mb-3">
                 <label class="form-label">Emergency Contact Number</label>
-                <input type="text" class="form-control" name="emergency_contact_number">
+                <input type="text" class="form-control" name="emergency_contact_number" maxlength="11" inputmode="numeric" pattern="^09[0-9]{9}" autocomplete="tel-national" placeholder="09XXXXXXXXX">
               </div>
             </div>
           </div>
           <div class="mb-3">
-            <label class="form-label">Relationship</label>
-            <select class="form-select" name="emergency_contact_relationship">
+            <label class="form-label" for="enrollRelationship">Relationship</label>
+            <select class="form-select" name="emergency_contact_relationship" id="enrollRelationship" onchange="toggleEnrollRelationshipOther()">
               <option value="">Select Relationship</option>
-              <option value="Father">Father</option>
-              <option value="Mother">Mother</option>
-              <option value="Guardian">Guardian</option>
-              <option value="Grandfather">Grandfather</option>
-              <option value="Grandmother">Grandmother</option>
-              <option value="Uncle">Uncle</option>
-              <option value="Aunt">Aunt</option>
-              <option value="Other">Other</option>
+              <?php foreach (emergency_contact_relationship_options() as $relOption): ?>
+                <option value="<?= esc($relOption) ?>"><?= esc($relOption) ?></option>
+              <?php endforeach; ?>
             </select>
+            <div id="enrollRelationshipOtherWrap" style="display: none; margin-top: .35rem;">
+              <label class="form-label" for="enrollRelationshipOther">Specify Relationship</label>
+              <input type="text" class="form-control" name="emergency_contact_relationship_other" id="enrollRelationshipOther"
+                     maxlength="50" placeholder="e.g. Godparent, Friend" autocomplete="off">
+            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -1284,6 +1458,11 @@ function buildEnrollStudentModal() {
     </div></div>
   </div>`;
   document.body.insertAdjacentHTML('beforeend', html);
+  // The modal is injected after page load, so re-run the shared contact-number
+  // normaliser over its inputs (inline handlers never fire for injected HTML).
+  if (window.PhoneInput) {
+    window.PhoneInput.enhanceAll(document.getElementById('enrollStudentModal'));
+  }
   return document.getElementById('enrollStudentModal');
 }
 
@@ -1372,14 +1551,28 @@ function fillDemoData() {
   const genders = ['Male', 'Female'];
   const gradeLevels = <?= json_encode(array_map('strval', grade_level_options())) ?>;
   const studentTypes = ['New Student', 'Transferee', 'Old Student'];
-  const places = ['Tagbilaran City, Bohol', 'Panglao, Bohol', 'Dauis, Bohol', 'Baclayon, Bohol', 'Loboc, Bohol', 'Carmen, Bohol', 'Tubigon, Bohol'];
+  const barangays = ['Poblacion', 'Tawala', 'Bolod', 'Danao', 'Tangnan', 'Libaong', 'Lourdes'];
   const religions = ['Catholic', 'Protestant', 'Iglesia ni Cristo', 'Baptist', 'Methodist', 'Born Again', 'Seventh-day Adventist'];
   const relationships = ['Mother', 'Father', 'Guardian', 'Aunt', 'Uncle', 'Grandmother', 'Grandfather'];
-  const barangays = ['Poblacion', 'Tawala', 'Bolod', 'Danao', 'Tangnan', 'Libaong', 'Lourdes'];
   const emailDomains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com'];
   
-  // Helper functions
   const getRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  // Barangay text is generated per call (after getRandom exists) so every
+  // demo entry differs.
+  const getRandomBrgyFill = () => 'Purok ' + (Math.floor(Math.random() * 10) + 1) + ', Barangay ' + getRandom(barangays);
+  const getRandomDemoLocation = () => {
+    if (window.PSGC_DATA && window.LocSelect) {
+      const provinces = Object.keys(window.PSGC_DATA);
+      const province = getRandom(provinces);
+      const cities = window.PSGC_DATA[province] || [];
+      return {
+        province: province,
+        city: cities.length ? getRandom(cities) : '',
+        barangay: getRandomBrgyFill()
+      };
+    }
+    return { province: '', city: '', barangay: getRandomBrgyFill() };
+  };
   const getRandomBirthDate = () => {
     const today = new Date();
     const age = Math.floor(Math.random() * 7) + 6;
@@ -1402,7 +1595,7 @@ function fillDemoData() {
   const gradeLevel = getRandom(gradeLevels);
   const studentType = getRandom(studentTypes);
   const birthDate = getRandomBirthDate();
-  const placeOfBirth = getRandom(places);
+  const birthPlace = getRandomDemoLocation();
   const religion = getRandom(religions);
   const contactNumber = getRandomPhone();
   const emergencyContactNumber = getRandomPhone();
@@ -1410,7 +1603,7 @@ function fillDemoData() {
   const randomLRN = '999' + Date.now().toString().slice(-9);
   const emailUsername = (firstName + lastName).toLowerCase().replace(/\s+/g, '');
   const email = emailUsername + Math.floor(Math.random() * 999) + '@' + getRandom(emailDomains);
-  const address = `Purok ${Math.floor(Math.random() * 10) + 1}, Barangay ${getRandom(barangays)}, Panglao, Bohol`;
+  const addressPlace = getRandomDemoLocation();
   const emergencyContactName = getRandom(firstNames) + ' ' + getRandom(lastNames);
   
   // Fill form fields
@@ -1423,16 +1616,23 @@ function fillDemoData() {
   form.querySelector('[name="suffix"]').value = suffix;
   form.querySelector('[name="gender"]').value = gender;
   form.querySelector('[name="date_of_birth"]').value = birthDate;
-  form.querySelector('[name="place_of_birth"]').value = placeOfBirth;
+  if (window.LocSelect) {
+    window.LocSelect.set('modal_place_of_birth', birthPlace);
+    window.LocSelect.set('modal_address', addressPlace);
+  }
   form.querySelector('[name="nationality"]').value = 'Filipino';
   form.querySelector('[name="religion"]').value = religion;
   form.querySelector('[name="contact_number"]').value = contactNumber;
   form.querySelector('[name="grade_level"]').value = gradeLevel;
   form.querySelector('[name="student_type"]').value = studentType;
-  form.querySelector('[name="address"]').value = address;
+  if (window.LocSelect) {
+    window.LocSelect.refresh(form);
+  }
   form.querySelector('[name="emergency_contact_name"]').value = emergencyContactName;
   form.querySelector('[name="emergency_contact_number"]').value = emergencyContactNumber;
   form.querySelector('[name="emergency_contact_relationship"]').value = relationship;
+  // Keep the "Other" companion box in step with the value just assigned.
+  toggleEnrollRelationshipOther();
 }
 
 // Archive student function
@@ -1443,6 +1643,23 @@ function archiveStudent(studentId, studentName) {
 // Restore student function
 function restoreStudent(studentId, studentName) {
   showRestoreConfirmation(studentId, studentName);
+}
+
+// The enroll-modal relationship selector reveals its free-text box for "Other".
+// While hidden that box is disabled so no stale value is ever submitted.
+function toggleEnrollRelationshipOther() {
+  const select = document.getElementById('enrollRelationship');
+  const wrapper = document.getElementById('enrollRelationshipOtherWrap');
+  const input = document.getElementById('enrollRelationshipOther');
+
+  if (!select || !wrapper || !input) {
+    return;
+  }
+
+  const isOther = select.value === <?= json_encode(emergency_contact_relationship_other_option()) ?>;
+
+  wrapper.style.display = isOther ? 'block' : 'none';
+  input.disabled = !isOther;
 }
 
 function getDashboardModalPortal() {
@@ -1556,12 +1773,17 @@ function confirmDeleteStudent(studentId) {
   const modal = bootstrap.Modal.getInstance(document.getElementById('deleteConfirmModal'));
   if (modal) modal.hide();
 
+  const csrfName = '<?= csrf_token() ?>';
+  const csrfHash = '<?= csrf_hash() ?>';
+
   fetch(`<?= base_url('admin/students/delete-permanently') ?>/${studentId}`, {
-    method: 'DELETE',
+    method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest'
-    }
+      'X-Requested-With': 'XMLHttpRequest',
+      'X-CSRF-TOKEN': csrfHash
+    },
+    body: JSON.stringify({ [csrfName]: csrfHash })
   })
   .then(response => response.json())
   .then(data => {
@@ -1659,3 +1881,72 @@ function showArchiveAlert(message, type = 'success') {
 </script>
 
 <?= $this->endSection() ?>
+
+<?= $this->section('portal_overlays') ?>
+<!-- Emergency Contacts Modal — rendered OUTSIDE .main-content (via the layout's portal_overlays
+     section) so it stacks above the fixed sidebar (z-index 1030) and sticky top bar (z-index 1045).
+     Inside .main-content the modal is trapped in its z-index: 1 stacking context. -->
+<div id="emergencyContactsModal" class="custom-modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="emergencyContactsModalLabel">
+  <div class="custom-modal-container">
+    <div class="custom-modal-header">
+      <h3 class="custom-modal-title"><i class="bi bi-person-lines-fill me-2"></i>Emergency Contacts</h3>
+      <button type="button" class="custom-modal-close" onclick="closeEmergencyContactsModal()">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+    <div class="custom-modal-body">
+      <div class="mb-3">
+        <div class="input-group">
+          <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+          <input type="text" id="emergencyContactSearch" class="form-control" placeholder="Search by LRN or student name..." onkeydown="if (event.key === 'Enter') { event.preventDefault(); filterEmergencyContacts(); }">
+          <button type="button" class="btn btn-primary" onclick="filterEmergencyContacts()">
+            <i class="bi bi-search me-1"></i>Search
+          </button>
+          <button type="button" class="btn btn-outline-secondary" onclick="clearEmergencyContactSearch()">
+            <i class="bi bi-x-circle me-1"></i>Clear
+          </button>
+        </div>
+      </div>
+      <div id="emergencyContactsList">
+        <div class="loading-spinner">
+          <div class="spinner"></div>
+          <p>Loading emergency contacts...</p>
+        </div>
+      </div>
+      <div id="emergencyContactsFooter" class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-2" style="display: none;">
+        <div class="d-flex align-items-center gap-2">
+          <label class="small text-muted mb-0" for="emergencyContactsPerPage">Rows</label>
+          <select id="emergencyContactsPerPage" class="form-select form-select-sm" style="width: auto;" onchange="changeEmergencyPerPage(this.value)" aria-label="Rows per page">
+            <option value="10">10</option>
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+          </select>
+          <span class="text-muted small" id="emergencyContactsCount"></span>
+        </div>
+        <nav id="emergencyContactsPagination" aria-label="Emergency contacts pages"></nav>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Emergency modal: close on Escape (mirrors the Student Details modal behavior)
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') {
+    const emergencyModal = document.getElementById('emergencyContactsModal');
+    if (emergencyModal && emergencyModal.style.display === 'flex') {
+      closeEmergencyContactsModal();
+    }
+  }
+});
+
+// Emergency modal: close when clicking the dark backdrop (mirrors the Student Details modal behavior)
+document.addEventListener('click', function (e) {
+  const emergencyModal = document.getElementById('emergencyContactsModal');
+  if (emergencyModal && e.target === emergencyModal) {
+    closeEmergencyContactsModal();
+  }
+});
+</script>
+<?= $this->endSection() ?>
+

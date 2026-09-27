@@ -1,6 +1,15 @@
 <?= $this->extend('dashboard_layout') ?>
 <?= $this->section('content') ?>
 
+<style><?= view('partials/password_requirements_style') ?>
+
+/* Relationship selector + its "Other" companion box (same behaviour as the
+   registration form): the box only appears for "Other". */
+.religion-other { display: none; margin-top: .35rem; }
+.religion-other.is-visible { display: block; }
+.religion-other .form-label { margin-bottom: .15rem; }
+</style>
+
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h1 class="h3">Add New Student</h1>
   <a href="<?= base_url('admin/students') ?>" class="btn btn-outline-secondary">
@@ -55,13 +64,19 @@
           <div class="mb-3">
             <label for="password" class="form-label">Password <span class="text-danger">*</span></label>
             <div class="position-relative">
-              <input type="password" class="form-control" id="password" name="password" required>
+              <input type="password" class="form-control" id="password" name="password"
+                     minlength="<?= password_policy_min_length() ?>" pattern="(?=.*\d).{<?= password_policy_min_length() ?>,}"
+                     autocomplete="new-password" required data-password-indicator>
               <button type="button" class="btn position-absolute" id="togglePassword" 
                       style="right: 10px; top: 50%; transform: translateY(-50%); border: none; background: none; color: #6b7280; z-index: 10;">
                 <i class="bi bi-eye" id="toggleIcon"></i>
               </button>
             </div>
-            <div class="form-text">Minimum 8 characters</div>
+            <div class="alert alert-info d-flex align-items-center gap-2 py-2 px-3 mt-2" role="note" style="font-size: .8rem;">
+              <i class="bi bi-key-fill" aria-hidden="true"></i>
+              <span><strong>Input your desired password.</strong> This is the password you will use to log in.</span>
+            </div>
+            <?= view('partials/password_requirements') ?>
           </div>
         </div>
         <div class="col-md-6">
@@ -87,21 +102,32 @@
         <div class="col-md-3">
           <div class="mb-3">
             <label for="first_name" class="form-label">First Name <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" id="first_name" name="first_name" 
+            <input type="text" class="form-control" id="first_name" name="first_name" maxlength="50" oninput="this.value = this.value.replace(/[^\p{L}\p{M}\s.'\-]/gu, '')"
                    value="<?= old('first_name') ?>" required>
           </div>
         </div>
         <div class="col-md-3">
           <div class="mb-3">
+            <?php
+            // Students without a middle name tick the box; the field is then
+            // cleared and left unrequired. A supplied middle name must be at
+            // least two characters.
+            $noMiddleName = old(NO_MIDDLE_NAME_POST_KEY) === no_middle_name_rule();
+            $middleNameValue = $noMiddleName ? '' : old('middle_name');
+            ?>
             <label for="middle_name" class="form-label">Middle Name</label>
-            <input type="text" class="form-control" id="middle_name" name="middle_name" 
-                   value="<?= old('middle_name') ?>">
+            <input type="text" class="form-control" id="middle_name" name="middle_name" maxlength="100" minlength="2" oninput="this.value = this.value.replace(/[^\p{L}\p{M}\s.'\-]/gu, '')"
+                   value="<?= esc($middleNameValue) ?>" <?= $noMiddleName ? 'disabled' : 'required' ?>>
+            <label class="form-check-label d-flex align-items-center gap-1 mt-1" for="no_middle_name" style="font-size: .75rem; cursor: pointer;">
+              <input class="form-check-input mt-0" type="checkbox" name="<?= NO_MIDDLE_NAME_POST_KEY ?>" id="no_middle_name" value="<?= no_middle_name_rule() ?>" onchange="toggleNoMiddleName()" <?= $noMiddleName ? 'checked' : '' ?>>
+              <span>No middle name</span>
+            </label>
           </div>
         </div>
         <div class="col-md-3">
           <div class="mb-3">
             <label for="last_name" class="form-label">Last Name <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" id="last_name" name="last_name" 
+            <input type="text" class="form-control" id="last_name" name="last_name" maxlength="50" oninput="this.value = this.value.replace(/[^\p{L}\p{M}\s.'\-]/gu, '')"
                    value="<?= old('last_name') ?>" required>
           </div>
         </div>
@@ -138,13 +164,6 @@
         </div>
         <div class="col-md-6">
           <div class="mb-3">
-            <label for="place_of_birth" class="form-label">Place of Birth</label>
-            <input type="text" class="form-control" id="place_of_birth" name="place_of_birth" 
-                   value="<?= old('place_of_birth') ?>">
-          </div>
-        </div>
-        <div class="col-md-6">
-          <div class="mb-3">
             <label for="nationality" class="form-label">Nationality</label>
             <input type="text" class="form-control" id="nationality" name="nationality" 
                    value="<?= old('nationality', 'Filipino') ?>">
@@ -155,6 +174,14 @@
             <label for="religion" class="form-label">Religion</label>
             <input type="text" class="form-control" id="religion" name="religion" 
                    value="<?= old('religion') ?>">
+          </div>
+        </div>
+        <div class="col-md-12">
+          <div class="mb-3">
+            <label for="place_of_birth" class="form-label">Place of Birth</label>
+            <input type="hidden" id="place_of_birth" name="place_of_birth"
+                   value="<?= old('place_of_birth') ?>">
+            <div data-loc-group="place_of_birth" data-loc-field="place_of_birth" data-loc-label="Place of Birth"></div>
           </div>
         </div>
       </div>
@@ -209,7 +236,7 @@
         <div class="col-md-6">
           <div class="mb-3">
             <label for="contact_number" class="form-label">Contact Number</label>
-            <input type="text" class="form-control" id="contact_number" name="contact_number" 
+            <input type="text" class="form-control" id="contact_number" name="contact_number" maxlength="11" inputmode="numeric" pattern="^09[0-9]{9}" autocomplete="tel-national" placeholder="09XXXXXXXXX"
                    value="<?= old('contact_number') ?>">
           </div>
         </div>
@@ -223,7 +250,8 @@
         <div class="col-md-12">
           <div class="mb-3">
             <label for="address" class="form-label">Address</label>
-            <textarea class="form-control" id="address" name="address" rows="3"><?= old('address') ?></textarea>
+            <input type="hidden" id="address" name="address" value="<?= old('address') ?>">
+            <div data-loc-group="address" data-loc-field="address" data-loc-label="Address"></div>
           </div>
         </div>
       </div>
@@ -243,15 +271,36 @@
         <div class="col-md-6">
           <div class="mb-3">
             <label for="emergency_contact_number" class="form-label">Contact Number</label>
-            <input type="text" class="form-control" id="emergency_contact_number" name="emergency_contact_number" 
+            <input type="text" class="form-control" id="emergency_contact_number" name="emergency_contact_number" maxlength="11" inputmode="numeric" pattern="^09[0-9]{9}" autocomplete="tel-national" placeholder="09XXXXXXXXX"
                    value="<?= old('emergency_contact_number') ?>">
           </div>
         </div>
+        <?php
+        // A relationship outside the listed choices reveals a free-text box, so
+        // "Other" is never stored as a literal value.
+        $relOptions = emergency_contact_relationship_options();
+        $relOld     = old('emergency_contact_relationship', '', false);
+        $relValue   = is_string($relOld) ? trim($relOld) : '';
+        $relIsOther = emergency_contact_relationship_is_other($relValue);
+        ?>
         <div class="col-md-6">
           <div class="mb-3">
             <label for="emergency_contact_relationship" class="form-label">Relationship</label>
-            <input type="text" class="form-control" id="emergency_contact_relationship" name="emergency_contact_relationship" 
-                   value="<?= old('emergency_contact_relationship') ?>" placeholder="e.g., Parent, Guardian, Sibling">
+            <select class="form-select" name="emergency_contact_relationship" id="emergency_contact_relationship" onchange="toggleRelationshipOther()">
+              <option value="">Select Relationship</option>
+              <?php foreach ($relOptions as $relOption): ?>
+                <option value="<?= esc($relOption) ?>" <?= $relValue === $relOption ? 'selected' : '' ?>><?= esc($relOption) ?></option>
+              <?php endforeach; ?>
+              <option value="<?= esc(emergency_contact_relationship_other_option()) ?>" <?= $relIsOther ? 'selected' : '' ?>>Other (please specify)</option>
+            </select>
+            <div class="religion-other<?= $relIsOther ? ' is-visible' : '' ?>" id="relationshipOtherWrap">
+              <label class="form-label" for="emergency_contact_relationship_other">Specify Relationship *</label>
+              <input type="text" class="form-control" name="emergency_contact_relationship_other" id="emergency_contact_relationship_other"
+                     value="<?= $relIsOther ? esc($relValue) : '' ?>"
+                     data-field-label="Specify Relationship"
+                     maxlength="50" placeholder="e.g. Godparent, Friend" autocomplete="off"
+                     <?= $relIsOther ? 'required' : 'disabled' ?>>
+            </div>
           </div>
         </div>
       </div>
@@ -267,7 +316,52 @@
 </div>
 
 <script>
+// "No middle name": when ticked the field is cleared, disabled (so no stale
+// value is ever submitted) and unrequired. When unticked it is required and
+// must be at least two characters.
+function toggleNoMiddleName() {
+    const checkbox = document.getElementById('no_middle_name');
+    const field = document.getElementById('middle_name');
+
+    if (!checkbox || !field) {
+        return;
+    }
+
+    const noMiddleName = checkbox.checked;
+
+    if (noMiddleName) {
+        field.value = '';
+    }
+
+    field.disabled = noMiddleName;
+    field.required = !noMiddleName;
+    field.style.opacity = noMiddleName ? '0.5' : '';
+}
+
+// The relationship selector only reveals its free-text box for "Other". While
+// hidden that box is disabled (so no stale value is ever submitted) and drops
+// `required`, matching the registration form.
+function toggleRelationshipOther() {
+    const select = document.getElementById('emergency_contact_relationship');
+    const wrapper = document.getElementById('relationshipOtherWrap');
+    const input = document.getElementById('emergency_contact_relationship_other');
+
+    if (!select || !wrapper || !input) {
+        return;
+    }
+
+    const isOther = select.value === <?= json_encode(emergency_contact_relationship_other_option()) ?>;
+
+    wrapper.classList.toggle('is-visible', isOther);
+    input.required = isOther;
+    input.disabled = !isOther;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
+    // Restore the box state for a redisplayed form.
+    toggleNoMiddleName();
+    toggleRelationshipOther();
+
     const togglePassword = document.getElementById('togglePassword');
     const passwordInput = document.getElementById('password');
     const toggleIcon = document.getElementById('toggleIcon');

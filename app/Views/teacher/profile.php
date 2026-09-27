@@ -3,11 +3,8 @@
 
 <style>
 .blue-divider {
-  height: 3px;
-  background: linear-gradient(90deg, #007bff, #0056b3);
-  border-radius: 2px;
-  margin: 1rem 0;
-}
+  height: 1px;
+  background: var(--hairline-strong);
 
 .profile-card {
   background: #ffffff;
@@ -51,29 +48,107 @@
 .form-section h5 {
   color: #007bff;
   margin-bottom: 1rem;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .teacher-info-section { margin-bottom: 1.5rem; }
 .teacher-info-title {
-  font-size: 1rem; font-weight: 600; color: #007bff; margin-bottom: 0.75rem;
+  font-size: 1rem; font-weight: 700; color: #007bff; margin-bottom: 0.75rem;
   padding-bottom: 0.35rem; border-bottom: 1px solid #dee2e6;
 }
 .teacher-info-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem;
 }
 .teacher-info-label {
-  font-size: 0.75rem; font-weight: 600; color: #6c757d; text-transform: uppercase;
+  font-size: 0.8125rem; font-weight: 700; color: #6c757d; text-transform: uppercase;
 }
 .teacher-info-value { font-size: 0.95rem; color: #212529; }
 .teacher-info-value.empty { color: #adb5bd; font-style: italic; }
 .status-badge {
   display: inline-block; padding: 0.25rem 0.5rem; border-radius: 0.25rem;
-  font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
+  font-size: 0.8125rem; font-weight: 700; text-transform: uppercase;
 }
 .status-active { background: #d1e7dd; color: #0f5132; }
 .status-inactive, .status-terminated { background: #f8d7da; color: #842029; }
 .status-on_leave, .status-resigned { background: #fff3cd; color: #664d03; }
+
+/* Profile header chips */
+.profile-chips {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem;
+  margin-top: 1rem;
+}
+.profile-chip {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  padding: 0.25rem 0.75rem;
+  display: inline-flex; align-items: center; gap: 0.35rem;
+}
+
+/* Profile tabs: My Information vs Personnel Record */
+.profile-tabs {
+  display: flex; flex-wrap: wrap; gap: 0.25rem;
+  border-bottom: 2px solid #e9ecef;
+  margin-bottom: 1.5rem;
+}
+.profile-tab-btn {
+  border: none;
+  background: transparent;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  color: #6c757d;
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 0.75rem 1.1rem;
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.profile-tab-btn:hover { color: #007bff; }
+.profile-tab-btn.active { color: #007bff; border-bottom-color: #007bff; background: transparent; }
+.profile-tab-badge {
+  font-size: 0.6rem; font-weight: 700; text-transform: uppercase;
+  padding: 0.2rem 0.45rem; border-radius: 999px;
+}
+
+/* Read-only note on the Personnel Record tab */
+.personnel-readonly-note {
+  display: flex; align-items: flex-start; gap: 0.75rem;
+  background: #f8f9fa;
+  border: 1px dashed #adb5bd;
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  margin-bottom: 1.5rem;
+  color: #495057;
+  font-size: 0.9rem;
+}
+
+/* Save bar: Update Profile button below the form */
+.profile-save-bar {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem;
+  border-top: 1px solid #dee2e6;
+  margin-top: 0.5rem;
+  padding-top: 1.25rem;
+}
+.profile-save-note { font-size: 0.8rem; color: #6c757d; }
+
+/* Keep name/email white on the blue header — beats dashboard.css
+   `.main-content .page-content h3` (!important + higher specificity). */
+body.dashboard-app .main-content .page-content .profile-card .profile-header h3.profile-name {
+  color: #ffffff !important;
+  border-bottom: none !important;
+  margin-bottom: 0.25rem !important;
+  padding-bottom: 0 !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+body.dashboard-app .main-content .page-content .profile-card .profile-header p.profile-email {
+  color: #ffffff !important;
+  opacity: 0.92;
+}
+body.dashboard-app .main-content .page-content .profile-card .profile-header .profile-chip {
+  color: #ffffff !important;
+}
 </style>
 
 <!-- Header Section -->
@@ -132,7 +207,7 @@ if (!empty($missingFields)):
       </div>
       <p class="mb-0 mt-2 small text-muted">
         <i class="bi bi-pencil-square me-1"></i>
-        You can update these anytime by scrolling down to the Personal Information and Contact Information sections below.
+        You can update these anytime in the "My Information" tab below.
       </p>
     </div>
   </div>
@@ -147,12 +222,39 @@ if (!empty($missingFields)):
         <div class="profile-avatar">
           <?= strtoupper(substr($teacher['first_name'], 0, 1) . substr($teacher['last_name'], 0, 1)) ?>
         </div>
-        <h3 class="mb-1" style="color: white;"><?= esc($teacher['first_name'] . ' ' . $teacher['last_name']) ?></h3>
-        <p class="mb-0" style="color: white; opacity: 0.9;"><?= esc($teacher['email']) ?></p>
+        <h3 class="mb-1 profile-name" style="color: white;"><?= esc($teacher['first_name'] . ' ' . $teacher['last_name']) ?></h3>
+        <p class="mb-0 profile-email" style="color: white; opacity: 0.9;"><?= esc($teacher['email']) ?></p>
+        <div class="profile-chips">
+          <span class="profile-chip"><i class="bi bi-person-badge"></i><?= esc($teacher['government_employee_no'] ?? $teacher['employee_id'] ?? '—') ?></span>
+          <?php if (!empty($teacher['position'])): ?>
+            <span class="profile-chip"><i class="bi bi-briefcase"></i><?= esc($teacher['position']) ?></span>
+          <?php endif; ?>
+          <span class="profile-chip"><i class="bi bi-diagram-3"></i><?= esc($department ?? 'Not Assigned') ?></span>
+          <span class="profile-chip"><i class="bi bi-check-circle"></i>Active</span>
+        </div>
       </div>
       
       <div class="card-body p-4">
-        <form action="<?= base_url('teacher/profile/update') ?>" method="post" id="profileUpdateForm">
+        <!-- Tabs: editable info vs official (read-only) personnel record -->
+        <ul class="nav profile-tabs" id="profileTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="profile-tab-btn active" id="tab-myinfo-btn" data-bs-toggle="tab" data-bs-target="#tab-myinfo" type="button" role="tab" aria-selected="true">
+              <i class="bi bi-person-gear"></i>My Information
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="profile-tab-btn" id="tab-personnel-btn" data-bs-toggle="tab" data-bs-target="#tab-personnel" type="button" role="tab" aria-selected="false">
+              <i class="bi bi-file-earmark-person"></i>Personnel Record
+              <?php $personnelEditable = (int) ($teacher['personnel_edit_enabled'] ?? 1) === 1; ?>
+              <span class="profile-tab-badge <?= $personnelEditable ? 'bg-success' : 'bg-secondary' ?> text-white"><?= $personnelEditable ? 'Editable' : 'Locked' ?></span>
+            </button>
+          </li>
+        </ul>
+
+        <div class="tab-content">
+          <!-- Editable Profile Information -->
+          <div class="tab-pane fade show active" id="tab-myinfo" role="tabpanel" aria-labelledby="tab-myinfo-btn">
+          <form action="<?= base_url('teacher/profile/update') ?>" method="post" id="profileUpdateForm">
           <?= csrf_field() ?>
           
           <div class="form-section">
@@ -165,7 +267,7 @@ if (!empty($missingFields)):
               </div>
               <div class="col-md-4 mb-3">
                 <label for="middle_name" class="form-label">Middle Name</label>
-                <input type="text" class="form-control" id="middle_name" name="middle_name" 
+                <input type="text" class="form-control" id="middle_name" name="middle_name" minlength="2" 
                        value="<?= esc($teacher['middle_name']) ?>">
               </div>
               <div class="col-md-4 mb-3">
@@ -186,25 +288,86 @@ if (!empty($missingFields)):
               </div>
               <div class="col-md-6 mb-3">
                 <label for="contact_number" class="form-label">Phone Number</label>
-                <input type="text" class="form-control" id="contact_number" name="contact_number" 
+                <input type="text" class="form-control" id="contact_number" name="contact_number" maxlength="11" inputmode="numeric" pattern="^09[0-9]{9}" autocomplete="tel-national" placeholder="09XXXXXXXXX"
                        value="<?= esc($teacher['contact_number'] ?? '') ?>">
               </div>
             </div>
             <div class="mb-3">
-              <label for="address" class="form-label">Address</label>
-              <textarea class="form-control" id="address" name="address" rows="2"><?= esc($teacher['address'] ?? '') ?></textarea>
+              <label for="profile_address" class="form-label">Address</label>
+              <input type="hidden" id="profile_address" name="address" maxlength="255" value="<?= esc($teacher['address'] ?? '') ?>">
+              <div data-loc-group="address" data-loc-field="profile_address" data-loc-label="Address"></div>
             </div>
           </div>
 
-          <div class="d-flex gap-2">
-            <button type="submit" class="btn btn-primary">
+          <!-- Save bar: Update Profile button placed below the form -->
+          <div class="profile-save-bar">
+            <span class="profile-save-note">
+              <i class="bi bi-info-circle me-1"></i>Changes are saved to your account when you click Update Profile.
+            </span>
+            <button type="submit" class="btn btn-primary px-4">
               <i class="bi bi-check-circle me-2"></i>Update Profile
             </button>
-            <a href="<?= base_url('teacher/dashboard') ?>" class="btn btn-outline-secondary">
-              <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
-            </a>
           </div>
         </form>
+          </div>
+
+          <!-- Official Personnel Record (editable when the administrator allows it) -->
+          <div class="tab-pane fade" id="tab-personnel" role="tabpanel" aria-labelledby="tab-personnel-btn">
+          <?php if ($personnelEditable): ?>
+            <div class="personnel-readonly-note" style="background:#e7f1ff;border:1px solid #b6d4fe;">
+              <i class="bi bi-unlock-fill fs-5 mt-1 flex-shrink-0" style="color:#0d6efd;"></i>
+              <div>
+                <strong>Official personnel record on file.</strong>
+                You can update the fields below, then click <em>Save Personnel Record</em> to submit your corrections.
+              </div>
+            </div>
+
+            <form action="<?= base_url('teacher/profile/update-personnel') ?>" method="post" id="personnelEditForm">
+            <?= csrf_field() ?>
+
+            <div class="row mb-2 mt-3">
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <label for="personnel_email" class="form-label"><i class="bi bi-envelope"></i>Email Address <span class="text-danger">*</span></label>
+                  <input type="email" class="form-control" id="personnel_email" name="email"
+                         value="<?= esc($teacher['email']) ?>" required>
+                  <div class="form-text"><i class="bi bi-info-circle"></i>Changing this also updates the email you use to sign in.</div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <label class="form-label"><i class="bi bi-hash"></i>System ID</label>
+                  <input type="text" class="form-control" value="<?= esc($teacher['employee_id'] ?? '—') ?>" readonly>
+                  <div class="form-text"><i class="bi bi-info-circle"></i>Assigned by the system — cannot be changed.</div>
+                </div>
+              </div>
+            </div>
+
+            <?= view('admin/partials/teacher_personnel_fields', ['teacher' => $teacher, 'mode' => 'edit', 'showAccount' => false]) ?>
+
+            <div class="profile-save-bar">
+              <span class="profile-save-note">
+                <i class="bi bi-info-circle me-1"></i>Your personnel record is shared with the school administrator.
+              </span>
+              <button type="submit" class="btn btn-primary px-4">
+                <i class="bi bi-check-circle me-2"></i>Save Personnel Record
+              </button>
+            </div>
+            </form>
+
+            <?= view('admin/partials/teacher_personnel_scripts') ?>
+          <?php else: ?>
+            <div class="personnel-readonly-note">
+              <i class="bi bi-lock-fill fs-5 mt-1 flex-shrink-0"></i>
+              <div>
+                <strong>Personnel record editing is currently disabled.</strong>
+                The school administrator has locked this record, so your official details below are read-only.
+              </div>
+            </div>
+            <?= view('admin/partials/teacher_personnel_details', ['teacher' => $teacher]) ?>
+          <?php endif; ?>
+          </div>
+        </div><!-- /tab-content -->
       </div>
     </div>
   </div>
@@ -288,18 +451,6 @@ if (!empty($missingFields)):
     </div>
 
 
-  </div>
-</div>
-
-<div class="row mt-4">
-  <div class="col-12">
-    <div class="profile-card">
-      <div class="card-body p-4">
-        <h5 class="text-primary mb-2"><i class="bi bi-file-earmark-person me-2"></i>Personnel Record</h5>
-        <p class="text-muted small mb-3">Official personnel data on file. Contact the administrator to request corrections.</p>
-        <?= view('admin/partials/teacher_personnel_details', ['teacher' => $teacher]) ?>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -390,6 +541,44 @@ document.addEventListener('DOMContentLoaded', function() {
             
             console.log('Form validation passed, submitting...');
         });
+    }
+
+    // Personnel Record save — show the styled confirmation modal instead of the
+    // native browser confirm() dialog. The modal-system.js script (loaded via
+    // dashboard_layout) provides the promise-based customConfirm() dialog.
+    const personnelEditForm = document.getElementById('personnelEditForm');
+    if (personnelEditForm) {
+        personnelEditForm.addEventListener('submit', function(e) {
+            // Second pass: confirmation was already given, allow the POST through.
+            if (this.dataset.confirmed === '1') {
+                delete this.dataset.confirmed;
+                return;
+            }
+            e.preventDefault();
+            // HTML5 required-field validation has already passed by the time
+            // the submit event fires, so the record is safe to submit once
+            // the user confirms in the modal.
+            customConfirm('Save the changes to your personnel record?', 'Save Personnel Record', 'question').then(function(ok) {
+                if (ok) {
+                    personnelEditForm.dataset.confirmed = '1';
+                    personnelEditForm.submit();
+                }
+            });
+        });
+    }
+
+    // Remember the active profile tab in the URL so it can be linked directly
+    const profileTabButtons = document.querySelectorAll('#profileTabs button[data-bs-toggle="tab"]');
+    profileTabButtons.forEach(function(btn) {
+        btn.addEventListener('shown.bs.tab', function(e) {
+            history.replaceState(null, '', e.target.getAttribute('data-bs-target'));
+        });
+    });
+    if (window.location.hash === '#tab-personnel') {
+        const personnelBtn = document.querySelector('#profileTabs button[data-bs-target="#tab-personnel"]');
+        if (personnelBtn) {
+            bootstrap.Tab.getOrCreateInstance(personnelBtn).show();
+        }
     }
 });
 </script>

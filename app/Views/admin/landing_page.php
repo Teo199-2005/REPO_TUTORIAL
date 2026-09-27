@@ -1,8 +1,9 @@
 <?= $this->extend('dashboard_layout') ?>
 <?= $this->section('content') ?>
 
-<div class="mb-3">
-    <h1 class="h4 mb-1">Landing Page</h1>
+<div class="mb-4">
+    <h1 class="h3 mb-2">Landing Page</h1>
+    <p class="text-muted mb-0">Manage the public home page hero slideshow (up to 3 images), the announcement strip above the hero, and Tappy's own message on the front page. Everything here is what a visitor sees at <?= esc(base_url()) ?>.</p>
 </div>
 
 <?php if (session()->getFlashdata('success')): ?>
@@ -19,720 +20,1453 @@
     </div>
 <?php endif; ?>
 
-<?php
-    $announcementStrip = $announcementStrip ?? '';
-    $lifelines = landing_lifelines();
-    $qrUrl = landing_qr_code_url();
-?>
-
-<style>
-.lp-row { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.75rem; }
-.lp-col { flex: 0 0 calc(50% - 0.375rem); max-width: calc(50% - 0.375rem); }
-.lp-card { height: 100%; display: flex; flex-direction: column; }
-.lp-card .card-body { flex: 1 1 auto; overflow: auto; padding: 0.75rem; }
-.lp-preview-frame { border: 1px solid #e5e7eb; border-radius: 0.375rem; background: #fff; padding: 0.75rem; min-height: 300px; }
-@media (max-width: 767px) {
-    .lp-col { flex: 0 0 100%; max-width: 100%; }
-}
-
-/* Slide position controls - compact */
-.slide-position-controls {
-    display: flex;
-    gap: 0.35rem;
-    align-items: center;
-    flex-wrap: nowrap;
-    margin-top: 0.35rem;
-}
-
-.slide-position-controls input[type="range"] {
-    flex: 1;
-    min-width: 40px;
-    height: 4px;
-    -webkit-appearance: none;
-    appearance: none;
-    background: #e2e8f0;
-    border-radius: 2px;
-    outline: none;
-}
-
-.slide-position-controls input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: #3b82f6;
-    cursor: pointer;
-    border: 2px solid white;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-}
-
-.slide-preview-thumb {
-    position: relative;
-    overflow: hidden;
-    border-radius: 6px;
-    background: #0b1530;
-    cursor: grab;
-    touch-action: none;
-}
-
-.slide-preview-thumb:active {
-    cursor: grabbing;
-}
-
-.slide-preview-thumb img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    pointer-events: none;
-    transition: none;
-}
-
-/* Live Preview Container */
-.live-preview-container {
-    background: #0b1530;
-    border-radius: 12px;
-    overflow: hidden;
-    position: relative;
-    aspect-ratio: 1983 / 793;
-    max-height: 400px;
-    border: 2px solid #1e3a8a;
-}
-
-.live-preview-container .preview-slide {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    opacity: 0;
-    transition: opacity 0.5s ease;
-}
-
-.live-preview-container .preview-slide.is-active {
-    opacity: 1;
-    z-index: 1;
-}
-
-.live-preview-container .preview-slide img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: var(--preview-pos, 50% 50%);
-}
-
-.live-preview-dots {
-    position: absolute;
-    bottom: 1rem;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 5;
-    display: flex;
-    gap: 0.5rem;
-}
-
-.live-preview-dots button {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    border: 2px solid rgba(255,255,255,0.85);
-    background: transparent;
-    padding: 0;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.live-preview-dots button.is-active {
-    background: #fbbf24;
-    border-color: #fbbf24;
-    transform: scale(1.15);
-}
-
-.live-preview-nav {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    background: rgba(0,0,0,0.28);
-    border: none;
-    color: #fff;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    cursor: pointer;
-    z-index: 5;
-    backdrop-filter: blur(4px);
-    box-shadow: 0 4px 14px rgba(0,0,0,0.24);
-}
-
-.live-preview-nav:hover {
-    background: rgba(0,0,0,0.45);
-}
-
-.live-preview-nav.prev { left: 10px; }
-.live-preview-nav.next { right: 10px; }
-
-.live-preview-nav i { font-size: 0.95rem; }
-
-/* Preview announcement strip */
-.preview-announcement-strip {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 6;
-    background: linear-gradient(90deg, #1e3a8a 0%, #2563eb 45%, #1d4ed8 100%);
-    color: #fff;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
-    border-bottom: 2px solid #fbbf24;
-    padding: 0.35rem 0;
-    font-size: 0.78rem;
-    font-weight: 600;
-}
-
-.preview-announcement-viewport {
-    overflow: hidden;
-    width: 100%;
-    mask-image: linear-gradient(90deg, transparent 0%, #000 3%, #000 97%, transparent 100%);
-    -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 3%, #000 97%, transparent 100%);
-}
-
-.preview-announcement-track {
-    display: flex;
-    width: max-content;
-    min-width: 200%;
-    animation: previewStripScroll 28s linear infinite;
-    will-change: transform;
-}
-
-.preview-announcement-group {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-    min-width: 50vw;
-    justify-content: center;
-    gap: 0.5rem;
-    padding: 0 1.5rem;
-    white-space: nowrap;
-}
-
-.preview-announcement-icon {
-    color: #fbbf24;
-    font-size: 0.85rem;
-    flex-shrink: 0;
-}
-
-.preview-announcement-text {
-    white-space: nowrap;
-    font-size: 0.75rem;
-}
-
-@keyframes previewStripScroll {
-    0% { transform: translateX(0); }
-    100% { transform: translateX(-50%); }
-}
-
-/* Preview lifelines */
-.preview-lifelines {
-    position: absolute;
-    top: 3.2rem;
-    right: 10px;
-    display: flex;
-    gap: 0.3rem;
-    align-items: center;
-    padding: 0.25rem 0.35rem;
-    background: rgba(0,0,0,0.36);
-    border-radius: 8px;
-    z-index: 25;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.35);
-}
-
-.preview-lifeline-item {
-    background: rgba(0,0,0,0.45);
-    border-radius: 6px;
-    display: flex;
-    gap: 0.3rem;
-    align-items: center;
-    padding: 0.2rem 0.4rem;
-}
-
-.preview-lifeline-icon i {
-    font-size: 0.75rem;
-    color: #22c55e;
-}
-
-.preview-lifeline-status {
-    font-weight: 700;
-    color: #22c55e;
-    font-size: 0.65rem;
-}
-
-.preview-lifeline-item.is-down .preview-lifeline-icon i,
-.preview-lifeline-item.is-down .preview-lifeline-status {
-    color: #ff4d4f;
-}
-
-/* Drag crosshair overlay */
-.slide-position-overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    cursor: crosshair;
-}
-
-.slide-position-crosshair {
-    position: absolute;
-    width: 24px;
-    height: 24px;
-    border: 2px solid rgba(255, 255, 255, 0.8);
-    border-radius: 50%;
-    transform: translate(-50%, -50%);
-    pointer-events: none;
-    z-index: 3;
-    box-shadow: 0 0 0 1px rgba(0,0,0,0.3), 0 0 12px rgba(0,0,0,0.3);
-    background: rgba(255, 255, 255, 0.15);
-}
-
-.slide-position-coords {
-    position: absolute;
-    bottom: 4px;
-    right: 4px;
-    z-index: 4;
-    background: rgba(0,0,0,0.6);
-    color: #fbbf24;
-    font-size: 0.65rem;
-    font-family: monospace;
-    padding: 2px 6px;
-    border-radius: 4px;
-    pointer-events: none;
-}
-</style>
-
-<form method="post" action="<?= base_url('admin/landing-page/update') ?>" enctype="multipart/form-data" id="landingForm">
+<form method="post" action="<?= base_url('admin/landing-page/update') ?>" enctype="multipart/form-data">
     <?= csrf_field() ?>
 
-    <!-- Row 1: Announcement + Lifelines (left) | Hero Slideshow (right) -->
-    <div class="lp-row">
-        <div class="lp-col">
-            <div class="card border-0 shadow-sm lp-card">
-                <div class="card-header bg-warning text-dark">
-                    <h5 class="mb-0"><i class="bi bi-megaphone-fill me-2"></i>Announcement Strip</h5>
-                </div>
-                <div class="card-body">
-                    <p class="text-muted small mb-3">Scrolling message above hero. Leave empty to hide.</p>
-                    <label class="form-label fw-semibold" for="announcement_strip">Announcement Text</label>
-                    <textarea class="form-control" id="announcement_strip" name="announcement_strip" rows="5" maxlength="500" placeholder="Enter announcement text..."><?= esc($announcementStrip) ?></textarea>
-                    <small class="text-muted d-block mt-1">Maximum 500 characters.</small>
-
-                    <hr class="my-4">
-
-                    <h5 class="mb-4"><i class="bi bi-heart-pulse me-2"></i>Lifelines</h5>
-                    <p class="text-muted small mb-4">Service status shown on public home page.</p>
-                    <div class="d-flex flex-column gap-2 flex-grow-1">
-                        <div class="d-flex align-items-center justify-content-between w-100 py-2 border-bottom">
-                            <div class="d-flex align-items-center gap-2">
-                                <i class="bi bi-droplet-fill text-primary"></i>
-                                <span class="small fw-semibold">Water</span>
-                            </div>
-                            <select name="lifeline_water" class="form-select form-select-sm" style="width: 160px;">
-                                <option value="FUNCTIONAL"<?= $lifelines['water'] === 'FUNCTIONAL' ? ' selected' : '' ?>>FUNCTIONAL</option>
-                                <option value="NOT FUNCTIONAL"<?= $lifelines['water'] === 'NOT FUNCTIONAL' ? ' selected' : '' ?>>NOT FUNCTIONAL</option>
-                            </select>
-                        </div>
-                        <div class="d-flex align-items-center justify-content-between w-100 py-2 border-bottom">
-                            <div class="d-flex align-items-center gap-2">
-                                <i class="bi bi-wifi text-success"></i>
-                                <span class="small fw-semibold">Communication</span>
-                            </div>
-                            <select name="lifeline_communication" class="form-select form-select-sm" style="width: 160px;">
-                                <option value="FUNCTIONAL"<?= $lifelines['communication'] === 'FUNCTIONAL' ? ' selected' : '' ?>>FUNCTIONAL</option>
-                                <option value="NOT FUNCTIONAL"<?= $lifelines['communication'] === 'NOT FUNCTIONAL' ? ' selected' : '' ?>>NOT FUNCTIONAL</option>
-                            </select>
-                        </div>
-                        <div class="d-flex align-items-center justify-content-between w-100 py-2">
-                            <div class="d-flex align-items-center gap-2">
-                                <i class="bi bi-lightning-charge-fill text-warning"></i>
-                                <span class="small fw-semibold">Electricity</span>
-                            </div>
-                            <select name="lifeline_electricity" class="form-select form-select-sm" style="width: 160px;">
-                                <option value="FUNCTIONAL"<?= $lifelines['electricity'] === 'FUNCTIONAL' ? ' selected' : '' ?>>FUNCTIONAL</option>
-                                <option value="NOT FUNCTIONAL"<?= $lifelines['electricity'] === 'NOT FUNCTIONAL' ? ' selected' : '' ?>>NOT FUNCTIONAL</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <h5 class="mb-3 mt-4"><i class="bi bi-qr-code me-2"></i>Footer QR Code</h5>
-                    <p class="text-muted small mb-2">QR code shown in the site footer beside the Facebook button.</p>
-                    <div class="border rounded p-2 mb-2">
-                        <?php if ($qrUrl !== ''): ?>
-                            <img src="<?= esc($qrUrl) ?>" alt="Footer QR Code" class="img-fluid mb-2" style="max-height: 90px; max-width: 90px; display: block;">
-                        <?php else: ?>
-                            <div class="bg-light border rounded mb-2" style="height: 70px; width: 70px; display: flex; align-items: center; justify-content: center; color: #999; font-size: 0.8rem;">No QR code</div>
-                        <?php endif; ?>
-                        <input type="file" class="form-control form-control-sm" name="footer_qr_code" accept="image/png,image/jpeg,image/webp">
-                        <input type="hidden" name="remove_qr_code" value="0">
-                    </div>
-                </div>
-            </div>
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="bi bi-images me-2"></i>Hero slideshow</h5>
         </div>
+        <div class="card-body p-4">
+            <p class="text-muted">Upload up to <strong>3</strong> wide banner images which will be shown in addition to the primary school banner (primary + up to 3 uploads = up to 4 slides). Recommended aspect ratio about <strong>2.5:1</strong> (e.g. 1983×793 px). If none are uploaded, the default school banner is used.</p>
+            <p class="text-muted small">Server limits: upload_max_filesize = <strong><?= esc(ini_get('upload_max_filesize')) ?></strong>, post_max_size = <strong><?= esc(ini_get('post_max_size')) ?></strong></p>
 
-        <div class="lp-col">
-            <div class="card border-0 shadow-sm lp-card">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="bi bi-images me-2"></i>Hero Slideshow</h5>
-                </div>
-                <div class="card-body">
-                    <p class="text-muted small mb-3">Upload up to 3 wide banner images (2.5:1 aspect ratio). <strong>Drag on the preview to adjust image position.</strong></p>
-                    <?php for ($slot = 1; $slot <= 3; $slot++): ?>
-                        <?php $slide = $slides[$slot] ?? null; ?>
-                        <?php $pos = $slide['position'] ?? '50% 50%'; ?>
-                        <?php $posParts = explode(' ', $pos); $posX = (int) rtrim($posParts[0] ?? '50', '%'); $posY = (int) rtrim($posParts[1] ?? '50', '%'); ?>
-                        <?php $scale = $slide['scale'] ?? 1; ?>
-                        <div class="border rounded p-3 mb-3">
-                            <h6 class="fw-bold">Slide <?= $slot ?></h6>
-                            <div class="slide-preview-thumb mb-2" style="height: 140px;" data-slot="<?= $slot ?>" data-posx="<?= $posX ?>" data-posy="<?= $posY ?>">
-                                <?php if (!empty($slide['url'])): ?>
-                                    <img src="<?= esc($slide['url']) ?>" alt="Slide <?= $slot ?>" style="width: 100%; height: 100%; object-fit: cover; object-position: <?= $posX ?>% <?= $posY ?>%;">
+            <div class="row g-4">
+                <?php for ($slot = 1; $slot <= 3; $slot++): ?>
+                    <?php $slide = $slides[$slot] ?? null; ?>
+                    <div class="col-lg-4">
+                        <div class="border rounded-3 p-3 h-100">
+                            <h6 class="fw-bold text-primary mb-3">Slide <?= $slot ?></h6>
+                            <div class="slide-editor__preview-wrapper mb-3 rounded-3 overflow-hidden border bg-light position-relative" data-slot="<?= $slot ?>" tabindex="0" aria-label="Slide <?= $slot ?> preview">
+                                <?php if (! empty($slide['url'])): ?>
+                                    <img src="<?= esc($slide['url']) ?>" alt="Hero slide <?= $slot ?>" class="img-fluid w-100 slide-preview-img" data-slot="<?= $slot ?>" style="aspect-ratio: 2.5/1; object-fit: cover; object-position: <?= esc($slide['position'] ?? '50% 50%') ?>; transform: scale(<?= esc(number_format((float)($slide['scale'] ?? 1), 2, '.', '')) ?>);">
+                                    <div class="slide-editor__preview-hint">Drag image to reposition</div>
                                 <?php else: ?>
-                                    <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #666; font-size: 0.85rem; background: #1a1a2e;">No image uploaded</div>
+                                    <div class="slide-editor__placeholder d-flex align-items-center justify-content-center p-3 text-center small text-muted">No image yet. Upload a slide to preview and drag it into place.</div>
                                 <?php endif; ?>
-                                <div class="slide-position-overlay" data-slot="<?= $slot ?>"></div>
-                                <div class="slide-position-crosshair" style="left: <?= $posX ?>%; top: <?= $posY ?>%;"></div>
-                                <div class="slide-position-coords"><?= $posX ?>% <?= $posY ?>%</div>
                             </div>
-                            <input type="file" class="form-control form-control-sm mb-2" name="hero_slide_<?= $slot ?>" accept="image/jpeg,image/png,image/webp">
-                            
-                            <div class="slide-position-controls">
-                                <input type="range" class="slide-pos-x" min="0" max="100" value="<?= $posX ?>" data-slot="<?= $slot ?>" title="Horizontal position">
-                                <input type="range" class="slide-pos-y" min="0" max="100" value="<?= $posY ?>" data-slot="<?= $slot ?>" title="Vertical position">
+                            <input type="hidden" name="remove_slide_<?= $slot ?>" id="remove_slide_<?= $slot ?>" value="0">
+                            <div class="d-flex flex-wrap gap-2 mb-2">
+                                <?php if (! empty($slide['url'])): ?>
+                                    <button type="button" class="btn btn-sm btn-outline-primary open-slide-editor" data-slot="<?= $slot ?>" title="Open the crop editor">
+                                        <i class="bi bi-arrows-fullscreen me-1" aria-hidden="true"></i>
+                                        <span class="d-none d-sm-inline">Edit crop</span>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger remove-slide-btn" data-slot="<?= $slot ?>" title="Remove this slide">
+                                        <i class="bi bi-trash me-1" aria-hidden="true"></i>
+                                        <span class="d-none d-sm-inline">Remove</span>
+                                    </button>
+                                <?php endif; ?>
                             </div>
-                            
-                            <div class="slide-position-controls mt-1">
-                                <input type="range" class="slide-scale" min="100" max="250" value="<?= (int)($scale * 100) ?>" data-slot="<?= $slot ?>" title="Zoom level">
+                            <label class="form-label small fw-semibold" for="hero_slide_<?= $slot ?>">Replace or add image</label>
+                            <input type="file" class="form-control form-control-sm hero-slide-input" id="hero_slide_<?= $slot ?>" name="hero_slide_<?= $slot ?>" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp">
+                            <div class="form-text small text-muted mt-1">
+                                <span class="slide-input-hint">JPG, PNG, or WEBP — max 50MB. Choosing a file opens the crop editor automatically.</span>
+                                <span class="text-danger d-none slide-input-error" role="alert"></span>
                             </div>
 
-                            <input type="hidden" name="hero_slide_<?= $slot ?>_position" id="posInput_<?= $slot ?>" value="<?= esc($pos) ?>">
-                            <input type="hidden" name="hero_slide_<?= $slot ?>_scale" id="scaleInput_<?= $slot ?>" value="<?= esc($scale) ?>">
+                            <div class="slide-editor__controls mt-3">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <label class="form-label small fw-semibold mb-0" for="hero_slide_<?= $slot ?>_zoom">Zoom</label>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary reset-slide-edit" data-slot="<?= $slot ?>">Reset</button>
+                                </div>
+                                <input type="range" class="form-range slide-zoom-range" id="hero_slide_<?= $slot ?>_zoom" data-slot="<?= $slot ?>" min="1" max="2.5" step="0.05" value="<?= esc(number_format((float)($slide['scale'] ?? 1), 2, '.', '')) ?>" <?= empty($slide['url']) ? 'disabled' : '' ?>>
+                                <div class="d-flex justify-content-between align-items-center small text-muted">
+                                    <span class="slide-position-label" id="hero_slide_<?= $slot ?>_position_label">Position: <?= esc($slide['position'] ?? '50% 50%') ?></span>
+                                    <span class="slide-zoom-label" id="hero_slide_<?= $slot ?>_zoom_label"><?= esc(number_format((float)($slide['scale'] ?? 1), 2, '.', '')) ?>×</span>
+                                </div>
+                            </div>
+
+                            <input type="hidden" name="hero_slide_<?= $slot ?>_position" id="hero_slide_<?= $slot ?>_position" value="<?= esc($slide['position'] ?? '50% 50%') ?>">
+                            <input type="hidden" name="hero_slide_<?= $slot ?>_scale" id="hero_slide_<?= $slot ?>_scale" value="<?= esc(number_format((float)($slide['scale'] ?? 1), 2, '.', '')) ?>">
                         </div>
-                    <?php endfor; ?>
-                </div>
+                    </div>
+                <?php endfor; ?>
             </div>
         </div>
     </div>
 
-    <!-- Live Preview Row -->
-    <div class="lp-row" style="align-items: stretch;">
-        <div class="lp-col" style="flex: 0 0 70%; max-width: 70%;">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-dark text-white">
-                    <h5 class="mb-0"><i class="bi bi-eye-fill me-2"></i>Live Preview</h5>
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0"><i class="bi bi-megaphone-fill me-2"></i>Announcement strip</h5>
+        </div>
+        <div class="card-body p-4">
+            <p class="text-muted">This message scrolls in a loop above the hero images on the public home page (e.g. principal advisories). Leave empty to hide the strip.</p>
+            <label class="form-label fw-semibold" for="announcement_strip">Announcement text</label>
+            <textarea
+                class="form-control"
+                id="announcement_strip"
+                name="announcement_strip"
+                rows="3"
+                maxlength="500"
+                placeholder="Example: Welcome to CSCS! Enrollment for SY 2025–2026 is now open. Contact the registrar for assistance."
+            ><?= esc($announcementStrip ?? '') ?></textarea>
+            <small class="text-muted d-block mt-2">Maximum 500 characters. Keep wording concise for smooth scrolling.</small>
+        </div>
+    </div>
+
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-info text-white">
+      <h5 class="mb-0"><i class="bi bi-heart-pulse me-2"></i>Lifelines</h5>
+    </div>
+    <div class="card-body p-4">
+      <p class="text-muted">Set the current status of essential services shown on the public home page.</p>
+      <?php $lifelines = landing_lifelines(); // helper returns defaults if missing ?>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label small fw-semibold" for="lifeline_water">Water</label>
+          <select id="lifeline_water" name="lifeline_water" class="form-select form-select-sm">
+            <option value="FUNCTIONAL"<?= $lifelines['water'] === 'FUNCTIONAL' ? ' selected' : '' ?>>FUNCTIONAL</option>
+            <option value="NOT FUNCTIONAL"<?= $lifelines['water'] === 'NOT FUNCTIONAL' ? ' selected' : '' ?>>NOT FUNCTIONAL</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-semibold" for="lifeline_communication">Communication</label>
+          <select id="lifeline_communication" name="lifeline_communication" class="form-select form-select-sm">
+            <option value="FUNCTIONAL"<?= $lifelines['communication'] === 'FUNCTIONAL' ? ' selected' : '' ?>>FUNCTIONAL</option>
+            <option value="NOT FUNCTIONAL"<?= $lifelines['communication'] === 'NOT FUNCTIONAL' ? ' selected' : '' ?>>NOT FUNCTIONAL</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small fw-semibold" for="lifeline_electricity">Electricity</label>
+          <select id="lifeline_electricity" name="lifeline_electricity" class="form-select form-select-sm">
+            <option value="FUNCTIONAL"<?= $lifelines['electricity'] === 'FUNCTIONAL' ? ' selected' : '' ?>>FUNCTIONAL</option>
+            <option value="NOT FUNCTIONAL"<?= $lifelines['electricity'] === 'NOT FUNCTIONAL' ? ' selected' : '' ?>>NOT FUNCTIONAL</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h5 class="mb-0"><i class="bi bi-eye me-2"></i>Live preview</h5>
+            <span class="badge bg-secondary fw-normal">Updates as you edit — matches public home page hero</span>
+        </div>
+        <div class="card-body p-3 p-md-4">
+            <?= view('partials/admin_landing_preview', [
+                'previewSlides' => $previewSlides ?? [],
+                'stripText'     => $announcementStrip ?? '',
+                'previewId'     => 'adminLandingPreview',
+            ]) ?>
+        </div>
+    </div>
+
+    <div class="modal fade slide-editor-modal" id="heroSlideEditorModal" tabindex="-1" aria-labelledby="heroSlideEditorModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content slide-editor-modal__content">
+                <div class="modal-header slide-editor-modal__header">
+                    <div>
+                        <h5 class="modal-title mb-1" id="heroSlideEditorModalLabel"><i class="bi bi-aspect-ratio me-2"></i>Hero slide editor</h5>
+                        <p class="text-muted small mb-0">Drag the image inside the frame and zoom until the exact area looks right.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="card-body p-3 d-flex flex-column">
-                    <div class="live-preview-container" id="livePreview">
-                        <?php 
-                        // Collect only slides with images
-                        $previewSlides = [];
-                        for ($slot = 1; $slot <= 3; $slot++): 
-                            $slide = $slides[$slot] ?? null;
-                            if (!empty($slide['url'])):
-                                $previewSlides[] = [
-                                    'slot' => $slot,
-                                    'url' => $slide['url'],
-                                    'pos' => $slide['position'] ?? '50% 50%'
-                                ];
-                            endif;
-                        endfor; 
-                        ?>
-                        <?php if (!empty($previewSlides)): ?>
-                            <?php foreach ($previewSlides as $idx => $ps): ?>
-                                <div class="preview-slide <?= $idx === 0 ? 'is-active' : '' ?>" data-preview-index="<?= $idx ?>">
-                                    <img src="<?= esc($ps['url']) ?>" alt="Preview Slide <?= $ps['slot'] ?>" style="--preview-pos: <?= esc($ps['pos']) ?>;">
+                <div class="modal-body slide-editor-modal__body">
+                    <div class="row g-4 align-items-start">
+                        <div class="col-lg-8">
+                            <div class="slide-editor-modal__stage-shell">
+                                <div class="slide-editor-modal__stage" id="heroSlideEditorStage" role="img" aria-label="Hero slide crop preview">
+                                    <img id="heroSlideEditorImage" alt="Hero slide preview" class="slide-editor-modal__image">
+                                    <div class="slide-editor-modal__grid" aria-hidden="true"></div>
+                                    <div class="slide-editor-modal__focus" aria-hidden="true"></div>
+                                    <div class="slide-editor-modal__label" id="heroSlideEditorSlotLabel">Slide</div>
                                 </div>
-                            <?php endforeach; ?>
-                            
-                            <!-- Announcement Strip -->
-                            <?php if ($announcementStrip !== ''): ?>
-                            <div class="preview-announcement-strip">
-                                <div class="preview-announcement-viewport">
-                                    <div class="preview-announcement-track">
-                                        <div class="preview-announcement-group">
-                                            <span class="preview-announcement-icon"><i class="bi bi-megaphone-fill"></i></span>
-                                            <span class="preview-announcement-text"><?= esc($announcementStrip) ?></span>
-                                        </div>
-                                        <div class="preview-announcement-group" aria-hidden="true">
-                                            <span class="preview-announcement-icon"><i class="bi bi-megaphone-fill"></i></span>
-                                            <span class="preview-announcement-text"><?= esc($announcementStrip) ?></span>
-                                        </div>
+                            </div>
+                            <div class="slide-editor-modal__tip mt-3">
+                                <i class="bi bi-hand-index-thumb me-2" aria-hidden="true"></i>
+                                Drag to reposition. Use the zoom slider or mouse wheel to adjust how much of the image is visible.
+                            </div>
+                        </div>
+                        <div class="col-lg-4">
+                            <div class="slide-editor-modal__panel">
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold" for="heroSlideEditorZoom">Zoom</label>
+                                    <input type="range" class="form-range" id="heroSlideEditorZoom" min="1" max="2.5" step="0.05" value="1">
+                                    <div class="d-flex justify-content-between small text-muted">
+                                        <span id="heroSlideEditorZoomLabel">1.00x</span>
+                                        <span>Range: 1.00x - 2.50x</span>
                                     </div>
                                 </div>
-                            </div>
-                            <?php endif; ?>
-                            
-                            <!-- Lifelines -->
-                            <div class="preview-lifelines">
-                                <div class="preview-lifeline-item <?= $lifelines['water'] !== 'FUNCTIONAL' ? 'is-down' : '' ?>">
-                                    <span class="preview-lifeline-icon"><i class="bi bi-droplet-fill"></i></span>
-                                    <span class="preview-lifeline-status"><?= $lifelines['water'] === 'FUNCTIONAL' ? 'ON' : 'OFF' ?></span>
+                                <div class="mb-3">
+                                    <div class="small text-muted mb-1">Visible area</div>
+                                    <div class="slide-editor-modal__readout">
+                                        <span id="heroSlideEditorPositionLabel">Position: 50% 50%</span>
+                                    </div>
                                 </div>
-                                <div class="preview-lifeline-item <?= $lifelines['communication'] !== 'FUNCTIONAL' ? 'is-down' : '' ?>">
-                                    <span class="preview-lifeline-icon"><i class="bi bi-wifi"></i></span>
-                                    <span class="preview-lifeline-status"><?= $lifelines['communication'] === 'FUNCTIONAL' ? 'ON' : 'OFF' ?></span>
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">Quick actions</label>
+                                    <div class="d-flex flex-wrap gap-2">
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" id="heroSlideEditorCenterBtn">Center</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" id="heroSlideEditorResetBtn">Reset</button>
+                                    </div>
                                 </div>
-                                <div class="preview-lifeline-item <?= $lifelines['electricity'] !== 'FUNCTIONAL' ? 'is-down' : '' ?>">
-                                    <span class="preview-lifeline-icon"><i class="bi bi-lightning-charge-fill"></i></span>
-                                    <span class="preview-lifeline-status"><?= $lifelines['electricity'] === 'FUNCTIONAL' ? 'ON' : 'OFF' ?></span>
+                                <div class="alert alert-info mb-0 small">
+                                    Any image size works. This editor shows the exact crop the public hero will use.
                                 </div>
                             </div>
-                            
-                            <?php if (count($previewSlides) > 1): ?>
-                            <div class="live-preview-dots">
-                                <?php foreach ($previewSlides as $idx => $ps): ?>
-                                    <button type="button" class="preview-dot <?= $idx === 0 ? 'is-active' : '' ?>" data-preview-index="<?= $idx ?>" aria-label="View slide <?= $ps['slot'] ?>"></button>
-                                <?php endforeach; ?>
-                            </div>
-                            
-                            <button type="button" class="live-preview-nav prev" id="previewPrev" aria-label="Previous slide">
-                                <i class="bi bi-chevron-left"></i>
-                            </button>
-                            <button type="button" class="live-preview-nav next" id="previewNext" aria-label="Next slide">
-                                <i class="bi bi-chevron-right"></i>
-                            </button>
-                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer slide-editor-modal__footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="heroSlideEditorApplyBtn">Use this crop</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tappy's message on the public front page.
+         Keyed "home" because the front page has no path segment at all; the form
+         still posts to the same endpoint, and the controller saves it under that
+         key. Mirrors the card on admin/childpro-gad and admin/programs-projects. -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0"><i class="bi bi-chat-quote me-2"></i>Tappy's message on the public home page</h5>
+        </div>
+        <div class="card-body p-4">
+            <p class="text-muted small">
+                Tappy floats in the corner of the public
+                <a href="<?= base_url() ?>" target="_blank" rel="noopener">home page</a>.
+                Write what he should say there. Leave both boxes empty to go back to
+                the built-in wording.
+            </p>
+
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label small">Pose</label>
+                    <select class="form-select form-select-sm" name="mascot_pose">
+                        <?php foreach (($mascotPoses ?? ['hero' => 'Waving (default)']) as $poseValue => $poseLabel): ?>
+                            <option value="<?= esc($poseValue) ?>" <?= ($mascot['pose'] ?? 'hero') === $poseValue ? 'selected' : '' ?>><?= esc($poseLabel) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label small">Heading</label>
+                    <input type="text" class="form-control form-control-sm" name="mascot_title"
+                           value="<?= esc($mascot['title'] ?? '') ?>" maxlength="60"
+                           placeholder="<?= esc($mascot['defaults']['title'] ?? 'Welcome') ?>">
+                </div>
+                <div class="col-12">
+                    <label class="form-label small">Message</label>
+                    <textarea class="form-control form-control-sm" name="mascot_text" rows="2" maxlength="240"
+                              placeholder="<?= esc($mascot['defaults']['text'] ?? '') ?>"></textarea>
+                    <div class="form-text">
+                        Currently using:
+                        <strong><?= esc($mascot['defaults']['text'] ?? '') ?></strong>
+                        <?php if ($mascot['isCustom'] ?? false): ?>
+                            &mdash; this box will replace it. Clear both boxes to restore the default.
                         <?php else: ?>
-                            <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.3);font-size:1rem;background:#0b1530;flex-direction:column;gap:0.5rem;">
-                                <i class="bi bi-images" style="font-size:2rem;"></i>
-                                <span>Upload slides to see preview</span>
-                            </div>
+                            &mdash; the built-in wording. Anything you type here overrides it.
                         <?php endif; ?>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="lp-col" style="flex: 0 0 25%; max-width: 25%;">
-            <div class="card border-0 shadow-sm">
-                <div class="card-header bg-secondary text-white">
-                    <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Info</h5>
-                </div>
-                <div class="card-body p-3">
-                    <p style="color:#000 !important; margin-bottom: 0.75rem; font-size: 0.875rem; line-height: 1.6;">
-                        <i class="bi bi-info-circle me-1"></i><strong style="color:#000;">Landing Page Controls</strong><br><br>
-                        • <strong>Hero Slideshow:</strong> Upload 3 banners (2.5:1) for events. Drag or use sliders for position/zoom.<br><br>
-                        • <strong>Announcement Ticker:</strong> Scrolling text above hero for notices and reminders.<br><br>
-                        • <strong>Lifelines:</strong> Set Water, Communication, Electricity status. Green = ON, Red = OFF.<br><br>
-                        • <strong>QR Code:</strong> Upload QR for footer. Share links or contact info.<br><br>
-                        • <strong>Live Preview:</strong> Preview instantly. Changes apply after saving.
-                    </p>
-                </div>
-            </div>
-        </div>
     </div>
 
-    <!-- Save Button -->
-    <div class="lp-row">
-        <div class="lp-col" style="flex: 0 0 100%; max-width: 100%;">
-            <button type="submit" class="btn btn-primary">
-                <i class="bi bi-check-circle me-2"></i>Save Changes
-            </button>
-        </div>
-    </div>
+    <button type="submit" class="btn btn-primary btn-lg px-4">
+        <i class="bi bi-check-circle me-2"></i>Save landing page
+    </button>
+    <a href="<?= base_url() ?>" class="btn btn-outline-secondary btn-lg ms-2" target="_blank" rel="noopener">
+        <i class="bi bi-box-arrow-up-right me-2"></i>Open home page
+    </a>
 </form>
 
+<script type="application/json" id="adminLandingPreviewSlots"><?= json_encode([
+    1 => $slides[1]['url'] ?? '',
+    2 => $slides[2]['url'] ?? '',
+    3 => $slides[3]['url'] ?? '',
+], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES) ?></script>
+
+<script type="application/json" id="adminLandingPreviewLifelines"><?= json_encode($lifelines ?? [
+  'water' => 'FUNCTIONAL',
+  'communication' => 'FUNCTIONAL',
+  'electricity' => 'FUNCTIONAL',
+], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
+
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // --- Live Preview Navigation (index-based) ---
-    let currentPreview = 0;
-    const previewSlides = document.querySelectorAll('.preview-slide');
-    const totalPreviews = previewSlides.length;
-    
-    function showPreviewSlide(index) {
-        if (totalPreviews === 0) return;
-        if (index < 0) index = totalPreviews - 1;
-        if (index >= totalPreviews) index = 0;
-        currentPreview = index;
-        
-        previewSlides.forEach(el => {
-            el.classList.toggle('is-active', parseInt(el.dataset.previewIndex) === index);
-        });
-        document.querySelectorAll('.preview-dot').forEach(el => {
-            el.classList.toggle('is-active', parseInt(el.dataset.previewIndex) === index);
-        });
+if (false) {
+(function () {
+  const previewRoot = document.getElementById('adminLandingPreview');
+  const dataEl = document.getElementById('adminLandingPreviewData');
+  const slotsEl = document.getElementById('adminLandingPreviewSlots');
+  const stripField = document.getElementById('announcement_strip');
+  const stripEl = document.getElementById('adminLandingPreviewStrip');
+  if (!previewRoot || !dataEl) return;
+
+  let config;
+  try {
+    config = JSON.parse(dataEl.textContent || '{}');
+  } catch (e) {
+    config = { slides: [], defaultBanner: '', strip: '' };
+  }
+
+  // Remove slide handling: immediately mark and submit (no confirmation)
+  document.querySelectorAll('.remove-slide-btn').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      var slot = btn.getAttribute('data-slot');
+      var input = document.getElementById('remove_slide_' + slot);
+      if (input) input.value = '1';
+      var form = btn.closest('form');
+      if (form) form.submit();
+    }, false);
+  });
+
+  let slotUrls = { 1: '', 2: '', 3: '' };
+  try {
+    slotUrls = Object.assign(slotUrls, JSON.parse(slotsEl ? slotsEl.textContent : '{}'));
+  } catch (e) { /* keep defaults */ }
+
+  const stage = document.getElementById('adminLandingPreviewStage');
+  const defaultBanner = config.defaultBanner || '';
+  let objectUrls = [];
+
+  function revokeObjectUrls() {
+    objectUrls.forEach(function (url) { URL.revokeObjectURL(url); });
+    objectUrls = [];
+  }
+
+  function normalizePositionString(position) {
+    position = String(position || '50% 50%').replace(/\s+/g, ' ').trim();
+    const matches = position.match(/^(\d{1,3})%\s+(\d{1,3})%$/);
+    if (!matches) {
+      return '50% 50%';
     }
-    
-    document.querySelectorAll('.preview-dot').forEach(dot => {
-        dot.addEventListener('click', function() {
-            showPreviewSlide(parseInt(this.dataset.previewIndex));
-        });
-    });
-    
-    document.getElementById('previewPrev')?.addEventListener('click', function() {
-        showPreviewSlide(currentPreview - 1);
-    });
-    
-    document.getElementById('previewNext')?.addEventListener('click', function() {
-        showPreviewSlide(currentPreview + 1);
-    });
-    
-    // Auto-rotate preview every 5 seconds (only if multiple slides)
-    let previewInterval;
-    if (totalPreviews > 1) {
-        previewInterval = setInterval(() => showPreviewSlide(currentPreview + 1), 5000);
+    const x = Math.min(100, Math.max(0, Number(matches[1])));
+    const y = Math.min(100, Math.max(0, Number(matches[2])));
+    return x + '% ' + y + '%';
+  }
+
+  function normalizeScaleNumber(value) {
+    const scale = Number(value);
+    if (Number.isNaN(scale)) {
+      return 1.0;
     }
-    
-    const livePreview = document.getElementById('livePreview');
-    if (livePreview) {
-        livePreview.addEventListener('mouseenter', function() {
-            clearInterval(previewInterval);
-        });
-        livePreview.addEventListener('mouseleave', function() {
-            if (totalPreviews > 1) {
-                previewInterval = setInterval(() => showPreviewSlide(currentPreview + 1), 5000);
-            }
-        });
+    return Math.min(2.5, Math.max(1.0, scale));
+  }
+
+  function getSlideMeta(slot) {
+    const posEl = document.getElementById('hero_slide_' + slot + '_position');
+    const scaleEl = document.getElementById('hero_slide_' + slot + '_scale');
+    return {
+      position: normalizePositionString(posEl ? posEl.value : '50% 50%'),
+      scale: normalizeScaleNumber(scaleEl ? scaleEl.value : 1),
+    };
+  }
+
+  function setSlideMeta(slot, position, scale) {
+    const posEl = document.getElementById('hero_slide_' + slot + '_position');
+    const scaleEl = document.getElementById('hero_slide_' + slot + '_scale');
+    const zoomEl = document.getElementById('hero_slide_' + slot + '_zoom');
+    const labelEl = document.getElementById('hero_slide_' + slot + '_position_label');
+    const zoomLabelEl = document.getElementById('hero_slide_' + slot + '_zoom_label');
+    const normalizedPosition = normalizePositionString(position);
+    const normalizedScale = normalizeScaleNumber(scale);
+
+    if (posEl) {
+      posEl.value = normalizedPosition;
+    }
+    if (scaleEl) {
+      scaleEl.value = normalizedScale.toFixed(2);
+    }
+    if (zoomEl) {
+      zoomEl.value = normalizedScale.toFixed(2);
+      zoomEl.disabled = false;
+    }
+    if (labelEl) {
+      labelEl.textContent = 'Position: ' + normalizedPosition;
+    }
+    if (zoomLabelEl) {
+      zoomLabelEl.textContent = normalizedScale.toFixed(2) + '×';
     }
 
-    // --- Slide Position Controls ---
-    function updateSlideCrosshair(slot, x, y) {
-        const thumb = document.querySelector('.slide-preview-thumb[data-slot="' + slot + '"]');
-        if (!thumb) return;
-        const crosshair = thumb.querySelector('.slide-position-crosshair');
-        if (crosshair) {
-            crosshair.style.left = x + '%';
-            crosshair.style.top = y + '%';
-        }
-        const coords = thumb.querySelector('.slide-position-coords');
-        if (coords) {
-            coords.textContent = x + '% ' + y + '%';
-        }
+    const previewImg = document.querySelector('.slide-preview-img[data-slot="' + slot + '"]');
+    if (previewImg) {
+      previewImg.style.objectPosition = normalizedPosition;
+      previewImg.style.transform = 'scale(' + normalizedScale + ')';
     }
-    
-    function updateSlidePreview(slot, x, y) {
-        const previewSlide = document.querySelector('.preview-slide[data-preview-index="' + (slot - 1) + '"]');
-        if (previewSlide) {
-            const img = previewSlide.querySelector('img');
-            if (img) {
-                img.style.setProperty('--preview-pos', x + '% ' + y + '%');
-            }
-        }
+  }
+
+  function updateSlideEditorUI(slot) {
+    const meta = getSlideMeta(slot);
+    const zoomInput = document.querySelector('.slide-zoom-range[data-slot="' + slot + '"]');
+    const labelEl = document.getElementById('hero_slide_' + slot + '_position_label');
+    const zoomLabelEl = document.getElementById('hero_slide_' + slot + '_zoom_label');
+    if (zoomInput) {
+      zoomInput.value = meta.scale.toFixed(2);
+      zoomInput.disabled = false;
     }
-    
-    function updateSlidePosition(slot, x, y) {
-        const posStr = x + '% ' + y + '%';
-        document.getElementById('posInput_' + slot).value = posStr;
-        
-        // Update thumb image position
-        const thumb = document.querySelector('.slide-preview-thumb[data-slot="' + slot + '"]');
-        if (thumb) {
-            const img = thumb.querySelector('img');
-            if (img) {
-                img.style.objectPosition = posStr;
-            }
-        }
-        
-        updateSlideCrosshair(slot, x, y);
-        updateSlidePreview(slot, x, y);
+    if (labelEl) {
+      labelEl.textContent = 'Position: ' + meta.position;
     }
-    
-    // Slider controls
-    document.querySelectorAll('.slide-pos-x').forEach(slider => {
-        slider.addEventListener('input', function() {
-            const slot = parseInt(this.dataset.slot);
-            const x = parseInt(this.value);
-            const y = parseInt(document.querySelector('.slide-pos-y[data-slot="' + slot + '"]').value);
-            updateSlidePosition(slot, x, y);
-        });
-    });
-    
-    document.querySelectorAll('.slide-pos-y').forEach(slider => {
-        slider.addEventListener('input', function() {
-            const slot = parseInt(this.dataset.slot);
-            const y = parseInt(this.value);
-            const x = parseInt(document.querySelector('.slide-pos-x[data-slot="' + slot + '"]').value);
-            updateSlidePosition(slot, x, y);
-        });
-    });
-    
-    document.querySelectorAll('.slide-scale').forEach(slider => {
-        slider.addEventListener('input', function() {
-            const slot = this.dataset.slot;
-            const val = parseInt(this.value);
-            const scaleVal = (val / 100).toFixed(2);
-            document.getElementById('scaleInput_' + slot).value = scaleVal;
-            
-            const thumb = document.querySelector('.slide-preview-thumb[data-slot="' + slot + '"]');
-            if (thumb) {
-                const img = thumb.querySelector('img');
-                if (img) {
-                    img.style.transform = 'scale(' + scaleVal + ')';
-                }
-            }
-        });
-    });
-    
-    // --- Drag to position on thumbnails ---
-    document.querySelectorAll('.slide-position-overlay').forEach(overlay => {
-        const slot = parseInt(overlay.dataset.slot);
-        let isDragging = false;
-        
-        function setPositionFromEvent(e) {
-            const thumb = overlay.closest('.slide-preview-thumb');
-            const rect = thumb.getBoundingClientRect();
-            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-            const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-            
-            if (clientX === undefined) return;
-            
-            let x = ((clientX - rect.left) / rect.width) * 100;
-            let y = ((clientY - rect.top) / rect.height) * 100;
-            x = Math.max(0, Math.min(100, Math.round(x)));
-            y = Math.max(0, Math.min(100, Math.round(y)));
-            
-            // Update sliders
-            const xSlider = document.querySelector('.slide-pos-x[data-slot="' + slot + '"]');
-            const ySlider = document.querySelector('.slide-pos-y[data-slot="' + slot + '"]');
-            if (xSlider) xSlider.value = x;
-            if (ySlider) ySlider.value = y;
-            
-            updateSlidePosition(slot, x, y);
+    if (zoomLabelEl) {
+      zoomLabelEl.textContent = meta.scale.toFixed(2) + '×';
+    }
+    setSlideMeta(slot, meta.position, meta.scale);
+  }
+
+  function buildSlidesFromForm() {
+    const slides = [];
+    for (let slot = 1; slot <= 3; slot++) {
+      const remove = document.getElementById('remove_slide_' + slot);
+      if (remove && (remove.checked || remove.value === '1')) continue;
+
+      const meta = getSlideMeta(slot);
+      const fileInput = document.getElementById('hero_slide_' + slot);
+      const file = fileInput && fileInput.files && fileInput.files[0];
+      if (file) {
+        const url = URL.createObjectURL(file);
+        let previewImg = document.querySelector('.slide-preview-img[data-slot="' + slot + '"]');
+        const wrapper = document.querySelector('.slide-editor__preview-wrapper[data-slot="' + slot + '"]');
+        if (!previewImg && wrapper) {
+          wrapper.innerHTML = '';
+          previewImg = document.createElement('img');
+          previewImg.className = 'img-fluid w-100 slide-preview-img';
+          previewImg.dataset.slot = slot;
+          previewImg.style.aspectRatio = '2.5/1';
+          previewImg.style.objectFit = 'cover';
+          wrapper.appendChild(previewImg);
+          const hint = document.createElement('div');
+          hint.className = 'slide-editor__preview-hint';
+          hint.textContent = 'Drag image to reposition';
+          wrapper.appendChild(hint);
         }
-        
-        overlay.addEventListener('mousedown', function(e) {
-            isDragging = true;
-            setPositionFromEvent(e);
-            e.preventDefault();
-        });
-        
-        document.addEventListener('mousemove', function(e) {
-            if (isDragging) {
-                setPositionFromEvent(e);
-                e.preventDefault();
-            }
-        });
-        
-        document.addEventListener('mouseup', function() {
-            isDragging = false;
-        });
-        
-        // Touch support
-        overlay.addEventListener('touchstart', function(e) {
-            isDragging = true;
-            setPositionFromEvent(e);
-            e.preventDefault();
-        }, { passive: false });
-        
-        overlay.addEventListener('touchmove', function(e) {
-            if (isDragging) {
-                setPositionFromEvent(e);
-                e.preventDefault();
-            }
-        }, { passive: false });
-        
-        overlay.addEventListener('touchend', function() {
-            isDragging = false;
-        });
+        if (previewImg) {
+          previewImg.src = url;
+          const meta = getSlideMeta(slot);
+          setSlideMeta(slot, meta.position, meta.scale);
+        }
+        renderHero();
+        return;
+      }
+
+      const existingUrl = slotUrls[String(slot)] || slotUrls[slot] || '';
+      if (existingUrl) {
+        slides.push({ url: existingUrl, alt: 'Hero slide ' + slot, position: meta.position, scale: meta.scale });
+      }
+    }
+    if (slides.length === 0 && defaultBanner) {
+      slides.push({ url: defaultBanner, alt: 'Default school banner', position: '50% 50%', scale: 1 });
+    }
+    return slides;
+  }
+
+  function setActiveSlide(index) {
+    const slides = stage.querySelectorAll('.hero-slide');
+    const dots = previewRoot.querySelectorAll('.hero-slideshow__dot');
+    slides.forEach(function (el, i) {
+      el.classList.toggle('is-active', i === index);
     });
-});
+    dots.forEach(function (el, i) {
+      el.classList.toggle('is-active', i === index);
+      el.setAttribute('aria-selected', i === index ? 'true' : 'false');
+    });
+  }
+
+  function renderHero() {
+    revokeObjectUrls();
+    const slides = buildSlidesFromForm();
+    previewRoot.setAttribute('data-slide-count', String(slides.length));
+    stage.innerHTML = '';
+
+    if (slides.length === 0) {
+      stage.innerHTML = '<div class="admin-landing-preview__empty">No hero images — default banner will be used on the home page.</div>';
+      const oldDots = previewRoot.querySelector('.hero-slideshow__dots');
+      if (oldDots) oldDots.remove();
+      return;
+    }
+
+    slides.forEach(function (slide, index) {
+      const wrap = document.createElement('div');
+      wrap.className = 'hero-slide' + (index === 0 ? ' is-active' : '');
+      wrap.setAttribute('data-slide-index', String(index));
+      const img = document.createElement('img');
+      img.className = 'hero-banner-img';
+      img.src = slide.url;
+      img.alt = slide.alt || ('Hero slide ' + (index + 1));
+      img.width = 1983;
+      img.height = 793;
+      img.decoding = 'async';
+      img.style.objectPosition = slide.position || '50% 50%';
+      img.style.transform = 'scale(' + (slide.scale || 1) + ')';
+      img.style.transformOrigin = 'center center';
+      wrap.appendChild(img);
+      stage.appendChild(wrap);
+    });
+
+    let dotsWrap = previewRoot.querySelector('.hero-slideshow__dots');
+    if (slides.length > 1) {
+      if (!dotsWrap) {
+        dotsWrap = document.createElement('div');
+        dotsWrap.className = 'hero-slideshow__dots';
+        dotsWrap.setAttribute('role', 'tablist');
+        dotsWrap.setAttribute('aria-label', 'Preview slideshow');
+        previewRoot.querySelector('.hero-slideshow').appendChild(dotsWrap);
+      }
+      dotsWrap.innerHTML = '';
+      slides.forEach(function (_, index) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'hero-slideshow__dot' + (index === 0 ? ' is-active' : '');
+        btn.setAttribute('role', 'tab');
+        btn.setAttribute('aria-label', 'Slide ' + (index + 1));
+        btn.setAttribute('data-goto', String(index));
+        btn.addEventListener('click', function () { setActiveSlide(index); });
+        dotsWrap.appendChild(btn);
+      });
+      dotsWrap.style.display = '';
+    } else if (dotsWrap) {
+      dotsWrap.remove();
+    }
+  }
+
+  function updateStrip() {
+    if (!stripField || !stripEl) return;
+    const text = stripField.value.trim();
+    stripEl.classList.toggle('is-hidden', text === '');
+    stripEl.setAttribute('aria-hidden', text === '' ? 'true' : 'false');
+    stripEl.querySelectorAll('[data-strip-text]').forEach(function (node) {
+      node.textContent = text || ' ';
+    });
+  }
+
+  function updateLifelines() {
+    try {
+      const lifelinesEl = document.getElementById('adminLandingPreviewLifelines');
+      let values = lifelinesEl ? JSON.parse(lifelinesEl.textContent || '{}') : {};
+      // prefer form values if present
+      ['water','communication','electricity'].forEach(function (k) {
+        const sel = document.getElementById('lifeline_' + k);
+        if (sel) values[k] = sel.value;
+      });
+
+      const root = previewRoot.querySelector('.hero-lifelines');
+      if (!root) return;
+      const cards = root.querySelectorAll('.lifeline-card');
+      if (cards.length < 3) return;
+      const keys = ['water','communication','electricity'];
+      cards.forEach(function (card, i) {
+            const status = (values[keys[i]] || '').toUpperCase();
+            const statusEl = card.querySelector('.lifeline-status');
+            if (statusEl) statusEl.textContent = status || 'FUNCTIONAL';
+            // toggle down state
+            if (String(status).trim() === 'NOT FUNCTIONAL') {
+              card.classList.add('is-down');
+            } else {
+              card.classList.remove('is-down');
+            }
+      });
+    } catch (e) { /* ignore */ }
+  }
+
+  for (let slot = 1; slot <= 3; slot++) {
+    const zoomInput = document.querySelector('.slide-zoom-range[data-slot="' + slot + '"]');
+    const resetButton = document.querySelector('.reset-slide-edit[data-slot="' + slot + '"]');
+    const previewWrapper = document.querySelector('.slide-editor__preview-wrapper[data-slot="' + slot + '"]');
+
+    if (zoomInput) {
+      zoomInput.addEventListener('input', function () {
+        const meta = getSlideMeta(slot);
+        setSlideMeta(slot, meta.position, this.value);
+        renderHero();
+      }, false);
+    }
+
+    if (resetButton) {
+      resetButton.addEventListener('click', function () {
+        setSlideMeta(slot, '50% 50%', 1.0);
+        renderHero();
+      }, false);
+    }
+
+    if (previewWrapper) {
+      let dragging = false;
+      let startX = 0;
+      let startY = 0;
+      let pointerId = null;
+      let startPos = { x: 50, y: 50 };
+
+      previewWrapper.addEventListener('pointerdown', function (event) {
+        if (event.pointerType === 'mouse' && event.button !== 0) {
+          return;
+        }
+        const previewImg = previewWrapper.querySelector('.slide-preview-img');
+        if (!previewImg) {
+          return;
+        }
+        event.preventDefault();
+        pointerId = event.pointerId;
+        previewWrapper.setPointerCapture(pointerId);
+        dragging = true;
+        startX = event.clientX;
+        startY = event.clientY;
+        const meta = getSlideMeta(slot);
+        const parts = meta.position.split(' ');
+        startPos = {
+          x: Number(parts[0].replace('%', '')) || 50,
+          y: Number(parts[1].replace('%', '')) || 50,
+        };
+        previewWrapper.classList.add('is-dragging');
+      }, false);
+
+      previewWrapper.addEventListener('pointermove', function (event) {
+        if (!dragging) {
+          return;
+        }
+        const dx = event.clientX - startX;
+        const dy = event.clientY - startY;
+        const rect = previewWrapper.getBoundingClientRect();
+        const dragBasis = Math.max(Math.min(rect.width, rect.height), 1);
+        const x = Math.min(100, Math.max(0, startPos.x + dx / dragBasis * 100));
+        const y = Math.min(100, Math.max(0, startPos.y + dy / dragBasis * 100));
+        setSlideMeta(slot, x + '% ' + y + '%', getSlideMeta(slot).scale);
+        renderHero();
+      }, false);
+
+      const stopDrag = function () {
+        if (!dragging) {
+          return;
+        }
+        dragging = false;
+        pointerId = null;
+        previewWrapper.classList.remove('is-dragging');
+      };
+
+      previewWrapper.addEventListener('pointerup', stopDrag, false);
+      previewWrapper.addEventListener('pointercancel', stopDrag, false);
+      previewWrapper.addEventListener('pointerleave', stopDrag, false);
+    }
+
+    updateSlideEditorUI(slot);
+  }
+
+  for (let slot = 1; slot <= 3; slot++) {
+    const fileInput = document.getElementById('hero_slide_' + slot);
+    if (!fileInput) {
+      continue;
+    }
+
+    fileInput.addEventListener('change', function () {
+      const file = fileInput.files && fileInput.files[0];
+      const errorEl = fileInput.closest('.border') ? fileInput.closest('.border').querySelector('.slide-input-error') : null;
+      if (errorEl) {
+        errorEl.classList.add('d-none');
+        errorEl.textContent = '';
+      }
+
+      if (!file) {
+        renderHero();
+        return;
+      }
+
+      if (file.size > 50 * 1024 * 1024) {
+        if (errorEl) {
+          errorEl.textContent = ' File is too large (max 50MB).';
+          errorEl.classList.remove('d-none');
+        }
+        fileInput.value = '';
+        renderHero();
+        return;
+      }
+
+      const url = URL.createObjectURL(file);
+      let previewImg = document.querySelector('.slide-preview-img[data-slot="' + slot + '"]');
+      const wrapper = document.querySelector('.slide-editor__preview-wrapper[data-slot="' + slot + '"]');
+      if (!previewImg && wrapper) {
+        wrapper.innerHTML = '';
+        previewImg = document.createElement('img');
+        previewImg.className = 'img-fluid w-100 slide-preview-img';
+        previewImg.dataset.slot = slot;
+        previewImg.style.aspectRatio = '2.5/1';
+        previewImg.style.objectFit = 'cover';
+        wrapper.appendChild(previewImg);
+        const hint = document.createElement('div');
+        hint.className = 'slide-editor__preview-hint';
+        hint.textContent = 'Drag image to reposition';
+        wrapper.appendChild(hint);
+      }
+      if (previewImg) {
+        previewImg.src = url;
+        const meta = getSlideMeta(slot);
+        setSlideMeta(slot, meta.position, meta.scale);
+      }
+
+      renderHero();
+    }, false);
+  }
+
+  if (stripField) {
+    stripField.addEventListener('input', updateStrip);
+  }
+
+  // lifelines live update
+  ['lifeline_water','lifeline_communication','lifeline_electricity'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', updateLifelines);
+  });
+
+  // initial lifeline render
+  updateLifelines();
+
+  previewRoot.addEventListener('click', function (e) {
+    const dot = e.target.closest('.hero-slideshow__dot');
+    if (!dot) return;
+    const idx = parseInt(dot.getAttribute('data-goto'), 10);
+    if (!isNaN(idx)) setActiveSlide(idx);
+  });
+
+  updateStrip();
+})();
+}
 </script>
+
+<script>
+(function () {
+  const previewRoot = document.getElementById('adminLandingPreview');
+  const dataEl = document.getElementById('adminLandingPreviewData');
+  const slotsEl = document.getElementById('adminLandingPreviewSlots');
+  const stripField = document.getElementById('announcement_strip');
+  const stripEl = document.getElementById('adminLandingPreviewStrip');
+  const stage = document.getElementById('adminLandingPreviewStage');
+  if (!previewRoot || !dataEl || !stage) return;
+
+  let config = { slides: [], defaultBanner: '', strip: '' };
+  try {
+    config = JSON.parse(dataEl.textContent || '{}');
+  } catch (e) {
+    config = { slides: [], defaultBanner: '', strip: '' };
+  }
+
+  let slotUrls = { 1: '', 2: '', 3: '' };
+  try {
+    slotUrls = Object.assign(slotUrls, JSON.parse(slotsEl ? slotsEl.textContent : '{}'));
+  } catch (e) { /* keep defaults */ }
+
+  const modalEl = document.getElementById('heroSlideEditorModal');
+  let modalInstance = null;
+  function getModalInstance() {
+    if (!modalEl || !window.bootstrap || !bootstrap.Modal) {
+      return null;
+    }
+
+    if (!modalInstance) {
+      modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+    }
+
+    return modalInstance;
+  }
+  const editorImage = document.getElementById('heroSlideEditorImage');
+  const editorStage = document.getElementById('heroSlideEditorStage');
+  const editorZoom = document.getElementById('heroSlideEditorZoom');
+  const editorZoomLabel = document.getElementById('heroSlideEditorZoomLabel');
+  const editorPositionLabel = document.getElementById('heroSlideEditorPositionLabel');
+  const editorSlotLabel = document.getElementById('heroSlideEditorSlotLabel');
+  const editorApplyBtn = document.getElementById('heroSlideEditorApplyBtn');
+  const editorCenterBtn = document.getElementById('heroSlideEditorCenterBtn');
+  const editorResetBtn = document.getElementById('heroSlideEditorResetBtn');
+
+  const defaultBanner = config.defaultBanner || '';
+  const objectUrls = [];
+  const editor = {
+    slot: null,
+    file: null,
+    fileInput: null,
+    sourceType: 'existing',
+    sourceUrl: '',
+    objectUrl: '',
+    position: '50% 50%',
+    scale: 1,
+    applied: false,
+    dragging: false,
+    startX: 0,
+    startY: 0,
+    startPos: { x: 50, y: 50 },
+  };
+
+  function revokeObjectUrls() {
+    while (objectUrls.length > 0) {
+      const url = objectUrls.pop();
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  function normalizePositionString(position) {
+    position = String(position || '50% 50%').replace(/\s+/g, ' ').trim();
+    const matches = position.match(/^(\d{1,3})%\s+(\d{1,3})%$/);
+    if (!matches) {
+      return '50% 50%';
+    }
+    const x = Math.min(100, Math.max(0, Number(matches[1])));
+    const y = Math.min(100, Math.max(0, Number(matches[2])));
+    return x + '% ' + y + '%';
+  }
+
+  function normalizeScaleNumber(value) {
+    const scale = Number(value);
+    if (Number.isNaN(scale)) {
+      return 1.0;
+    }
+    return Math.min(2.5, Math.max(1.0, scale));
+  }
+
+  function positionToTuple(position) {
+    const parts = normalizePositionString(position).split(' ');
+    return {
+      x: Number(parts[0].replace('%', '')) || 50,
+      y: Number(parts[1].replace('%', '')) || 50,
+    };
+  }
+
+  function tupleToPosition(x, y) {
+    return Math.round(Math.min(100, Math.max(0, x))) + '% ' + Math.round(Math.min(100, Math.max(0, y))) + '%';
+  }
+
+  function getSlideMeta(slot) {
+    const posEl = document.getElementById('hero_slide_' + slot + '_position');
+    const scaleEl = document.getElementById('hero_slide_' + slot + '_scale');
+    return {
+      position: normalizePositionString(posEl ? posEl.value : '50% 50%'),
+      scale: normalizeScaleNumber(scaleEl ? scaleEl.value : 1),
+    };
+  }
+
+  function getPreviewWrapper(slot) {
+    return document.querySelector('.slide-editor__preview-wrapper[data-slot="' + slot + '"]');
+  }
+
+  function getPreviewImg(slot) {
+    return document.querySelector('.slide-preview-img[data-slot="' + slot + '"]');
+  }
+
+  function setSlideMeta(slot, position, scale) {
+    const posEl = document.getElementById('hero_slide_' + slot + '_position');
+    const scaleEl = document.getElementById('hero_slide_' + slot + '_scale');
+    const zoomEl = document.getElementById('hero_slide_' + slot + '_zoom');
+    const labelEl = document.getElementById('hero_slide_' + slot + '_position_label');
+    const zoomLabelEl = document.getElementById('hero_slide_' + slot + '_zoom_label');
+    const normalizedPosition = normalizePositionString(position);
+    const normalizedScale = normalizeScaleNumber(scale);
+
+    if (posEl) {
+      posEl.value = normalizedPosition;
+    }
+    if (scaleEl) {
+      scaleEl.value = normalizedScale.toFixed(2);
+    }
+    if (zoomEl) {
+      zoomEl.value = normalizedScale.toFixed(2);
+      zoomEl.disabled = false;
+    }
+    if (labelEl) {
+      labelEl.textContent = 'Position: ' + normalizedPosition;
+    }
+    if (zoomLabelEl) {
+      zoomLabelEl.textContent = normalizedScale.toFixed(2) + 'x';
+    }
+
+    const previewImg = getPreviewImg(slot);
+    if (previewImg) {
+      previewImg.style.objectPosition = normalizedPosition;
+      previewImg.style.transform = 'scale(' + normalizedScale + ')';
+    }
+  }
+
+  function updateSlideEditorUI(slot) {
+    const meta = getSlideMeta(slot);
+    const zoomInput = document.querySelector('.slide-zoom-range[data-slot="' + slot + '"]');
+    const labelEl = document.getElementById('hero_slide_' + slot + '_position_label');
+    const zoomLabelEl = document.getElementById('hero_slide_' + slot + '_zoom_label');
+    if (zoomInput) {
+      zoomInput.value = meta.scale.toFixed(2);
+      zoomInput.disabled = false;
+    }
+    if (labelEl) {
+      labelEl.textContent = 'Position: ' + meta.position;
+    }
+    if (zoomLabelEl) {
+      zoomLabelEl.textContent = meta.scale.toFixed(2) + 'x';
+    }
+    setSlideMeta(slot, meta.position, meta.scale);
+  }
+
+  function renderPreviewCardImage(slot, url, position, scale, alt) {
+    let previewImg = getPreviewImg(slot);
+    const wrapper = getPreviewWrapper(slot);
+
+    if (!previewImg && wrapper) {
+      wrapper.innerHTML = '';
+      previewImg = document.createElement('img');
+      previewImg.className = 'img-fluid w-100 slide-preview-img';
+      previewImg.dataset.slot = slot;
+      previewImg.style.aspectRatio = '2.5/1';
+      previewImg.style.objectFit = 'cover';
+      wrapper.appendChild(previewImg);
+      const hint = document.createElement('div');
+      hint.className = 'slide-editor__preview-hint';
+      hint.textContent = 'Drag image to reposition';
+      wrapper.appendChild(hint);
+    }
+
+    if (previewImg) {
+      previewImg.src = url;
+      previewImg.alt = alt || ('Hero slide ' + slot);
+      previewImg.style.objectPosition = position;
+      previewImg.style.transform = 'scale(' + scale + ')';
+    }
+  }
+
+  function syncPreviewCard(slot, url, position, scale) {
+    const wrapper = getPreviewWrapper(slot);
+    if (!wrapper || !url) {
+      return;
+    }
+    let img = getPreviewImg(slot);
+    if (!img) {
+      wrapper.innerHTML = '';
+      img = document.createElement('img');
+      img.className = 'img-fluid w-100 slide-preview-img';
+      img.dataset.slot = String(slot);
+      img.style.aspectRatio = '2.5/1';
+      img.style.objectFit = 'cover';
+      wrapper.appendChild(img);
+      const hint = document.createElement('div');
+      hint.className = 'slide-editor__preview-hint';
+      hint.textContent = 'Drag image to reposition';
+      wrapper.appendChild(hint);
+    }
+    img.src = url;
+    img.alt = 'Hero slide ' + slot;
+    img.style.objectPosition = normalizePositionString(position);
+    img.style.transform = 'scale(' + normalizeScaleNumber(scale) + ')';
+    img.style.transformOrigin = 'center center';
+  }
+
+  function buildSlidesFromForm() {
+    const slides = [];
+    for (let slot = 1; slot <= 3; slot++) {
+      const remove = document.getElementById('remove_slide_' + slot);
+      if (remove && (remove.checked || remove.value === '1')) {
+        continue;
+      }
+
+      const meta = getSlideMeta(slot);
+      const fileInput = document.getElementById('hero_slide_' + slot);
+      const file = fileInput && fileInput.files && fileInput.files[0];
+      if (file) {
+        const url = URL.createObjectURL(file);
+        objectUrls.push(url);
+        slides.push({ url: url, alt: 'Hero slide ' + slot, position: meta.position, scale: meta.scale });
+        syncPreviewCard(slot, url, meta.position, meta.scale);
+        continue;
+      }
+
+      const existingUrl = slotUrls[String(slot)] || slotUrls[slot] || '';
+      if (existingUrl) {
+        slides.push({ url: existingUrl, alt: 'Hero slide ' + slot, position: meta.position, scale: meta.scale });
+        syncPreviewCard(slot, existingUrl, meta.position, meta.scale);
+      }
+    }
+
+    if (slides.length === 0 && defaultBanner) {
+      slides.push({ url: defaultBanner, alt: 'Default school banner', position: '50% 50%', scale: 1 });
+    }
+
+    return slides;
+  }
+
+  function setActiveSlide(index) {
+    const slides = stage.querySelectorAll('.hero-slide');
+    const dots = previewRoot.querySelectorAll('.hero-slideshow__dot');
+    slides.forEach(function (el, i) {
+      el.classList.toggle('is-active', i === index);
+    });
+    dots.forEach(function (el, i) {
+      el.classList.toggle('is-active', i === index);
+      el.setAttribute('aria-selected', i === index ? 'true' : 'false');
+    });
+  }
+
+  function renderHero() {
+    revokeObjectUrls();
+    const slides = buildSlidesFromForm();
+    previewRoot.setAttribute('data-slide-count', String(slides.length));
+    stage.innerHTML = '';
+
+    if (slides.length === 0) {
+      stage.innerHTML = '<div class="admin-landing-preview__empty">No hero images - default banner will be used on the home page.</div>';
+      const oldDots = previewRoot.querySelector('.hero-slideshow__dots');
+      if (oldDots) oldDots.remove();
+      return;
+    }
+
+    slides.forEach(function (slide, index) {
+      const wrap = document.createElement('div');
+      wrap.className = 'hero-slide' + (index === 0 ? ' is-active' : '');
+      wrap.setAttribute('data-slide-index', String(index));
+      const img = document.createElement('img');
+      img.className = 'hero-banner-img';
+      img.src = slide.url;
+      img.alt = slide.alt || ('Hero slide ' + (index + 1));
+      img.width = 1983;
+      img.height = 793;
+      img.decoding = 'async';
+      img.style.objectPosition = slide.position || '50% 50%';
+      img.style.transform = 'scale(' + (slide.scale || 1) + ')';
+      img.style.transformOrigin = 'center center';
+      wrap.appendChild(img);
+      stage.appendChild(wrap);
+    });
+
+    let dotsWrap = previewRoot.querySelector('.hero-slideshow__dots');
+    if (slides.length > 1) {
+      if (!dotsWrap) {
+        dotsWrap = document.createElement('div');
+        dotsWrap.className = 'hero-slideshow__dots';
+        dotsWrap.setAttribute('role', 'tablist');
+        dotsWrap.setAttribute('aria-label', 'Preview slideshow');
+        previewRoot.querySelector('.hero-slideshow').appendChild(dotsWrap);
+      }
+      dotsWrap.innerHTML = '';
+      slides.forEach(function (_, index) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'hero-slideshow__dot' + (index === 0 ? ' is-active' : '');
+        btn.setAttribute('role', 'tab');
+        btn.setAttribute('aria-label', 'Slide ' + (index + 1));
+        btn.setAttribute('data-goto', String(index));
+        btn.addEventListener('click', function () { setActiveSlide(index); });
+        dotsWrap.appendChild(btn);
+      });
+      dotsWrap.style.display = '';
+    } else if (dotsWrap) {
+      dotsWrap.remove();
+    }
+  }
+
+  function updateStrip() {
+    if (!stripField || !stripEl) return;
+    const text = stripField.value.trim();
+    stripEl.classList.toggle('is-hidden', text === '');
+    stripEl.setAttribute('aria-hidden', text === '' ? 'true' : 'false');
+    stripEl.querySelectorAll('[data-strip-text]').forEach(function (node) {
+      node.textContent = text || ' ';
+    });
+  }
+
+  function updateLifelines() {
+    try {
+      const lifelinesEl = document.getElementById('adminLandingPreviewLifelines');
+      let values = lifelinesEl ? JSON.parse(lifelinesEl.textContent || '{}') : {};
+      ['water', 'communication', 'electricity'].forEach(function (k) {
+        const sel = document.getElementById('lifeline_' + k);
+        if (sel) values[k] = sel.value;
+      });
+
+      const root = previewRoot.querySelector('.hero-lifelines');
+      if (!root) return;
+      const cards = root.querySelectorAll('.lifeline-card');
+      if (cards.length < 3) return;
+      const keys = ['water', 'communication', 'electricity'];
+      cards.forEach(function (card, i) {
+        const status = (values[keys[i]] || '').toUpperCase();
+        const statusEl = card.querySelector('.lifeline-status');
+        if (statusEl) statusEl.textContent = status || 'FUNCTIONAL';
+        if (String(status).trim() === 'NOT FUNCTIONAL') {
+          card.classList.add('is-down');
+        } else {
+          card.classList.remove('is-down');
+        }
+      });
+    } catch (e) { /* ignore */ }
+  }
+
+  function renderEditorPreview() {
+    if (!editorImage) return;
+    const position = normalizePositionString(editor.position);
+    const scale = normalizeScaleNumber(editor.scale);
+    editorImage.style.objectFit = 'cover';
+    editorImage.style.objectPosition = position;
+    editorImage.style.transform = 'scale(' + scale + ')';
+    editorImage.style.transformOrigin = 'center center';
+    if (editorZoom) {
+      editorZoom.value = scale.toFixed(2);
+    }
+    if (editorZoomLabel) {
+      editorZoomLabel.textContent = scale.toFixed(2) + 'x';
+    }
+    if (editorPositionLabel) {
+      editorPositionLabel.textContent = 'Position: ' + position;
+    }
+  }
+
+  function openEditor(slot) {
+    const fileInput = document.getElementById('hero_slide_' + slot);
+    const file = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+    const existingUrl = slotUrls[String(slot)] || slotUrls[slot] || '';
+    let sourceUrl = existingUrl;
+
+    editor.applied = false;
+    editor.slot = slot;
+    editor.fileInput = fileInput;
+    editor.position = getSlideMeta(slot).position;
+    editor.scale = getSlideMeta(slot).scale;
+
+    if (file) {
+      sourceUrl = URL.createObjectURL(file);
+      editor.objectUrl = sourceUrl;
+      editor.file = file;
+      editor.sourceType = 'file';
+      editor.sourceUrl = sourceUrl;
+      if (fileInput) {
+        fileInput.value = '';
+      }
+    } else {
+      editor.objectUrl = '';
+      editor.file = null;
+      editor.sourceType = 'existing';
+      editor.sourceUrl = sourceUrl;
+    }
+
+    if (!sourceUrl || !editorImage) {
+      return;
+    }
+
+    if (editorSlotLabel) {
+      editorSlotLabel.textContent = 'Slide ' + slot;
+    }
+
+    editorImage.onload = function () {
+      renderEditorPreview();
+    };
+    editorImage.src = sourceUrl;
+    renderEditorPreview();
+
+    const instance = getModalInstance();
+    if (instance) {
+      instance.show();
+    }
+  }
+
+  function cleanupEditor() {
+    if (editor.objectUrl) {
+      URL.revokeObjectURL(editor.objectUrl);
+      editor.objectUrl = '';
+    }
+    if (!editor.applied && editor.sourceType === 'file' && editor.fileInput) {
+      editor.fileInput.value = '';
+    }
+    editor.file = null;
+    editor.fileInput = null;
+    editor.sourceType = 'existing';
+    editor.sourceUrl = '';
+    editor.slot = null;
+    editor.dragging = false;
+    editor.applied = false;
+  }
+
+  function applyEditor() {
+    if (editor.slot === null) {
+      return;
+    }
+
+    if (editor.sourceType === 'file' && editor.fileInput && editor.file) {
+      try {
+        const dt = new DataTransfer();
+        dt.items.add(editor.file);
+        editor.fileInput.files = dt.files;
+      } catch (e) {
+        if (window.console && console.warn) {
+          console.warn('Could not keep the selected hero slide file after editing.', e);
+        }
+      }
+    }
+
+    setSlideMeta(editor.slot, editor.position, editor.scale);
+    editor.applied = true;
+    renderHero();
+
+    const wrapper = getPreviewWrapper(editor.slot);
+    if (wrapper && typeof wrapper.scrollIntoView === 'function') {
+      wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    const instance = getModalInstance();
+    if (instance) {
+      instance.hide();
+    }
+  }
+
+  function centerEditor() {
+    editor.position = '50% 50%';
+    renderEditorPreview();
+  }
+
+  function resetEditor() {
+    editor.position = '50% 50%';
+    editor.scale = 1.0;
+    renderEditorPreview();
+  }
+
+  function pointerToPosition(event) {
+    if (!editorStage) {
+      return editor.position;
+    }
+    const rect = editorStage.getBoundingClientRect();
+    const dragBasis = Math.max(Math.min(rect.width, rect.height), 1);
+    const dx = event.clientX - editor.startX;
+    const dy = event.clientY - editor.startY;
+    const x = editor.startPos.x + dx / dragBasis * 100;
+    const y = editor.startPos.y + dy / dragBasis * 100;
+    return tupleToPosition(x, y);
+  }
+
+  function bindEditorControls() {
+    if (editorZoom) {
+      editorZoom.addEventListener('input', function () {
+        editor.scale = normalizeScaleNumber(this.value);
+        renderEditorPreview();
+      });
+    }
+
+    if (editorCenterBtn) {
+      editorCenterBtn.addEventListener('click', centerEditor);
+    }
+
+    if (editorResetBtn) {
+      editorResetBtn.addEventListener('click', resetEditor);
+    }
+
+    if (editorApplyBtn) {
+      editorApplyBtn.addEventListener('click', applyEditor);
+    }
+
+    if (editorStage) {
+      editorStage.addEventListener('pointerdown', function (event) {
+        if (event.pointerType === 'mouse' && event.button !== 0) {
+          return;
+        }
+        if (editor.slot === null) {
+          return;
+        }
+        event.preventDefault();
+        editor.dragging = true;
+        editor.startX = event.clientX;
+        editor.startY = event.clientY;
+        editor.startPos = positionToTuple(editor.position);
+        editorStage.setPointerCapture(event.pointerId);
+        editorStage.classList.add('is-dragging');
+      });
+
+      editorStage.addEventListener('pointermove', function (event) {
+        if (!editor.dragging) {
+          return;
+        }
+        editor.position = pointerToPosition(event);
+        renderEditorPreview();
+      });
+
+      const stopDragging = function () {
+        if (!editor.dragging) {
+          return;
+        }
+        editor.dragging = false;
+        editorStage.classList.remove('is-dragging');
+      };
+
+      editorStage.addEventListener('pointerup', stopDragging);
+      editorStage.addEventListener('pointercancel', stopDragging);
+      editorStage.addEventListener('pointerleave', stopDragging);
+      editorStage.addEventListener('wheel', function (event) {
+        event.preventDefault();
+        const delta = event.deltaY > 0 ? -0.05 : 0.05;
+        editor.scale = normalizeScaleNumber(editor.scale + delta);
+        renderEditorPreview();
+      }, { passive: false });
+    }
+
+    if (modalEl) {
+      modalEl.addEventListener('hidden.bs.modal', function () {
+        cleanupEditor();
+      });
+    }
+  }
+
+  function bindQuickControls() {
+    document.querySelectorAll('.remove-slide-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        const slot = btn.getAttribute('data-slot');
+        const input = document.getElementById('remove_slide_' + slot);
+        if (input) input.value = '1';
+        const form = btn.closest('form');
+        if (form) form.submit();
+      }, false);
+    });
+
+    document.querySelectorAll('.open-slide-editor').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        const slot = parseInt(btn.getAttribute('data-slot'), 10);
+        if (!isNaN(slot)) {
+          openEditor(slot);
+        }
+      });
+    });
+
+    for (let slot = 1; slot <= 3; slot++) {
+      const zoomInput = document.querySelector('.slide-zoom-range[data-slot="' + slot + '"]');
+      const resetButton = document.querySelector('.reset-slide-edit[data-slot="' + slot + '"]');
+      const previewWrapper = getPreviewWrapper(slot);
+
+      if (zoomInput) {
+        zoomInput.addEventListener('input', function () {
+          const meta = getSlideMeta(slot);
+          setSlideMeta(slot, meta.position, this.value);
+          renderHero();
+        }, false);
+      }
+
+      if (resetButton) {
+        resetButton.addEventListener('click', function () {
+          setSlideMeta(slot, '50% 50%', 1.0);
+          renderHero();
+        }, false);
+      }
+
+      if (previewWrapper) {
+        let dragging = false;
+        let startX = 0;
+        let startY = 0;
+        let startPos = { x: 50, y: 50 };
+
+        previewWrapper.addEventListener('pointerdown', function (event) {
+          if (event.pointerType === 'mouse' && event.button !== 0) {
+            return;
+          }
+          const previewImg = previewWrapper.querySelector('.slide-preview-img');
+          if (!previewImg) {
+            return;
+          }
+          event.preventDefault();
+          dragging = true;
+          startX = event.clientX;
+          startY = event.clientY;
+          startPos = positionToTuple(getSlideMeta(slot).position);
+          previewWrapper.setPointerCapture(event.pointerId);
+          previewWrapper.classList.add('is-dragging');
+        }, false);
+
+        previewWrapper.addEventListener('pointermove', function (event) {
+          if (!dragging) {
+            return;
+          }
+          const rect = previewWrapper.getBoundingClientRect();
+          const dragBasis = Math.max(Math.min(rect.width, rect.height), 1);
+          const x = startPos.x + (event.clientX - startX) / dragBasis * 100;
+          const y = startPos.y + (event.clientY - startY) / dragBasis * 100;
+          setSlideMeta(slot, tupleToPosition(x, y), getSlideMeta(slot).scale);
+          renderHero();
+        }, false);
+
+        const stopDrag = function () {
+          if (!dragging) {
+            return;
+          }
+          dragging = false;
+          previewWrapper.classList.remove('is-dragging');
+        };
+
+        previewWrapper.addEventListener('pointerup', stopDrag, false);
+        previewWrapper.addEventListener('pointercancel', stopDrag, false);
+        previewWrapper.addEventListener('pointerleave', stopDrag, false);
+      }
+
+      updateSlideEditorUI(slot);
+    }
+
+    for (let slot = 1; slot <= 3; slot++) {
+      const fileInput = document.getElementById('hero_slide_' + slot);
+      if (!fileInput) {
+        continue;
+      }
+
+      fileInput.addEventListener('change', function () {
+        const file = fileInput.files && fileInput.files[0];
+        const errorEl = fileInput.closest('.border') ? fileInput.closest('.border').querySelector('.slide-input-error') : null;
+        if (errorEl) {
+          errorEl.classList.add('d-none');
+          errorEl.textContent = '';
+        }
+
+        if (!file) {
+          return;
+        }
+
+        if (file.size > 50 * 1024 * 1024) {
+          if (errorEl) {
+            errorEl.textContent = ' File is too large (max 50MB).';
+            errorEl.classList.remove('d-none');
+          }
+          fileInput.value = '';
+          return;
+        }
+
+        const mime = String(file.type || '').toLowerCase();
+        const name = String(file.name || '').toLowerCase();
+        if (mime && !mime.startsWith('image/') && !/\.(jpe?g|png|webp)$/i.test(name)) {
+          if (errorEl) {
+            errorEl.textContent = ' Please choose a JPG, PNG, or WEBP image.';
+            errorEl.classList.remove('d-none');
+          }
+          fileInput.value = '';
+          return;
+        }
+
+        openEditor(slot);
+      }, false);
+    }
+  }
+
+  function bindLifelines() {
+    ['lifeline_water', 'lifeline_communication', 'lifeline_electricity'].forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('change', updateLifelines);
+      }
+    });
+  }
+
+  if (stripField) {
+    stripField.addEventListener('input', updateStrip);
+  }
+
+  previewRoot.addEventListener('click', function (e) {
+    const dot = e.target.closest('.hero-slideshow__dot');
+    if (!dot) return;
+    const idx = parseInt(dot.getAttribute('data-goto'), 10);
+    if (!isNaN(idx)) setActiveSlide(idx);
+  });
+
+  bindEditorControls();
+  bindQuickControls();
+  bindLifelines();
+  updateLifelines();
+  renderHero();
+  updateStrip();
+
+  if (modalEl) {
+    modalEl.addEventListener('hidden.bs.modal', function () {
+      if (!editor.applied && editor.sourceType === 'file' && editor.fileInput) {
+        editor.fileInput.value = '';
+      }
+    });
+  }
+})();
+</script>
+
+<!-- Remove slide confirmation modal -->
+<!-- confirmation modal removed: remove is immediate -->
 
 <?= $this->endSection() ?>

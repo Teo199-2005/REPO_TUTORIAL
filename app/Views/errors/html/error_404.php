@@ -18,17 +18,17 @@
         body {
             height: 100%;
             background: #fafafa;
-            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-            color: #777;
-            font-weight: 300;
+            font-family: 'Times New Roman', Times, 'Liberation Serif', 'DejaVu Serif', serif;
+            color: #475569;
+            font-weight: 400;
         }
         h1 {
-            font-weight: lighter;
-            letter-spacing: normal;
+            font-weight: 700;
+            letter-spacing: 0;
             font-size: 3rem;
             margin-top: 0;
             margin-bottom: 0;
-            color: #222;
+            color: #0f172a;
         }
         .wrap {
             max-width: 1024px;
@@ -56,15 +56,15 @@
         }
         .footer {
             margin-top: 2rem;
-            border-top: 1px solid #efefef;
+            border-top: 1px solid #e2e8f0;
             padding: 1em 2em 0 2em;
             font-size: 85%;
-            color: #999;
+            color: #64748b;
         }
         a:active,
         a:link,
         a:visited {
-            color: #dd4814;
+            color: #1e40af;
         }
     </style>
 </head>

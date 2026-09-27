@@ -2,7 +2,6 @@
 helper(['landing', 'asset']);
 $previewSlides = $previewSlides ?? landing_hero_slides_for_view();
 $stripText     = $stripText ?? landing_announcement_strip_text();
-$stripHtml     = landing_announcement_strip_html();
 $showStrip     = trim((string) $stripText) !== '';
 $slideCount    = count($previewSlides);
 $previewId     = $previewId ?? 'adminLandingPreview';
@@ -20,7 +19,7 @@ $lifelines     = landing_lifelines();
                             <?php for ($repeat = 0; $repeat < 4; $repeat++): ?>
                                 <span class="landing-announcement-strip__item">
                                     <i class="bi bi-megaphone-fill landing-announcement-strip__icon" aria-hidden="true"></i>
-                                    <span class="landing-announcement-strip__text" data-strip-text><?= $stripHtml ?></span>
+                                    <span class="landing-announcement-strip__text" data-strip-text><?= esc($stripText) ?></span>
                                 </span>
                                 <span class="landing-announcement-strip__sep" aria-hidden="true">◆</span>
                             <?php endfor; ?>

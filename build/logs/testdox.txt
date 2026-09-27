@@ -1,4 +1,0 @@
-Password Reset Approve (Tests\Feature\PasswordResetApprove)
- [x] Approve with csrf token header
- [ ] Approve without csrf token fails
-

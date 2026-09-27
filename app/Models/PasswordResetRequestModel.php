@@ -46,15 +46,51 @@ class PasswordResetRequestModel extends Model
     protected $afterDelete = [];
 
     /**
-     * Get all password reset requests with user details
+     * Filtered + paginated password reset requests for the admin list page.
+     *
+     * @param array  $filters Accepted keys: 'status' (pending|approved|rejected|used|expired), 'q' (email / student name / LRN search)
+     * @param int    $perPage Rows per page
+     * @param int    $page    1-based page number
+     *
+     * @return array{rows: list<array>, total: int, per_page: int, page: int, total_pages: int}
      */
-    public function getAllRequestsWithDetails()
+    public function getFilteredRequestsWithDetails(array $filters = [], int $perPage = 15, int $page = 1): array
     {
-        return $this->select('password_reset_requests.*, password_reset_requests.email as user_email, students.first_name, students.last_name, students.lrn as student_id')
+        $perPage = max(1, $perPage);
+        $page    = max(1, $page);
+
+        $builder = $this->select('password_reset_requests.*, password_reset_requests.email as user_email, students.first_name, students.last_name, students.lrn as student_id')
             ->join('users', 'users.id = password_reset_requests.user_id')
-            ->join('students', 'students.user_id = users.id', 'left')
+            ->join('students', 'students.user_id = users.id', 'left');
+
+        if (! empty($filters['status'])) {
+            $builder->where('password_reset_requests.status', $filters['status']);
+        }
+
+        $q = trim((string) ($filters['q'] ?? ''));
+        if ($q !== '') {
+            $builder->groupStart()
+                ->like('password_reset_requests.email', $q)
+                ->orLike('students.first_name', $q)
+                ->orLike('students.last_name', $q)
+                ->orLike('students.lrn', $q)
+                ->groupEnd();
+        }
+
+        // countAllResults(false) keeps the builder intact for the rows query below.
+        $total = (int) $builder->countAllResults(false);
+
+        $rows = $builder
             ->orderBy('password_reset_requests.created_at', 'DESC')
-            ->findAll();
+            ->findAll($perPage, ($page - 1) * $perPage);
+
+        return [
+            'rows'        => $rows,
+            'total'       => $total,
+            'per_page'    => $perPage,
+            'page'        => $page,
+            'total_pages' => max(1, (int) ceil($total / $perPage)),
+        ];
     }
 
     /**

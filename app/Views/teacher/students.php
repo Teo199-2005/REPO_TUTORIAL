@@ -5,9 +5,6 @@
     <h1 class="h3 mb-0">My Students</h1>
     <div class="d-flex gap-2 align-items-center">
         <span class="badge bg-primary" id="totalStudentsCount"><?= count($advisoryStudents) ?> Students</span>
-        <button class="btn btn-success btn-sm" onclick="sendSelectedReportCards()" id="sendSelectedBtn" disabled>
-            <i class="bi bi-send"></i> Send Report Cards (<span id="selectedCount">0</span>)
-        </button>
         <button class="btn btn-danger btn-sm" onclick="removeSelectedStudents()" id="removeSelectedBtn" disabled>
             <i class="bi bi-person-dash"></i> Remove Selected (<span id="selectedCountRemove">0</span>)
         </button>
@@ -97,7 +94,7 @@
                                                     <a href="<?= base_url('teacher/report-card/' . $student['id']) ?>" class="btn btn-primary" target="_blank" title="View Report Card" aria-label="View report card for <?= esc($student['first_name'] . ' ' . $student['last_name']) ?> (opens in new tab)">
                                                         <i class="bi bi-file-earmark-text"></i> <span class="d-none d-md-inline">Report Card</span>
                                                     </a>
-                                                    <?php if (($student['grade_level'] ?? 0) == 7): ?>
+                                                    <?php if (is_sned_grade((int) ($student['grade_level'] ?? 0))): ?>
                                                     <a href="<?= base_url('teacher/sned/report-card/' . $student['id']) ?>" class="btn btn-primary" target="_blank" title="View SNED Report Card" aria-label="View SNED report card for <?= esc($student['first_name'] . ' ' . $student['last_name']) ?> (opens in new tab)" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none;">
                                                         <i class="bi bi-universal-access"></i> <span class="d-none d-md-inline">SNED</span>
                                                     </a>
@@ -161,7 +158,7 @@
                                                     <a href="<?= base_url('teacher/report-card/' . $student['id']) ?>" class="btn btn-primary" target="_blank" title="View Report Card" aria-label="View report card for <?= esc($student['first_name'] . ' ' . $student['last_name']) ?> (opens in new tab)">
                                                         <i class="bi bi-file-earmark-text"></i> <span class="d-none d-md-inline">Report Card</span>
                                                     </a>
-                                                    <?php if (($student['grade_level'] ?? 0) == 7): ?>
+                                                    <?php if (is_sned_grade((int) ($student['grade_level'] ?? 0))): ?>
                                                     <a href="<?= base_url('teacher/sned/report-card/' . $student['id']) ?>" class="btn btn-primary" target="_blank" title="View SNED Report Card" aria-label="View SNED report card for <?= esc($student['first_name'] . ' ' . $student['last_name']) ?> (opens in new tab)" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none;">
                                                         <i class="bi bi-universal-access"></i> <span class="d-none d-md-inline">SNED</span>
                                                     </a>
@@ -344,54 +341,12 @@ function updateSelectedCount() {
     const activeTab = document.querySelector('.tab-pane.active');
     const selected = activeTab ? activeTab.querySelectorAll('.student-checkbox:checked') : [];
     const count = selected.length;
-    document.getElementById('selectedCount').textContent = count;
     document.getElementById('selectedCountRemove').textContent = count;
     document.getElementById('allowCount').textContent = count;
     document.getElementById('blockCount').textContent = count;
-    document.getElementById('sendSelectedBtn').disabled = count === 0;
     document.getElementById('removeSelectedBtn').disabled = count === 0;
     document.getElementById('allowBtn').disabled = count === 0;
     document.getElementById('blockBtn').disabled = count === 0;
-}
-
-function sendSelectedReportCards() {
-    const selected = Array.from(document.querySelectorAll('.student-checkbox:checked'));
-    const studentIds = selected.map(cb => cb.value);
-    const count = studentIds.length;
-    const btn = document.getElementById('sendSelectedBtn');
-    const originalText = btn.innerHTML;
-    
-    showConfirmModal(`Send report card notifications to ${count} selected student(s)?`, () => {
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Sending...';
-        
-        fetch('<?= base_url('teacher/send-all-report-cards') ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify({ student_ids: studentIds })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showAlert(`Report card notifications sent to ${count} student(s)!`);
-                selected.forEach(cb => cb.checked = false);
-                updateSelectedCount();
-            } else {
-                showAlert('Failed to send notifications. Please try again.');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showAlert('An error occurred. Please try again.');
-        })
-        .finally(() => {
-            btn.disabled = false;
-            btn.innerHTML = originalText;
-        });
-    });
 }
 
 function removeSelectedStudents() {
@@ -409,7 +364,8 @@ function removeSelectedStudents() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': '<?= csrf_hash() ?>'
             },
             body: JSON.stringify({ student_ids: studentIds })
         })
@@ -522,40 +478,60 @@ function showAlert(message) {
 }
 
 function bulkToggleAccess(studentIds, canView, btn, originalText) {
-    let completed = 0;
     const total = studentIds.length;
     const hasButton = !!btn;
-    
+    let completed = 0;
+    let failed = 0;
+    let firstError = '';
+
+    const finish = () => {
+        if (hasButton) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+        if (failed === 0) {
+            showAlert(`Updated ${total} student(s) successfully!`);
+            setTimeout(() => location.reload(), 1000);
+            return;
+        }
+        // The change did NOT happen for every student - say so and refresh
+        // so the page gets a fresh CSRF token and the list reflects the DB.
+        showAlert(
+            (firstError || `Some updates failed (${failed} of ${total}).`)
+            + ' The page has been refreshed - please try again.'
+        );
+        setTimeout(() => location.reload(), 2500);
+    };
+
     studentIds.forEach(id => {
         fetch('<?= base_url('teacher/toggle-report-card-access') ?>', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': '<?= csrf_hash() ?>'
             },
             body: JSON.stringify({ student_id: id, can_view: canView })
         })
-        .then(response => response.json())
-        .then(data => {
+        .then(async response => {
+            let data = null;
+            try { data = await response.json(); } catch (e) { /* non-JSON (e.g. security error page) */ }
             completed++;
-            if (completed === total) {
-                showAlert(`Updated ${total} student(s) successfully!`);
-                setTimeout(() => location.reload(), 1000);
+            if (!(response.ok && data && data.success)) {
+                failed++;
+                if (!firstError) {
+                    firstError = (data && (data.error || data.message))
+                        || (response.status === 403 ? 'Your session expired.' : `Update failed (HTTP ${response.status}).`);
+                }
             }
+            if (completed === total) finish();
         })
         .catch(error => {
             console.error('Error:', error);
             completed++;
-            if (completed === total) {
-                showAlert('Some updates may have failed. Refreshing...');
-                setTimeout(() => location.reload(), 1000);
-            }
-        })
-        .finally(() => {
-            if (hasButton && completed === total) {
-                btn.disabled = false;
-                btn.innerHTML = originalText;
-            }
+            failed++;
+            if (!firstError) firstError = 'Could not reach the server.';
+            if (completed === total) finish();
         });
     });
 }

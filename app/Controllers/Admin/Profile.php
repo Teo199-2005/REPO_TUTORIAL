@@ -18,7 +18,7 @@ class Profile extends BaseController
         $userData = $db->table('users')->where('id', $user->id)->get()->getRow();
         
         return view('admin/profile', [
-            'title' => 'My Profile - CSCS SMS',
+            'title' => 'My Profile - CSCS Tap n Track',
             'admin' => [
                 'id' => $userData->id,
                 'email' => $userData->email,
@@ -47,6 +47,12 @@ class Profile extends BaseController
         $user = auth()->user();
         $db = \Config\Database::connect();
 
+        $before = (array) $db->table('users')
+            ->select('first_name, last_name, email')
+            ->where('id', $user->id)
+            ->get()
+            ->getRowArray();
+
         $data = [
             'first_name' => $this->request->getPost('first_name'),
             'last_name' => $this->request->getPost('last_name'),
@@ -55,6 +61,18 @@ class Profile extends BaseController
         ];
 
         if ($db->table('users')->where('id', $user->id)->update($data)) {
+            audit_event('profile.updated', [
+                'category'    => 'account',
+                'status'      => 'success',
+                'resource_type' => 'user',
+                'resource_id' => (string) $user->id,
+                'description' => 'Admin profile details updated',
+            ] + audit_diff($before, [
+                'first_name' => $data['first_name'],
+                'last_name'  => $data['last_name'],
+                'email'      => $data['email'],
+            ], ['first_name', 'last_name', 'email']));
+
             return redirect()->to(base_url('admin/profile'))->with('success', 'Profile updated successfully.');
         }
 
@@ -79,8 +97,9 @@ class Profile extends BaseController
             return redirect()->back()->with('error', 'New passwords do not match.');
         }
 
-        if (strlen($newPassword) < 8) {
-            return redirect()->back()->with('error', 'New password must be at least 8 characters.');
+        $policyError = password_meets_policy($newPassword);
+        if ($policyError !== null) {
+            return redirect()->back()->with('error', $policyError);
         }
 
         $user = auth()->user();
@@ -97,29 +116,52 @@ class Profile extends BaseController
 
         $currentPassword = trim($currentPassword);
 
-        $passwordValid = false;
-        if (! empty($identity->secret) && password_verify($currentPassword, $identity->secret)) {
-            $passwordValid = true;
-        } elseif (! empty($identity->secret2) && password_verify($currentPassword, $identity->secret2)) {
-            $passwordValid = true;
-        }
+        // Verify the current password exactly like the login page does
+        // (verify_auth_identity_password checks the canonical hash in secret2
+        // AND any legacy hash sitting in secret).
+        if (! verify_auth_identity_password($currentPassword, $identity)) {
+            audit_event('account.password_change_failed', [
+                'category'      => 'account',
+                'status'        => 'failure',
+                'resource_type' => 'user',
+                'resource_id'   => (string) $user->id,
+                'description'   => 'Password change rejected: current password incorrect',
+            ]);
 
-        if (! $passwordValid) {
             return redirect()->back()->with('error', 'Current password is incorrect.');
         }
 
-        $newHash = password_hash($newPassword, PASSWORD_DEFAULT);
+        // The email always comes from the users table — never from
+        // identity->secret, which in legacy rows may hold a password hash
+        // instead of an email address.
+        $userRow = $db->table('users')->select('email')->where('id', $user->id)->get()->getRow();
+        $email = trim((string) ($userRow->email ?? ''));
 
-        $db->table('auth_identities')
-            ->where('user_id', $user->id)
-            ->where('type', 'email_password')
-            ->update([
-                'secret'  => $newHash,
-                'secret2' => null,
-                'updated_at' => date('Y-m-d H:i:s'),
-            ]);
+        if ($email === '') {
+            return redirect()->back()->with('error', 'Account email not found. Please contact support.');
+        }
 
-        return redirect()->to(base_url('admin/profile'))->with('success', 'Password changed successfully.');
+        // Save in the canonical layout (name/secret = email, secret2 = hash).
+        // Critically, this REPLACES the whole identity row — wiping any legacy
+        // password hash from secret, which is what kept an OLD password
+        // working after a change. sync_auth_password() is the same writer the
+        // registration and demo-account flows use.
+        if (! sync_auth_password((int) $user->id, $email, $newPassword)) {
+            return redirect()->back()->with('error', 'Failed to change password. Please try again.');
+        }
+
+        log_message('info', 'Admin profile password changed for user ID: ' . $user->id);
+
+        audit_event('account.password_changed', [
+            'category'      => 'account',
+            'status'        => 'success',
+            'resource_type' => 'user',
+            'resource_id'   => (string) $user->id,
+            'description'   => 'Password changed from the admin profile page',
+            'metadata'      => ['method' => 'self_service'],
+        ]);
+
+        return redirect()->to(base_url('admin/profile'))->with('success', 'Password changed successfully. Use your new password the next time you sign in.');
     }
 }
 

@@ -64,7 +64,10 @@ class IdCards extends BaseController
 
         // Get student photos - use photo_path if available
         foreach ($students as &$student) {
-            if (!empty($student['photo_path'])) {
+            if (!empty($student['id_photo_path'])) {
+                $student['photo'] = $student['id_photo_path'];
+            } elseif (!empty($student['photo_path'])) {
+                // Legacy fallback for students without a dedicated 2x2 yet.
                 $student['photo'] = $student['photo_path'];
             } else {
                 $student['photo'] = null;
@@ -79,7 +82,7 @@ class IdCards extends BaseController
             ->findAll();
 
         return view('admin/id_cards', [
-            'title' => 'Student ID Cards - CSCS SMS',
+            'title' => 'Student ID Cards - CSCS Tap n Track',
             'students' => $students,
             'allSections' => $allSections,
             'gradeFilter' => $gradeFilter,
@@ -109,7 +112,8 @@ class IdCards extends BaseController
         }
 
         // Get student photo
-        $student['photo'] = !empty($student['photo_path']) ? $student['photo_path'] : null;
+        // Prefer the dedicated 2x2 ID picture; fall back to the legacy photo for students who have no ID photo yet.
+        $student['photo'] = !empty($student['id_photo_path']) ? $student['id_photo_path'] : (!empty($student['photo_path']) ? $student['photo_path'] : null);
 
         return view('admin/id_card_clean', [
             'title' => 'Student ID Card - ' . $student['first_name'] . ' ' . $student['last_name'],
@@ -135,7 +139,8 @@ class IdCards extends BaseController
         }
 
         // Get student photo
-        $student['photo'] = !empty($student['photo_path']) ? $student['photo_path'] : null;
+        // Prefer the dedicated 2x2 ID picture; fall back to the legacy photo for students who have no ID photo yet.
+        $student['photo'] = !empty($student['id_photo_path']) ? $student['id_photo_path'] : (!empty($student['photo_path']) ? $student['photo_path'] : null);
 
         return view('admin/id_card_print', [
             'title' => 'Student ID Card - ' . $student['first_name'] . ' ' . $student['last_name'],
@@ -181,4 +186,3 @@ class IdCards extends BaseController
         }
     }
 }
-

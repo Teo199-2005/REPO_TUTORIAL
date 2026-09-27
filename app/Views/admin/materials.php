@@ -39,7 +39,7 @@
             </div>
         <?php else: ?>
             <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
+                <table class="table table-hover align-middle mb-0 admin-table" data-js-paged="1">
                     <thead class="table-light">
                         <tr>
                             <th>Title</th>
@@ -84,12 +84,9 @@
                                     <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#editMaterialModal<?= (int) $material->id ?>" title="Edit">
                                         <i class="bi bi-pencil"></i>
                                     </button>
-                                    <form method="post" action="<?= base_url('admin/materials/delete/' . (int) $material->id) ?>" class="d-inline" onsubmit="return confirm('Delete this material permanently?');">
-                                        <?= csrf_field() ?>
-                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </form>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" title="Delete" data-bs-toggle="modal" data-bs-target="#deleteMaterialModal<?= (int) $material->id ?>">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -249,6 +246,29 @@
                     <button type="submit" class="btn btn-primary">Save changes</button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+<?php endforeach; ?>
+<?php foreach ($materials as $material): ?>
+<div class="modal fade" id="deleteMaterialModal<?= (int) $material->id ?>" tabindex="-1" aria-labelledby="deleteMaterialModalLabel<?= (int) $material->id ?>" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header modal-header-danger">
+                <h5 class="modal-title" id="deleteMaterialModalLabel<?= (int) $material->id ?>"><i class="bi bi-exclamation-triangle me-2"></i>Delete material?</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-1">Delete <strong>&ldquo;<?= esc($material->title) ?>&rdquo;</strong> permanently?</p>
+                <p class="text-muted small mb-0">This action cannot be undone. The uploaded file will be removed and the material will no longer appear for teachers or on the public website.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary text-dark" data-bs-dismiss="modal">Cancel</button>
+                <form method="post" action="<?= base_url('admin/materials/delete/' . (int) $material->id) ?>" class="d-inline">
+                    <?= csrf_field() ?>
+                    <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Delete permanently</button>
+                </form>
+            </div>
         </div>
     </div>
 </div>

@@ -11,7 +11,7 @@
         </small>
     </div>
     <div>
-        <a href="<?= base_url("teacher/sned/report-card-pdf/{$student['id']}") ?>" class="btn btn-sm btn-danger" target="_blank">
+        <a href="<?= isset($pdfUrl) && $pdfUrl ? esc($pdfUrl) : base_url("teacher/sned/report-card-pdf/{$student['id']}") ?>" class="btn btn-sm btn-danger" target="_blank">
             <i class="bi bi-filetype-pdf me-1"></i> Export PDF
         </a>
         <a href="javascript:history.back()" class="btn btn-sm btn-outline-secondary ms-1">

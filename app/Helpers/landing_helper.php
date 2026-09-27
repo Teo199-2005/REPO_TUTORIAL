@@ -324,28 +324,66 @@ if (! function_exists('landing_announcement_strip_text')) {
     }
 }
 
-if (! function_exists('landing_announcement_strip_html')) {
+if (! function_exists('landing_announcement_strip_linkify')) {
     /**
-     * Return announcement strip text with URLs converted to clickable links.
-     * Other HTML is escaped for safety. Links open in a new tab.
+     * Escape arbitrary announcement text, then turn its http(s) URLs into links.
+     *
+     * The result is safe to echo WITHOUT esc(): the non-URL text is escaped here,
+     * and the only markup in the output is the <a> tags this function builds.
+     *
+     * Order matters. The text comes straight from system_settings, so it is
+     * untrusted input from the database's point of view: escaping it AFTER
+     * linkifying would let an admin store markup and have it run for every
+     * visitor. Escaping first means the only tags that can ever reach the page
+     * are ours. It is also safe to escape first and still match URLs, because
+     * htmlspecialchars cannot introduce a "://" sequence of its own, so the URL
+     * pattern cannot be tricked into matching across an escaped entity.
      */
-    function landing_announcement_strip_html(): string
+    function landing_announcement_strip_linkify(string $text): string
     {
-        $text = landing_announcement_strip_text();
+        $text = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
         if ($text === '') {
             return '';
         }
 
-        // plain-text text: URLs become links, everything else stays as-is
-        $pattern = '/(https?:\/\/[^\s<>"\']+)/i';
-        $html = preg_replace_callback($pattern, function ($m) {
-            $url = htmlspecialchars($m[1], ENT_QUOTES, 'UTF-8');
-            return '<a href="' . $url . '" target="_blank" rel="noopener noreferrer" style="color: #fbbf24; text-decoration: underline; text-underline-offset: 2px;">' . $url . '</a>';
-        }, $text);
+        // 1. Escape everything. After this the string holds no raw < > " or '.
+        $safe = htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
-        // IMPORTANT: we already built safe HTML (only <br> if user typed it, and our own <a> tags)
-        // so we must NOT pass it through esc() again, otherwise angle brackets get encoded.
+        // 2. Linkify http(s) only. Anchoring the pattern on the scheme is what
+        //    stops "javascript:" or "data:" from ever becoming an href; such
+        //    text stays visible and inert instead of quietly turning dangerous.
+        //    The character class cannot match quotes or angle brackets, and step
+        //    1 already removed them, so the match is safe to drop into an
+        //    attribute. It is already escaped, so escaping it a second time
+        //    would turn a legitimate "?a=1&b=2" into "?a=1&amp;amp;b=2".
+        $html = preg_replace_callback(
+            '#https?://[^\s<>"\']+#i',
+            static function (array $m): string {
+                $url  = $m[0];
+                // The class lets each page theme the link; the inline style is a
+                // deliberate baseline so a link stays visible and underlined even
+                // on a page whose stylesheet has not picked the class up yet.
+                return '<a class="strip-link" href="' . $url . '" target="_blank"'
+                    . ' rel="noopener noreferrer" style="color:#fbbf24;text-decoration:underline;'
+                    . 'text-underline-offset:2px;">' . $url . '</a>';
+            },
+            $safe
+        );
+
         return (string) $html;
+    }
+}
+
+if (! function_exists('landing_announcement_strip_html')) {
+    /**
+     * Announcement strip text for the page, with URLs converted to clickable
+     * links that open in a new tab.
+     *
+     * Safe to echo WITHOUT esc() -- see landing_announcement_strip_linkify().
+     */
+    function landing_announcement_strip_html(): string
+    {
+        return landing_announcement_strip_linkify(landing_announcement_strip_text());
     }
 }
 
@@ -399,178 +437,5 @@ if (! function_exists('landing_save_lifelines')) {
         $model->setSetting('landing_lifeline_water', strtoupper(trim($water)), 'Landing page lifeline: water');
         $model->setSetting('landing_lifeline_communication', strtoupper(trim($comm)), 'Landing page lifeline: communication');
         $model->setSetting('landing_lifeline_electricity', strtoupper(trim($elec)), 'Landing page lifeline: electricity');
-    }
-}
-
-if (! function_exists('landing_qr_code_path')) {
-    function landing_qr_code_path(): string
-    {
-        try {
-            $model = new \App\Models\SystemSettingModel();
-            $path = (string) ($model->getSetting('landing_qr_code', '') ?? '');
-        } catch (\Throwable $e) {
-            return '';
-        }
-
-        $path = ltrim(str_replace('\\', '/', $path), '/');
-        if ($path === '' || preg_match('#^uploads/[a-zA-Z0-9._/-]+$#', $path) !== 1) {
-            return '';
-        }
-
-        $full = FCPATH . $path;
-        if (! is_file($full)) {
-            return '';
-        }
-
-        return $path;
-    }
-}
-
-if (! function_exists('landing_qr_code_url')) {
-    function landing_qr_code_url(): string
-    {
-        $path = landing_qr_code_path();
-        if ($path === '') {
-            return '';
-        }
-
-        return asset_url($path);
-    }
-}
-
-if (! function_exists('landing_save_qr_code_path')) {
-    function landing_save_qr_code_path(?string $relativePath): void
-    {
-        $model = new \App\Models\SystemSettingModel();
-        if ($relativePath === null || trim($relativePath) === '') {
-            $model->setSetting('landing_qr_code', '', 'Landing page footer QR code');
-            return;
-        }
-
-        $relative = ltrim(str_replace('\\', '/', $relativePath), '/');
-        if (preg_match('#^uploads/[a-zA-Z0-9._/-]+$#', $relative) !== 1) {
-            return;
-        }
-
-        $full = FCPATH . $relative;
-        if (! is_file($full)) {
-            return;
-        }
-
-        $model->setSetting('landing_qr_code', $relative, 'Landing page footer QR code');
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Landing page content sections
-// ---------------------------------------------------------------------------
-
-if (! function_exists('landing_sections_get')) {
-    function landing_sections_get(): array
-    {
-        try {
-            $model = new \App\Models\SystemSettingModel();
-            $raw   = (string) ($model->getSetting('landing_content_sections', '') ?? '');
-        } catch (\Throwable $e) {
-            return [];
-        }
-
-        if ($raw === '') {
-            return [];
-        }
-
-        $decoded = json_decode($raw, true);
-        if (! is_array($decoded)) {
-            return [];
-        }
-
-        $sections = [];
-        foreach ($decoded as $item) {
-            if (! is_array($item)) {
-                continue;
-            }
-
-            $sections[] = [
-                'id'          => is_string($item['id'] ?? '') ? $item['id'] : '',
-                'title'       => is_string($item['title'] ?? '') ? $item['title'] : '',
-                'description' => is_string($item['description'] ?? '') ? $item['description'] : '',
-                'media_type'  => in_array($item['media_type'] ?? '', ['image', 'video'], true) ? $item['media_type'] : 'image',
-                'media_url'   => is_string($item['media_url'] ?? '') ? $item['media_url'] : '',
-                'order'       => is_numeric($item['order'] ?? '') ? (int) $item['order'] : 0,
-            ];
-        }
-
-        usort($sections, static fn (array $a, array $b): int => $a['order'] <=> $b['order']);
-
-        return $sections;
-    }
-}
-
-if (! function_exists('landing_sections_save')) {
-    function landing_sections_save(array $sections): void
-    {
-        $clean = [];
-        foreach ($sections as $section) {
-            if (! is_array($section)) {
-                continue;
-            }
-
-            $clean[] = [
-                'id'          => is_string($section['id'] ?? '') ? $section['id'] : '',
-                'title'       => is_string($section['title'] ?? '') ? $section['title'] : '',
-                'description' => is_string($section['description'] ?? '') ? $section['description'] : '',
-                'media_type'  => in_array($section['media_type'] ?? '', ['image', 'video'], true) ? $section['media_type'] : 'image',
-                'media_url'   => is_string($section['media_url'] ?? '') ? $section['media_url'] : '',
-                'order'       => is_numeric($section['order'] ?? '') ? (int) $section['order'] : 0,
-            ];
-        }
-
-        $model = new \App\Models\SystemSettingModel();
-        $model->setSetting(
-            'landing_content_sections',
-            json_encode(array_values($clean), JSON_UNESCAPED_SLASHES),
-            'Landing page content sections'
-        );
-    }
-}
-
-if (! function_exists('landing_section_media_url')) {
-    function landing_section_media_url(string $path): string
-    {
-        if ($path === '') {
-            return '';
-        }
-
-        if (preg_match('#^https?://#', $path) === 1) {
-            return $path;
-        }
-
-        $relative = ltrim(str_replace('\\', '/', $path), '/');
-        if ($relative === '') {
-            return '';
-        }
-
-        helper('asset');
-
-        $candidates = [];
-        if (defined('FCPATH')) {
-            $candidates[] = FCPATH . $relative;
-            $candidates[] = FCPATH . 'public' . DIRECTORY_SEPARATOR . $relative;
-        }
-        if (defined('ROOTPATH')) {
-            $candidates[] = rtrim(ROOTPATH, DIRECTORY_SEPARATOR . '/\\') . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . $relative;
-        }
-
-        foreach ($candidates as $file) {
-            if (is_file($file)) {
-                return asset_url($relative);
-            }
-        }
-
-        if (preg_match('#^uploads/landing/[a-zA-Z0-9._-]+$#', $relative) === 1) {
-            return asset_url($relative);
-        }
-
-        return '';
     }
 }

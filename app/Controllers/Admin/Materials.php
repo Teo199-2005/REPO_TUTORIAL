@@ -22,7 +22,7 @@ class Materials extends BaseController
         helper(['materials', 'admin_access']);
 
         return view('admin/materials', [
-            'title'      => 'School Materials — CSCS SMS',
+            'title'      => 'School Materials — CSCS Tap n Track',
             'materials'  => $this->materialModel->getAdminMaterials(),
             'categories' => material_category_options(),
         ]);
@@ -84,6 +84,21 @@ class Materials extends BaseController
             'sort_order'        => 0,
         ]);
 
+        $materialId = $this->materialModel->getInsertID();
+
+        audit_event('material.uploaded', [
+            'category'      => 'data',
+            'status'        => 'success',
+            'resource_type' => 'material',
+            'resource_id'   => (string) $materialId,
+            'description'   => 'School material uploaded',
+            'after'         => [
+                'title'    => $title,
+                'category' => $category,
+                'file'     => $file->getClientName(),
+            ],
+        ]);
+
         return redirect()->back()->with('success', 'Material uploaded successfully.');
     }
 
@@ -114,6 +129,26 @@ class Materials extends BaseController
             'show_on_website' => $this->request->getPost('show_on_website') ? 1 : 0,
         ]);
 
+        audit_event('material.updated', [
+            'category'      => 'data',
+            'status'        => 'success',
+            'resource_type' => 'material',
+            'resource_id'   => (string) $material->id,
+            'description'   => 'School material updated',
+        ] + audit_diff(
+            [
+                'title'           => (string) ($material->title ?? ''),
+                'category'        => (string) ($material->category ?? ''),
+                'show_on_website' => (string) ($material->show_on_website ?? ''),
+            ],
+            [
+                'title'           => (string) $title,
+                'category'        => (string) $category,
+                'show_on_website' => $this->request->getPost('show_on_website') ? '1' : '0',
+            ],
+            ['title', 'category', 'show_on_website']
+        ));
+
         return redirect()->back()->with('success', 'Material updated successfully.');
     }
 
@@ -132,6 +167,15 @@ class Materials extends BaseController
         }
 
         $this->materialModel->delete($material->id);
+
+        audit_event('material.deleted', [
+            'category'      => 'data',
+            'status'        => 'success',
+            'resource_type' => 'material',
+            'resource_id'   => (string) $material->id,
+            'description'   => 'School material deleted',
+            'before'        => ['title' => (string) ($material->title ?? '')],
+        ]);
 
         return redirect()->back()->with('success', 'Material deleted successfully.');
     }

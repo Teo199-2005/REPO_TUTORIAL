@@ -2,11 +2,25 @@
 <?= $this->section('content') ?>
 
 <style>
-.grade-card { border-left: 4px solid #0d6efd; margin-bottom: 1rem; }
-.section-item { background: #f8f9fa; border-radius: 8px; padding: 12px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; }
-.section-item:hover { background: #e9ecef; transform: translateX(4px); }
-.student-link { display: block; padding: 10px 15px; border-radius: 6px; text-decoration: none; color: inherit; transition: all 0.2s; }
-.student-link:hover { background: #e7f3ff; color: #0d6efd; }
+.grade-card {
+  border: var(--hairline);
+  border-radius: var(--radius-lg);
+  background: var(--surface-tint);
+  box-shadow: var(--shadow-md);
+  margin-bottom: 1rem;
+}
+/* Grade headers sit on a deep, saturated bar, so their title and chevron are
+   explicitly white. The platform heading rules default an undecorated heading
+   to the dark heading colour, which would be invisible on that bar. */
+.grade-card > .card-header h5,
+.grade-card > .card-header h5 .bi,
+.grade-card > .card-header .bi {
+  color: #ffffff !important;
+}
+.section-item { background: #f8fafc; border: var(--hairline); border-radius: var(--radius-md); padding: 12px; margin-bottom: 8px; cursor: pointer; transition: background 0.2s ease, box-shadow 0.2s ease; }
+.section-item:hover { background: #f1f5f9; box-shadow: var(--shadow-sm); }
+.student-link { display: block; padding: 10px 15px; border-radius: var(--radius-sm); text-decoration: none; color: inherit; transition: background 0.2s ease; }
+.student-link:hover { background: #eef2f7; color: #1e40af; }
 .badge-count { font-size: 0.85rem; padding: 4px 10px; }
 </style>
 
@@ -46,13 +60,13 @@
     <?php foreach ($groupedRecords as $gradeLevel => $sections): ?>
         <?php
         $colors = [
-            0 => '#7c3aed',
-            1 => '#0d6efd',
-            2 => '#0056b3',
-            3 => '#004085',
-            4 => '#002752',
-            5 => '#28a745',
-            6 => '#1e7e34',
+            0 => '#6d28d9',
+            1 => '#1d4ed8',
+            2 => '#1e40af',
+            3 => '#0f2f66',
+            4 => '#111f42',
+            5 => '#15803d',
+            6 => '#14532d',
         ];
         $bgColor = $colors[$gradeLevel] ?? '#0d6efd';
         ?>

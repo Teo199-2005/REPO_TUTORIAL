@@ -28,6 +28,18 @@ class Home extends BaseController
                     return redirect()->to(base_url('teacher/dashboard'));
                 }
                 if ($user->inGroup('student')) {
+                    // A locked portal only exposes My Profile, so a student with
+                    // an incomplete profile (BMI + both photos) goes straight there.
+                    try {
+                        $studentRow = (new StudentModel())->where('user_id', (int) $user->id)->first();
+                    } catch (\Throwable $e) {
+                        $studentRow = null;
+                    }
+
+                    if ($studentRow !== null && ! student_profile_complete($studentRow)) {
+                        return redirect()->to(base_url('student/profile'));
+                    }
+
                     return redirect()->to(base_url('student/dashboard'));
                 }
                 if ($user->inGroup('parent')) {
@@ -75,7 +87,7 @@ class Home extends BaseController
         helper('landing');
 
         return view('landing', [
-            'title' => 'CSCS School Management System',
+            'title' => 'CSCS Tap n Track',
             'announcements' => $announcements,
             'enrollmentData' => json_encode($enrollmentData),
             'monthlyEnrollmentData' => json_encode($monthlyEnrollmentData),

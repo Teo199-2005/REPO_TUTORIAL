@@ -1,4 +1,4 @@
-/* CSCS SMS Responsive Overrides
+/* CSCS Tap n Track Responsive Overrides
    Scope: Landing (/), Auth (/login, /register), Admin Dashboard
    Rule: Desktop styles remain untouched. All overrides scoped to mobile/tablet breakpoints.
 */
@@ -27,7 +27,7 @@ body.dashboard-app {
   box-sizing: border-box;
 }
 
-/* Table row actions — compact toolbar on desktop */
+/* Table row actions - compact toolbar on desktop */
 .dashboard-app .table-actions-grid {
   display: inline-flex;
   flex-wrap: wrap;
@@ -69,7 +69,7 @@ body.dashboard-app {
     border-width: 1.5px;
     border-radius: 8px;
     font-size: 0.8125rem !important;
-    font-weight: 600;
+    font-weight: 700;
     line-height: 1.2;
     text-align: left;
     white-space: nowrap;
@@ -86,7 +86,7 @@ body.dashboard-app {
   .dashboard-app .table-actions-grid .table-action-label {
     display: inline !important;
     font-size: 0.8125rem !important;
-    font-weight: 600;
+    font-weight: 700;
     line-height: 1.2;
     white-space: nowrap;
     overflow: visible;
@@ -261,7 +261,7 @@ body.dashboard-app {
   .btn-step, .register-btn { width: 100%; }
 
   /* ===== ADMIN DASHBOARD MOBILE ===== */
-  /* Top bar: one row — menu | title (ellipsis) | actions. Do NOT target nested .d-flex (was breaking layout). */
+  /* Top bar: one row - menu | title (ellipsis) | actions. Do NOT target nested .d-flex (was breaking layout). */
   .dashboard-app .top-bar { padding: 0.75rem 1rem !important; }
   .dashboard-app .top-bar > .d-flex {
     display: flex !important;
@@ -311,7 +311,7 @@ body.dashboard-app {
   .dashboard-app .top-bar .top-bar-icon-btn i { font-size: 1.2rem; }
   .dashboard-app .app-desktop-collapse { display: none !important; }
 
-  /* Full-width main column on phones — cancel desktop sidebar offset */
+  /* Full-width main column on phones - cancel desktop sidebar offset */
   body.dashboard-app .main-content,
   body.dashboard-app .app-sidebar-wrapper.collapsed ~ .main-content,
   body.dashboard-app .app-sidebar-wrapper.show ~ .main-content {
@@ -386,9 +386,9 @@ body.dashboard-app {
     min-height: 200px !important;
     max-height: 200px !important;
   }
-  
+
   /*
-   * Mobile tables → card rows (all roles using dashboard_layout).
+   * Mobile tables -> card rows (all roles using dashboard_layout).
    * Opt out: add class `table-mobile-static` on <table>.
    * Labels come from <thead> via public/js/mobile-tables.js (data-label).
    * Scoped with `table > tbody` so nested tables inside cells still work.
@@ -415,22 +415,13 @@ body.dashboard-app {
     display: block !important;
     width: 100% !important;
     background: #ffffff !important;
-    border: 2px solid #e2e8f0 !important;
+    border: var(--hairline) !important;
     border-radius: 14px !important;
     padding: 0 !important;
     margin-bottom: 1rem !important;
     box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08) !important;
     overflow: hidden !important;
     position: relative !important;
-  }
-  .dashboard-app table:not(.table-mobile-static) > tbody > tr::before,
-  .dashboard-app table:not(.table-mobile-static) > tfoot > tr::before {
-    content: '' !important;
-    display: block !important;
-    height: 4px !important;
-    width: 100% !important;
-    background: linear-gradient(90deg, #1e40af 0%, #3b82f6 50%, #f59e0b 100%) !important;
-    opacity: 0.95 !important;
   }
   .dashboard-app table:not(.table-mobile-static) > tbody > tr > td,
   .dashboard-app table:not(.table-mobile-static) > tfoot > tr > td {
@@ -504,8 +495,8 @@ body.dashboard-app {
   }
   /*
    * Action buttons (mobile card tables).
-   * .table-actions-grid → 2-column grid; odd counts end with one full-width row (2×2×1 style).
-   * .btn-group → compact 2-column grid (legacy tables).
+   * .table-actions-grid -> 2-column grid; odd counts end with one full-width row (2x2x1 style).
+   * .btn-group -> compact 2-column grid (legacy tables).
    */
   .dashboard-app table:not(.table-mobile-static) .btn-group {
     display: grid !important;
@@ -564,8 +555,8 @@ body.dashboard-app {
     gap: 0.2rem !important;
     padding: 0.45rem 0.35rem !important;
     min-height: 2.75rem !important;
-    font-size: 0.68rem !important;
-    font-weight: 600 !important;
+    font-size: 0.8125rem !important;
+    font-weight: 700 !important;
     line-height: 1.15 !important;
     box-shadow: none !important;
   }
@@ -588,8 +579,8 @@ body.dashboard-app {
     gap: 0.2rem !important;
     padding: 0.4rem 0.3rem !important;
     min-height: 2.65rem !important;
-    font-size: 0.68rem !important;
-    font-weight: 600 !important;
+    font-size: 0.8125rem !important;
+    font-weight: 700 !important;
     line-height: 1.15 !important;
     text-align: center !important;
     background: #ffffff !important;
@@ -785,7 +776,7 @@ body.dashboard-app {
     min-height: 44px !important;
     margin: 0 !important;
   }
-  /* One full-width action when it’s the only control */
+  /* One full-width action when it's the only control */
   .dashboard-app table:not(.table-mobile-static) > tbody > tr > td:last-child > a.btn:only-child,
   .dashboard-app table:not(.table-mobile-static) > tbody > tr > td:last-child > .btn:only-child,
   .dashboard-app table:not(.table-mobile-static) > tfoot > tr > td:last-child > a.btn:only-child,
@@ -838,7 +829,7 @@ body.dashboard-app {
   /* Filter forms */
   .dashboard-app form.row { display: flex !important; flex-direction: column !important; gap: 1rem !important; }
   .dashboard-app form .col-auto { width: 100% !important; }
-  .dashboard-app form .col-auto .form-label { font-size: 0.9rem !important; font-weight: 600 !important; }
+  .dashboard-app form .col-auto .form-label { font-size: 0.9rem !important; font-weight: 700 !important; }
   .dashboard-app form .col-auto .form-select, .dashboard-app form .col-auto .form-control { font-size: 0.9rem !important; padding: 0.6rem !important; }
   .dashboard-app form .col-auto .btn { width: 100% !important; padding: 0.7rem !important; }
   
@@ -860,13 +851,13 @@ body.dashboard-app {
     flex: 0 0 100% !important; 
     max-width: 100% !important; 
   }
-  .dashboard-app .custom-modal-body .form-label { font-size: 0.9rem !important; font-weight: 600 !important; }
+  .dashboard-app .custom-modal-body .form-label { font-size: 0.9rem !important; font-weight: 700 !important; }
   .dashboard-app .custom-modal-body .form-control, .dashboard-app .custom-modal-body .form-select { font-size: 0.9rem !important; padding: 0.6rem !important; }
   
   .dashboard-app .student-info-section { padding: 1.25rem !important; }
   .dashboard-app .student-info-table td { padding: 0.6rem 0 !important; font-size: 0.9rem !important; }
   
-  /* Stack split toolbars on mobile — never apply to .top-bar (needs one horizontal row). */
+  /* Stack split toolbars on mobile - never apply to .top-bar (needs one horizontal row). */
   .dashboard-app .d-flex.justify-content-between:not(.top-bar .d-flex) {
     flex-direction: column !important;
     gap: 1rem !important;

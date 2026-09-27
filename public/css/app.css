@@ -1,17 +1,58 @@
 :root {
-  /* Typography — one stack across CSCS SMS (web UI) */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', Menlo, Monaco, Consolas, monospace;
+  /* ==========================================================================
+     TYPOGRAPHY SYSTEM
+     The single owner of every typeface decision in the platform.
+
+     One family, two weights, everywhere: Times New Roman (regular) and
+     Times New Roman Bold. Every screen, component, chart, print view and
+     exported document resolves its font through these tokens or through the
+     global enforcement rule further down this file, so no interface can drift
+     back onto a second family.
+
+     `--font-sans` and `--font-mono` are kept as token names only, so the
+     existing `var(--font-serif, …)` call sites keep resolving; they now point
+     at the institutional serif. The trailing Times / Liberation Serif /
+     DejaVu Serif entries are technical fallbacks for systems that do not ship
+     Times New Roman.
+     ========================================================================== */
+  --font-serif: 'Times New Roman', Times, 'Liberation Serif', 'DejaVu Serif', serif;
+  --font-sans: var(--font-serif);
+  --font-mono: var(--font-serif);
+
+  /* Weights: the family ships two, so medium/semibold/extrabold collapse onto
+     regular or bold. This matches what the browser already resolved them to,
+     so the hierarchy is now honest rather than aspirational. */
   --font-weight-normal: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
+  --font-weight-medium: 400;
+  --font-weight-semibold: 700;
   --font-weight-bold: 700;
-  --font-weight-extrabold: 800;
-  --line-height-tight: 1.25;
-  --line-height-body: 1.55;
-  --line-height-relaxed: 1.65;
-  --letter-spacing-display: -0.02em;
-  --letter-spacing-ui: 0.01em;
+  --font-weight-extrabold: 700;
+
+  /* A serif needs more leading and less tightening than the sans stack this
+     replaced, so display type is tracked at default and body copy breathes. */
+  --line-height-tight: 1.22;
+  --line-height-body: 1.6;
+  --line-height-relaxed: 1.7;
+  --letter-spacing-display: 0;
+  --letter-spacing-ui: 0.02em;
+
+  /* Hierarchy scale — used by the rules below and available to any component. */
+  --font-size-page-title: 2rem;
+  --font-size-section-title: 1.5rem;
+  --font-size-card-title: 1.125rem;
+  --font-size-body: 1rem;
+  --font-size-label: 0.875rem;
+  --font-size-table-head: 0.875rem;
+  --font-size-table: 0.9375rem;
+  --font-size-small: 0.875rem;
+
+  /* Bootstrap bridge. Loaded before this file, so these declarations win and
+     no Bootstrap component can pull a sans stack back in. */
+  --bs-body-font-family: var(--font-serif);
+  --bs-font-sans-serif: var(--font-serif);
+  --bs-font-monospace: var(--font-serif);
+  --bs-body-font-weight: 400;
+  --bs-heading-font-weight: 700;
 
   /* Modern Professional Color Scheme */
   --color-primary: #1e40af;      /* Deep Blue - Primary brand color */
@@ -35,13 +76,205 @@
   --color-heading: #0f172a;       /* Dark headings */
   --color-border: #e2e8f0;        /* Light borders */
   --color-border-dark: #cbd5e1;   /* Darker borders */
-  
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  
+
+  /* ==========================================================================
+     SURFACE + DEPTH SYSTEM
+     A premium enterprise surface: barely-there tints that add richness without
+     being noticed as a gradient, hairline separation instead of coloured
+     borders, and two soft shadow layers instead of one hard drop.
+
+     A widget is never distinguished by paint alone. Differentiation comes from
+     the icon glyph colour, the value typography and the spacing — that is what
+     keeps a dense dashboard looking designed rather than templated.
+     ========================================================================== */
+  --surface-page: #eef1f6;        /* app canvas behind the cards — a real
+                                       gray, not near-white, so a white widget
+                                       sitting on it has something to lift off */
+  --surface-1: #ffffff;           /* card / panel */
+  --surface-2: #f8fafc;           /* inset, table head, code */
+  --surface-3: #f1f5f9;           /* pressed state, progress track */
+  --surface-tint: linear-gradient(180deg, #ffffff 0%, #f7f9fd 100%);
+  --hairline: 1px solid rgba(15, 23, 42, 0.08);
+  --hairline-strong: 1px solid rgba(15, 23, 42, 0.14);
+
+  /* Depth — two soft layers each; no harsh, high-alpha, single-drop shadows. */
+  --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.04), 0 1px 1px 0 rgba(15, 23, 42, 0.03);
+  --shadow-md: 0 1px 2px 0 rgba(15, 23, 42, 0.04), 0 4px 12px -2px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 2px 4px -1px rgba(15, 23, 42, 0.04), 0 12px 28px -6px rgba(15, 23, 42, 0.10);
+  --shadow-xl: 0 8px 24px -8px rgba(15, 23, 42, 0.14), 0 24px 56px -16px rgba(15, 23, 42, 0.16);
+  --shadow-focus: 0 0 0 3px rgba(30, 64, 175, 0.22);
+
+  /* ==========================================================================
+     BLUE-TINTED GRAY RAMP
+     The neutral scale for the whole platform. Every step carries a small blue
+     undertone, so "gray" never resolves to a dead #808080 and no surface on
+     the platform reads as pure #fff next to pure #000. This is what removes
+     the black-and-white look: depth comes from these steps, never from
+     pure black shadows or pure white fills.
+
+     Use --gray-* for surfaces, rules and fills. --color-* above stays the
+     brand/status vocabulary.
+     ========================================================================== */
+  --gray-25:  #fbfcfe;   /* lightest — inner sheen, top of a glass edge */
+  --gray-50:  #f7f9fc;   /* near-white — alternating table row, inset head */
+  --gray-100: #eef2f8;   /* row zebra, pressed fills */
+  --gray-200: #e3e9f2;   /* hairline rules, table borders */
+  --gray-300: #cfd8e6;   /* stronger rules, header underline */
+  --gray-400: #a7b4c9;   /* decorative, disabled glyphs */
+  --gray-500: #7b8aa3;   /* placeholder text */
+  --gray-600: #5a6a83;   /* secondary text on glass */
+  --gray-700: #3f4d63;   /* body text on tinted surfaces */
+  --gray-800: #2b3648;   /* headings */
+  --gray-900: #1a2233;   /* deepest — never pure black */
+
+  /* ==========================================================================
+     GLASS SYSTEM
+     A glass panel is three things stacked: a vertical white-to-cool gradient
+     (light source above), a 1px inset top sheen (the lit edge), and a
+     three-layer shadow — a tight contact shadow, a soft ambient shadow, and a
+     wide low-alpha BLUE halo.
+
+     The blue halo is the accent that stops the panel looking like a flat
+     white box. It is deliberately low alpha (0.10–0.20); any higher and the
+     blue starts to compete with the content.
+
+     Tokens are declared as full box-shadow values so a component can adopt
+     one with a single declaration.
+     ========================================================================== */
+  --glass-bg: linear-gradient(180deg, #ffffff 0%, #fbfcfe 55%, var(--gray-50) 100%);
+  --glass-bg-strong: linear-gradient(180deg, #ffffff 0%, var(--gray-50) 100%);
+  --glass-edge: 1px solid var(--gray-200);
+  --glass-sheen: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  --glass-sheen-soft: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+
+  /* Resting: contact + ambient + blue halo. */
+  --glass-shadow:
+    0 1px 1px rgba(26, 34, 51, 0.04),
+    0 4px 10px -3px rgba(26, 34, 51, 0.07),
+    0 14px 28px -14px rgba(37, 99, 235, 0.16);
+  /* Lifted (hover / active widget): halo widens and gains a little weight. */
+  --glass-shadow-lift:
+    0 1px 1px rgba(26, 34, 51, 0.05),
+    0 8px 18px -6px rgba(26, 34, 51, 0.11),
+    0 24px 44px -20px rgba(37, 99, 235, 0.24);
+  /* Pressed: the halo collapses so the surface reads as pushed in. */
+  --glass-shadow-press:
+    inset 0 2px 4px rgba(26, 34, 51, 0.07),
+    0 1px 1px rgba(26, 34, 51, 0.04);
+
+  /* Smaller glass parts — icon tiles, chips, inline wells. */
+  --glass-shadow-sm:
+    0 1px 1px rgba(26, 34, 51, 0.04),
+    0 3px 8px -3px rgba(26, 34, 51, 0.07),
+    0 8px 16px -10px rgba(37, 99, 235, 0.16);
+
+  /* Full "glassy" stack, applied where a surface should read as glass over the
+     page canvas. */
+  --glass: var(--glass-bg) var(--glass-shadow);
+  --glass-full: var(--glass-bg) var(--glass-shadow) var(--glass-sheen);
+
+  /* ==========================================================================
+     TABLE STRIPES
+     Long, wide tables are the hardest thing to read when every row is the
+     same white. Alternating a true white row against a soft blue-gray is the
+     single highest-value legibility change on the platform: the eye tracks a
+     row across the whole width without hunting.
+
+     The gray is deliberately faint. It has to separate rows without competing
+     with status badges, which are the only saturated colour in a cell.
+     ========================================================================== */
+  --row-odd: #ffffff;                 /* white */
+  --row-even: var(--gray-100);        /* the "gray" in white-gray-white-gray */
+  --row-hover: #e4ecfa;               /* cool hover, still clearly a tint */
+  --row-rule: 1px solid var(--gray-200);
+  --thead-top: #f4f7fc;               /* header gradient, top */
+  --thead-bot: #e8eef7;               /* header gradient, bottom */
+  --thead-ink: #3f4d63;
+  --table-edge: 1px solid var(--gray-200);
+  --table-shadow:
+    0 1px 1px rgba(26, 34, 51, 0.03),
+    0 6px 16px -8px rgba(26, 34, 51, 0.10),
+    0 18px 36px -22px rgba(37, 99, 235, 0.14);
+
+  /* ==========================================================================
+     BUTTON SHADOWS — TINTED TO THE BUTTON'S OWN COLOUR
+     A single black drop on every button is what makes a button row look flat
+     and unfinished. Each variant now casts a shadow in its own hue, so a
+     green action button reads green in its shadow the same way its face does.
+
+     Neutral / white buttons get the faint blue halo instead, which is the
+     "hint of blue" they need to avoid looking like an unstyled box.
+     ========================================================================== */
+  --btn-shadow-neutral:
+    0 1px 1px rgba(26, 34, 51, 0.06),
+    0 4px 10px -4px rgba(26, 34, 51, 0.12),
+    0 10px 18px -12px rgba(37, 99, 235, 0.22);
+  --btn-shadow-primary:
+    0 1px 1px rgba(30, 58, 138, 0.20),
+    0 5px 12px -4px rgba(30, 64, 175, 0.36),
+    0 12px 22px -12px rgba(30, 64, 175, 0.42);
+  --btn-shadow-success:
+    0 1px 1px rgba(4, 120, 87, 0.20),
+    0 5px 12px -4px rgba(5, 150, 105, 0.36),
+    0 12px 22px -12px rgba(5, 150, 105, 0.42);
+  --btn-shadow-danger:
+    0 1px 1px rgba(185, 28, 28, 0.20),
+    0 5px 12px -4px rgba(220, 38, 38, 0.34),
+    0 12px 22px -12px rgba(220, 38, 38, 0.40);
+  --btn-shadow-warning:
+    0 1px 1px rgba(180, 83, 9, 0.20),
+    0 5px 12px -4px rgba(217, 119, 6, 0.34),
+    0 12px 22px -12px rgba(217, 119, 6, 0.40);
+  --btn-shadow-info:
+    0 1px 1px rgba(14, 116, 144, 0.20),
+    0 5px 12px -4px rgba(8, 145, 178, 0.34),
+    0 12px 22px -12px rgba(8, 145, 178, 0.40);
+  /* Accent (amber). The FILLED `.btn-primary` in this platform is amber, not
+     blue — app.css sets it to `var(--color-accent)` — so the main CTA borrows
+     this token for its shadow. Kept separate from --btn-shadow-warning
+     (Bootstrap's yellow .btn-warning) so the two can drift apart later. */
+  --btn-shadow-accent:
+    0 1px 1px rgba(180, 83, 9, 0.20),
+    0 5px 12px -4px rgba(217, 119, 6, 0.36),
+    0 12px 22px -12px rgba(217, 119, 6, 0.42);
+  --btn-shadow-accent-hover:
+    0 2px 4px rgba(180, 83, 9, 0.24),
+    0 10px 20px -6px rgba(217, 119, 6, 0.44),
+    0 18px 30px -16px rgba(217, 119, 6, 0.50);
+
+  /* Raised variant of any of the above, for :hover — the halo widens and the
+     contact shadow deepens, so the button appears to rise off the surface. */
+  --btn-shadow-neutral-hover:
+    0 2px 4px rgba(26, 34, 51, 0.08),
+    0 10px 20px -6px rgba(26, 34, 51, 0.16),
+    0 18px 30px -16px rgba(37, 99, 235, 0.30);
+  --btn-shadow-primary-hover:
+    0 2px 4px rgba(30, 58, 138, 0.24),
+    0 10px 20px -6px rgba(30, 64, 175, 0.44),
+    0 18px 30px -16px rgba(30, 64, 175, 0.50);
+  --btn-shadow-success-hover:
+    0 2px 4px rgba(4, 120, 87, 0.24),
+    0 10px 20px -6px rgba(5, 150, 105, 0.44),
+    0 18px 30px -16px rgba(5, 150, 105, 0.50);
+  --btn-shadow-danger-hover:
+    0 2px 4px rgba(185, 28, 28, 0.24),
+    0 10px 20px -6px rgba(220, 38, 38, 0.42),
+    0 18px 30px -16px rgba(220, 38, 38, 0.48);
+  --btn-shadow-warning-hover:
+    0 2px 4px rgba(180, 83, 9, 0.24),
+    0 10px 20px -6px rgba(217, 119, 6, 0.42),
+    0 18px 30px -16px rgba(217, 119, 6, 0.48);
+  --btn-shadow-info-hover:
+    0 2px 4px rgba(14, 116, 144, 0.24),
+    0 10px 20px -6px rgba(8, 145, 178, 0.42),
+    0 18px 30px -16px rgba(8, 145, 178, 0.48);
+
+  /* Lit top edge on a coloured button — the highlight that makes a solid fill
+     read as a moulded, slightly domed control rather than a flat swatch. */
+  --btn-sheen: inset 0 1px 0 rgba(255, 255, 255, 0.30);
+  --btn-sheen-strong: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  --btn-sheen-dark: inset 0 -1px 0 rgba(0, 0, 0, 0.12);
+
   /* Spacing */
   --spacing-xs: 0.5rem;
   --spacing-sm: 1rem;
@@ -49,13 +282,42 @@
   --spacing-lg: 2rem;
   --spacing-xl: 3rem;
   --spacing-2xl: 4rem;
-  
-  /* Border Radius */
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
-  
+
+  /* Border Radius — smooth, consistent corners */
+  --radius-sm: 0.625rem;   /* 10px  small controls, chips */
+  --radius-md: 0.875rem;   /* 14px  widgets, inputs, buttons */
+  --radius-lg: 1.125rem;   /* 18px  panels, cards */
+  --radius-xl: 1.375rem;   /* 22px  hero surfaces */
+
+  /* Icon scale — one ladder, so an icon is always proportionate to its widget.
+     --tile-* are the matching containers; the glyph sits at roughly half. */
+  --icon-xs: 0.875rem;   /* 14px  inline, buttons, table cells */
+  --icon-sm: 1rem;       /* 16px  small widgets, chips */
+  --icon-md: 1.25rem;    /* 20px  standard widget tile */
+  --icon-lg: 1.5rem;     /* 24px  large widget tile */
+  --icon-xl: 2rem;       /* 32px  page header / hero */
+  --tile-xs: 2.25rem;    /* 36px */
+  --tile-sm: 2.75rem;    /* 44px */
+  --tile-md: 3.5rem;     /* 56px */
+  --tile-lg: 4.5rem;     /* 72px */
+
+  /* ==========================================================================
+     STATUS PALETTE
+     One voice for every status surface, dot, badge, pill and toast. Soft and
+     desaturated rather than neon; each ink passes 4.5:1 on its own tint.
+     ========================================================================== */
+  --status-success-bg: #eef7f2;   --status-success-ink: #14663f;   --status-success-dot: #15803d;
+  --status-warning-bg: #fdf6e9;   --status-warning-ink: #8a5a08;   --status-warning-dot: #b45309;
+  --status-danger-bg:  #fdf1f1;   --status-danger-ink:  #8f2020;   --status-danger-dot:  #b91c1c;
+  --status-info-bg:    #eff4fb;   --status-info-ink:    #1a4a8f;   --status-info-dot:    #1d4ed8;
+  --status-neutral-bg: #f4f6f9;   --status-neutral-ink: #475569;   --status-neutral-dot: #94a3b8;
+
+  /* Motion — purposeful only: loaders, pending state, live data, entrances. */
+  --motion-fast: 140ms;
+  --motion-base: 220ms;
+  --motion-slow: 380ms;
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+
   /* Transitions */
   --transition-fast: 0.15s ease-in-out;
   --transition-normal: 0.3s ease-in-out;
@@ -72,7 +334,7 @@
   padding: 8px 16px;
   z-index: 9999;
   text-decoration: none;
-  font-weight: 600;
+  font-weight: 700;
   transition: top 0.3s ease;
   border-radius: 0 0 4px 4px;
 }
@@ -176,7 +438,7 @@
 }
 
 body {
-  font-family: var(--font-sans);
+  font-family: var(--font-serif);
   line-height: var(--line-height-body);
   color: var(--color-text);
   background-color: var(--color-bg);
@@ -185,9 +447,10 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Typography */
+/* Typography — element level baseline. Sizing, weights and the family are the
+   ones declared in :root; nothing here reintroduces a second typeface. */
 h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-sans);
+  font-family: var(--font-serif);
   font-weight: var(--font-weight-bold);
   line-height: var(--line-height-tight);
   color: var(--color-heading);
@@ -214,9 +477,388 @@ p {
   color: var(--color-text-muted);
 }
 
+/* ==========================================================================
+   TYPOGRAPHY SYSTEM — enforcement and hierarchy
+   Rules 1 to 3 guarantee the family and the two weights; rules 4 to 11 lay
+   down the hierarchy the rest of the file (and every future component) builds
+   on. They are intentionally class-light so a page only has to use a heading
+   element or a standard Bootstrap class to land on the right level.
+   ========================================================================== */
+
+/* 1. Enforce the family. One rule, `!important`, so no inline style, no
+   third-party widget and no future component can reintroduce a second
+   typeface. Bootstrap Icons is the single documented exception: `<i class="bi">`
+   glyphs are icons rather than text and keep their own icon font (declared on
+   the element / its ::before, neither of which this selector matches). */
+body,
+body :not(i):not(.bi):not([class^="bi-"]):not([class*=" bi-"]) {
+  font-family: var(--font-serif) !important;
+}
+
+/* 2. Normalize the Bootstrap weight utilities onto the two real weights, so
+   `fw-medium` / `fw-semibold` cannot smuggle a 500 or 600 back in. */
+body .fw-light,
+body .fw-lighter,
+body .fw-normal,
+body .fw-medium { font-weight: 400 !important; }
+body .fw-semibold,
+body .fw-bolder,
+body .fw-bold { font-weight: 700 !important; }
+
+/* 3. UI chrome reads as bold; prose never does. Interactive and framing text
+   (buttons, tabs, badges, nav links, pagination, dropdowns) carries the bold
+   weight, while body copy, captions and supporting copy stay regular. */
+.btn,
+.badge,
+.nav-tabs .nav-link,
+.dropdown-menu .dropdown-item,
+.page-link,
+.pagination,
+.tooltip .tooltip-inner,
+.list-group-item,
+.accordion-button,
+.form-check-label,
+.stat-chip,
+.chip,
+.pill {
+  font-weight: 700;
+}
+
+/* 4. Page titles — the most prominent text on a screen. Dashboard and portal
+   pages set an inline 1.25rem on their header heading, so the size is stated
+   here to keep every page title identical and unambiguously dominant.
+
+   The colour is NOT `!important`, and headings that carry a Bootstrap text
+   colour utility (`text-white`, `text-primary`, `text-muted`, …) are skipped
+   entirely. Roughly sixty headings across the app state their colour that way
+   — including the grade headers on Records Management, which sit on a dark
+   coloured bar and must stay white. The hierarchy sets a default; it never
+   overrides a deliberate choice. */
+.dashboard-header h1,
+.dashboard-header h2,
+.dashboard-header h3,
+.page-title,
+.page-header h1,
+.page-header h2,
+.page-header h3 {
+  font-family: var(--font-serif) !important;
+  font-weight: 700 !important;
+  font-size: 1.5rem !important;
+  line-height: 1.25 !important;
+  letter-spacing: 0 !important;
+}
+.dashboard-header h1:not([class*="text-"]),
+.dashboard-header h2:not([class*="text-"]),
+.dashboard-header h3:not([class*="text-"]),
+.page-title:not([class*="text-"]),
+.page-header h1:not([class*="text-"]),
+.page-header h2:not([class*="text-"]),
+.page-header h3:not([class*="text-"]) {
+  color: var(--color-heading);
+}
+
+/* 5. Section headers — a clear step below the page title. */
+.section-title,
+.page-section-title,
+h3.section-heading,
+.card-section-title {
+  font-family: var(--font-serif) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+}
+.section-title:not([class*="text-"]),
+.page-section-title:not([class*="text-"]),
+h3.section-heading:not([class*="text-"]),
+.card-section-title:not([class*="text-"]) {
+  color: var(--color-heading);
+}
+
+/* 6. Card titles — scannable, bold, balanced against the card body. Same
+   colour contract as above: a card header with a coloured ground keeps the
+   white its markup asks for. */
+.card-title,
+.card-header h2,
+.card-header h3,
+.card-header h4,
+.card-header h5,
+.card-header h6,
+.card-header strong {
+  font-family: var(--font-serif) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+}
+.card-title:not([class*="text-"]),
+.card-header h2:not([class*="text-"]),
+.card-header h3:not([class*="text-"]),
+.card-header h4:not([class*="text-"]),
+.card-header h5:not([class*="text-"]),
+.card-header h6:not([class*="text-"]),
+.card-header strong:not([class*="text-"]) {
+  color: var(--color-heading);
+}
+
+/* 7. Descriptions and supporting text — regular weight, generous leading.
+   Elements that explicitly ask for emphasis (`fw-bold`, `fw-semibold`) are
+   left alone, so "What will happen" can still be a bold muted label. */
+.card-text,
+.card-body p,
+.modal-body p,
+.alert p,
+.lead,
+.form-text,
+.help-block,
+.text-muted,
+small,
+caption,
+figcaption {
+  line-height: var(--line-height-relaxed);
+}
+.card-text:not([class*="fw-"]),
+.card-body p:not([class*="fw-"]),
+.modal-body p:not([class*="fw-"]),
+.alert p:not([class*="fw-"]),
+.lead:not([class*="fw-"]),
+.form-text:not([class*="fw-"]),
+.help-block:not([class*="fw-"]),
+.text-muted:not([class*="fw-"]),
+small:not([class*="fw-"]),
+caption:not([class*="fw-"]),
+figcaption:not([class*="fw-"]) {
+  font-weight: 400 !important;
+}
+
+/* 8. Labels — legible and emphatic without shouting, one size throughout. */
+label,
+.form-label,
+.col-form-label,
+.input-group-text,
+.legend-label {
+  font-weight: 700;
+  letter-spacing: var(--letter-spacing-ui);
+}
+
+/* 9. Tables — one uniform body size, bold tracked header row. */
+.table {
+  font-size: var(--font-size-table);
+}
+.table thead th,
+.table thead td,
+.table th.table-head {
+  font-weight: 700;
+  letter-spacing: var(--letter-spacing-ui);
+  color: var(--color-heading);
+}
+.table td,
+.table th { font-weight: 400; }
+.table thead th.table-head,
+.table thead th { font-weight: 700; }
+
+/* 10. Modals, alerts, confirmations and toasts — bold title, regular message. */
+.modal-title,
+.custom-modal-title,
+.alert-heading,
+.toast-title,
+.toast .toast-header strong,
+.toast strong,
+.offcanvas-title {
+  font-family: var(--font-serif) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+}
+.modal-body,
+.custom-modal-body,
+.modal-footer,
+.toast-body,
+.alert {
+  font-weight: 400;
+}
+
+/* 11. Form controls inherit the family from the enforcement rule; the sizes
+   and weights are normalized here so inputs, selects and textareas read
+   identically on desktop, tablet and mobile. */
+input,
+select,
+textarea,
+button {
+  font-family: var(--font-serif) !important;
+  line-height: normal;
+}
+input::placeholder,
+textarea::placeholder { color: #64748b; opacity: 1; }
+
+/* ==========================================================================
+   WIDGET SURFACE
+   One recipe for every card, KPI tile, stat widget, chart panel and list panel
+   in the platform, so a dense dashboard reads as a single designed system.
+
+   Rules the recipe follows:
+     - separation is a hairline, never a coloured border or an accent stripe
+     - depth is a soft two-layer shadow, lifted a little on hover
+     - the tint is a barely-there white-to-primary blend, not a colour block
+     - hierarchy comes from the value type and the icon glyph, not from paint
+   ========================================================================== */
+.card,
+.kpi-card,
+.stat-tile,
+.stats-card,
+.widget-surface {
+  background: var(--surface-tint);
+  border: var(--hairline);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  color: var(--color-text);
+}
+
+.card:hover,
+.kpi-card:hover,
+.stat-tile:hover,
+.widget-surface:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+
+/* Nested surfaces (a panel inside a panel) sit one level down, never boxed
+   twice with another shadow — that is what reads as "flat template card". */
+.card .card,
+.card .widget-surface {
+  background: var(--surface-1);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Table header / inset regions use the flat surface, not a second elevation. */
+.card-header,
+.card-footer,
+.table thead th {
+  background: var(--surface-2);
+}
+
+/* The canvas the widgets sit on. Now a real gray (--surface-page) with a soft
+   light source at the very top: a vertical white wash that fades out over the
+   first ~420px, plus a wide, very faint blue radial in the top-left. This is
+   what stops a long dashboard reading as one flat sheet, and it gives a white
+   widget something to sit against instead of more white. */
+body,
+.dashboard-app .main-content,
+.main-content,
+.page-content {
+  background-color: var(--surface-page);
+  background-image:
+    radial-gradient(1100px 520px at 12% -8%, rgba(37, 99, 235, 0.055), transparent 62%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0) 420px);
+}
+
+/* --------------------------------------------------------------------------
+   ICON LADDER
+   The previous blanket `.bi { font-size: .875rem !important }` pinned every
+   glyph on the platform to 14px, which is why widgets had to override it with
+   yet another `!important` and why sizes looked arbitrary. Icons now scale from
+   their own context, and these five steps are the only sizes in use.
+   -------------------------------------------------------------------------- */
+.bi,
+[class^="bi-"],
+[class*=" bi-"] { font-size: 1em; }
+
+.icon-xs, .bi.icon-xs { font-size: var(--icon-xs); }   /* 14px */
+.icon-sm, .bi.icon-sm { font-size: var(--icon-sm); }   /* 16px */
+.icon-md, .bi.icon-md { font-size: var(--icon-md); }   /* 20px */
+.icon-lg, .bi.icon-lg { font-size: var(--icon-lg); }   /* 24px */
+.icon-xl, .bi.icon-xl { font-size: var(--icon-xl); }   /* 32px */
+
+/* Icon tile: neutral surface + hairline ring + the accent carried by the glyph.
+   Colour lives in the icon, not in a painted block behind it. */
+.icon-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--tile-md);
+  height: var(--tile-md);
+  border-radius: var(--radius-md);
+  background: var(--surface-tint);
+  border: var(--hairline);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-primary);
+  line-height: 1;
+}
+.icon-tile--xs { width: var(--tile-xs); height: var(--tile-xs); border-radius: var(--radius-sm); color: var(--color-text-muted); }
+.icon-tile--sm { width: var(--tile-sm); height: var(--tile-sm); border-radius: var(--radius-sm); }
+.icon-tile--md { width: var(--tile-md); height: var(--tile-md); }
+.icon-tile--lg { width: var(--tile-lg); height: var(--tile-lg); border-radius: var(--radius-lg); }
+.icon-tile--xl { width: var(--tile-lg); height: var(--tile-lg); border-radius: var(--radius-lg); }
+.icon-tile--xs .bi { font-size: var(--icon-sm); }
+.icon-tile--sm .bi { font-size: var(--icon-md); }
+.icon-tile--md .bi { font-size: var(--icon-lg); }
+.icon-tile--lg .bi { font-size: var(--icon-xl); }
+.icon-tile--xl .bi { font-size: var(--icon-xl); }
+
+/* --------------------------------------------------------------------------
+   METRIC TYPE
+   A value is the loudest thing in a widget; its label and any supporting line
+   are supporting information and stay smaller and quieter.
+   -------------------------------------------------------------------------- */
+.metric-value,
+.kpi-value,
+.stats-number,
+.stat-tile__value {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 1.75rem;
+  line-height: 1.1;
+  letter-spacing: 0;
+  color: var(--color-heading);
+  font-variant-numeric: tabular-nums;
+}
+.metric-label,
+.kpi-label,
+.stats-label,
+.stat-tile__label {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  letter-spacing: var(--letter-spacing-ui);
+  color: var(--color-text-muted);
+}
+.metric-support,
+.stat-tile__meta {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   STATUS SURFACES
+   Shared by badges, pills, dots, banners and toasts so a "pending" looks the
+   same wherever it appears.
+   -------------------------------------------------------------------------- */
+.status-success { background: var(--status-success-bg); color: var(--status-success-ink); }
+.status-warning { background: var(--status-warning-bg); color: var(--status-warning-ink); }
+.status-danger  { background: var(--status-danger-bg);  color: var(--status-danger-ink); }
+.status-info    { background: var(--status-info-bg);    color: var(--status-info-ink); }
+.status-neutral { background: var(--status-neutral-bg); color: var(--status-neutral-ink); }
+
+.status-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: currentColor;
+}
+.status-success .status-dot,
+.status-dot--success { background: var(--status-success-dot); }
+.status-warning .status-dot,
+.status-dot--warning { background: var(--status-warning-dot); }
+.status-danger .status-dot,
+.status-dot--danger  { background: var(--status-danger-dot); }
+.status-info .status-dot,
+.status-dot--info    { background: var(--status-info-dot); }
+.status-neutral .status-dot,
+.status-dot--neutral { background: var(--status-neutral-dot); }
+
 /* Brand / marketing headings (school name on auth & public header) */
 .brand-gradient-heading {
-  font-family: var(--font-sans);
+  font-family: var(--font-serif);
   font-weight: var(--font-weight-extrabold);
   letter-spacing: var(--letter-spacing-display);
   line-height: var(--line-height-tight);
@@ -234,12 +876,14 @@ p {
   background-clip: text;
 }
 
-/* Public site header: school name next to logo */
+/* Public site header: school name next to logo.
+   Times New Roman Bold with the institutional amber gradient. Display tracking
+   stays at the token default — a serif tightened by the old -0.02em sets
+   visibly looser than it does at default tracking. */
 .site-brand-title-text {
-  font-family: var(--font-sans);
-  font-weight: var(--font-weight-extrabold);
+  font-family: var(--font-serif);
+  font-weight: var(--font-weight-bold);
   font-size: 1.8rem;
-  letter-spacing: var(--letter-spacing-display);
   background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #ea580c 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -248,36 +892,39 @@ p {
   position: relative;
 }
 
-/* Dashboard & data-heavy pages: readable UI scale */
+/* Dashboard & data-heavy pages: readable UI scale.
+   The serif has a smaller x-height than the sans stack it replaced, so the
+   reading sizes are nudged one step up (16px body / 15px table / 14px table
+   head ≈ 12pt / 11.25pt / 10.5pt) to keep the same perceived legibility. */
 .dashboard-app {
-  font-family: var(--font-sans);
+  font-family: var(--font-serif);
 }
 
 .dashboard-app .page-content {
-  font-size: 0.9375rem;
+  font-size: 1rem;
   line-height: var(--line-height-body);
 }
 
 .dashboard-app .table {
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
 }
 
 .dashboard-app .table thead th {
   font-weight: var(--font-weight-semibold);
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   letter-spacing: var(--letter-spacing-ui);
-  color: #475569;
+  color: #334155;
 }
 
 .dashboard-app .card-header {
-  font-family: var(--font-sans);
+  font-family: var(--font-serif);
   font-weight: var(--font-weight-semibold);
-  font-size: 0.9375rem;
+  font-size: 1rem;
   letter-spacing: var(--letter-spacing-ui);
 }
 
 .dashboard-app .btn {
-  font-family: var(--font-sans);
+  font-family: var(--font-serif);
   font-weight: var(--font-weight-semibold);
   letter-spacing: var(--letter-spacing-ui);
 }
@@ -290,13 +937,13 @@ p {
 }
 
 .dashboard-app .badge {
-  font-family: var(--font-sans);
+  font-family: var(--font-serif);
   font-weight: var(--font-weight-semibold);
   letter-spacing: 0.02em;
 }
 
 .dashboard-app .app-sidebar {
-  font-family: var(--font-sans);
+  font-family: var(--font-serif);
 }
 
 /* Header & Navigation */
@@ -316,10 +963,10 @@ p {
   gap: 0.75rem;
   color: white;
   text-decoration: none;
-  font-weight: 800;
+  font-weight: 700;
   font-size: 1.5rem;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .site-brand:hover {
@@ -348,13 +995,13 @@ p {
 .site-nav a {
   color: rgba(255, 255, 255, 0.9);
   text-decoration: none;
-  font-weight: 600;
+  font-weight: 700;
   padding: 0.75rem 1.25rem;
   border-radius: 12px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   font-size: 0.95rem;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   backdrop-filter: blur(10px);
   border: 1px solid transparent;
 }
@@ -378,10 +1025,6 @@ p {
   border-radius: 12px;
   opacity: 0;
   transition: opacity 0.3s ease;
-}
-
-.site-nav a:hover::before {
-  opacity: 1;
 }
 
 .site-nav a.active {
@@ -459,7 +1102,7 @@ p {
 
 .hero h1 {
   font-size: 3.5rem;
-  font-weight: 800;
+  font-weight: 700;
   margin-bottom: var(--spacing-md);
   color: white;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
@@ -484,7 +1127,7 @@ p {
   align-items: center;
   justify-content: center;
   padding: var(--spacing-sm) var(--spacing-lg);
-  font-weight: 600;
+  font-weight: 700;
   text-decoration: none;
   border-radius: var(--radius-lg);
   transition: var(--transition-fast);
@@ -544,19 +1187,11 @@ body:not(.dashboard-app) .btn-secondary:hover {
   font-size: 0.875rem;
 }
 
-/* Cards */
+/* Cards — the surface, hairline, radius and shadow come from the WIDGET
+   SURFACE block above; only the behaviour is declared here. */
 .card {
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
   transition: var(--transition-normal);
   overflow: hidden;
-}
-
-.card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-xl);
 }
 
 .card-body {
@@ -574,30 +1209,24 @@ body:not(.dashboard-app) .btn-secondary:hover {
 }
 
 .card-footer {
-  background: var(--color-surface);
-  border-top: 1px solid var(--color-border);
+  border-top: var(--hairline);
   padding: var(--spacing-md) var(--spacing-lg);
 }
 
-/* Stats Cards */
+/* Stats Cards — same widget recipe as every other card, with the value
+   carried by type rather than by a coloured block. */
 .stats-card {
   text-align: center;
   padding: var(--spacing-lg);
-  background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-bg) 100%);
-  border-radius: var(--radius-xl);
-  border: 1px solid var(--color-border);
 }
 
 .stats-number {
-  font-size: 2.5rem;
-  font-weight: 800;
-  color: var(--color-primary);
   margin-bottom: var(--spacing-xs);
 }
 
 .stats-label {
   color: var(--color-text-muted);
-  font-weight: 500;
+  font-weight: 400;
 }
 
 /* Features Grid */
@@ -663,7 +1292,7 @@ body:not(.dashboard-app) .btn-secondary:hover {
 .form-label {
   display: block;
   margin-bottom: var(--spacing-xs);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--color-heading);
 }
 
@@ -714,7 +1343,7 @@ body:not(.dashboard-app) .btn-secondary:hover {
 
 .analytics-value {
   font-size: 2rem;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--color-primary);
   margin-bottom: var(--spacing-xs);
 }
@@ -722,12 +1351,12 @@ body:not(.dashboard-app) .btn-secondary:hover {
 .analytics-label {
   color: var(--color-text-muted);
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .analytics-change {
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.8125rem;
+  font-weight: 700;
   padding: 0.25rem 0.5rem;
   border-radius: var(--radius-sm);
   display: inline-block;
@@ -806,12 +1435,11 @@ body:not(.dashboard-app) .btn-secondary:hover {
   margin-bottom: var(--spacing-lg);
 }
 
-/* Blue Divider - More Subtle */
+/* Section divider — a hairline, not a coloured bar. */
 .blue-divider {
-  height: 2px;
-  background: linear-gradient(90deg, transparent 0%, var(--color-primary) 20%, var(--color-primary) 80%, transparent 100%);
+  height: 1px;
+  background: var(--hairline-strong);
   margin: var(--spacing-md) 0;
-  opacity: 0.7;
 }
 
 /* Section Title - More Compact (dashboard only) */
@@ -820,7 +1448,7 @@ body:not(.dashboard-app) .btn-secondary:hover {
   text-align: center;
   margin-bottom: var(--spacing-lg);
   font-size: 1.25rem;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .dashboard-app .section-title span {
@@ -829,7 +1457,7 @@ body:not(.dashboard-app) .btn-secondary:hover {
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
   font-size: 0.9rem;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .dashboard-app .section-title::before {
@@ -861,13 +1489,13 @@ body:not(.dashboard-app) .btn-secondary:hover {
 
 .stats-number {
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: var(--spacing-xs);
 }
 
 .stats-label {
   font-size: 0.8rem;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 /* Enhanced Feature Cards */
@@ -910,14 +1538,13 @@ body:not(.dashboard-app) .btn-secondary:hover {
 
 .progress-bar {
   border-radius: var(--radius-sm);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 /* Performance Message */
 /* Performance Message - More Compact */
 .performance-message {
   background-color: var(--color-surface);
-  border-left: 3px solid var(--color-primary);
 }
 
 /* Deadline Items */
@@ -967,7 +1594,7 @@ body:not(.dashboard-app) .btn-secondary:hover {
   color: white !important;
   margin-bottom: var(--spacing-sm);
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .site-footer a {
@@ -1184,7 +1811,6 @@ ol li::marker {
   height: 20px;
   margin: -10px 0 0 -10px;
   border: 2px solid var(--color-border);
-  border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -1198,7 +1824,7 @@ ol li::marker {
 /* Additional Compact Dashboard Styles */
 .dashboard-header h1 {
   font-size: 1.5rem !important;
-  font-weight: 600 !important;
+  font-weight: 700 !important;
   margin-bottom: 0.5rem !important;
 }
 
@@ -1208,7 +1834,7 @@ ol li::marker {
 }
 
 .dashboard-header .btn {
-  font-size: 0.75rem !important;
+  font-size: 0.8125rem !important;
   padding: 0.375rem 0.75rem !important;
 }
 
@@ -1227,17 +1853,22 @@ ol li::marker {
 }
 
 .stats-card .stats-icon {
-  width: 32px !important;
-  height: 32px !important;
+  width: var(--tile-sm) !important;
+  height: var(--tile-sm) !important;
+  border-radius: var(--radius-sm) !important;
+  background: var(--surface-tint) !important;
+  border: var(--hairline) !important;
+  box-shadow: var(--shadow-sm) !important;
 }
+.stats-card .stats-icon .bi { font-size: var(--icon-md) !important; }
 
 .stats-card .stats-number {
-  font-size: 0.875rem !important;
+  font-size: 1.5rem !important;
   margin-bottom: 0.25rem !important;
 }
 
 .stats-card .stats-label {
-  font-size: 0.75rem !important;
+  font-size: 0.875rem !important;
 }
 
 /* Compact Feature Cards */
@@ -1246,36 +1877,38 @@ ol li::marker {
 }
 
 .feature-card .feature-icon {
-  width: 28px !important;
-  height: 28px !important;
+  width: var(--tile-xs) !important;
+  height: var(--tile-xs) !important;
 }
+.feature-card .feature-icon .bi { font-size: var(--icon-md) !important; }
 
 .feature-card .feature-title {
-  font-size: 0.8rem !important;
+  font-size: 0.9375rem !important;
   margin-bottom: 0.5rem !important;
 }
 
 .feature-card .feature-description {
-  font-size: 0.75rem !important;
+  font-size: 0.875rem !important;
   margin-bottom: 0.75rem !important;
 }
 
 /* Compact Section Titles */
 .section-title {
-  font-size: 1.1rem !important;
+  font-size: 1.25rem !important;
   margin-bottom: 1.5rem !important;
 }
 
 .section-title span {
-  font-size: 0.8rem !important;
+  font-size: 0.875rem !important;
   padding: 0.5rem 1rem !important;
 }
 
 /* Compact Blue Dividers */
 .blue-divider {
-  height: 1px !important;
-  margin: 1rem 0 !important;
-  opacity: 0.5 !important;
+  height: 1px;
+  background: var(--hairline-strong);
+  margin: var(--spacing-md) 0;
+
 }
 
 /* Compact Progress Bar */
@@ -1284,13 +1917,13 @@ ol li::marker {
 }
 
 .progress-bar {
-  font-size: 0.75rem !important;
+  font-size: 0.8125rem !important;
 }
 
 /* Compact Performance Message */
 .performance-message {
-  padding: 0.75rem !important;
-  font-size: 0.8rem !important;
+  padding: 0.875rem !important;
+  font-size: 0.875rem !important;
 }
 
 /* Compact Deadline Items */
@@ -1300,12 +1933,13 @@ ol li::marker {
 }
 
 .deadline-item .deadline-icon {
-  width: 24px !important;
-  height: 24px !important;
+  width: var(--tile-xs) !important;
+  height: var(--tile-xs) !important;
 }
+.deadline-item .deadline-icon .bi { font-size: var(--icon-md) !important; }
 
 .deadline-item h6 {
-  font-size: 0.8rem !important;
+  font-size: 0.875rem !important;
   margin-bottom: 0.25rem !important;
 }
 
@@ -1316,24 +1950,25 @@ ol li::marker {
 }
 
 .activity-item .activity-icon {
-  width: 20px !important;
-  height: 20px !important;
+  width: 28px !important;
+  height: 28px !important;
 }
+.activity-item .activity-icon .bi { font-size: var(--icon-sm) !important; }
 
 .activity-item p {
-  font-size: 0.8rem !important;
+  font-size: 0.875rem !important;
   margin-bottom: 0.25rem !important;
 }
 
 /* Compact Buttons */
 .btn-sm {
-  font-size: 0.75rem !important;
+  font-size: 0.8125rem !important;
   padding: 0.25rem 0.5rem !important;
 }
 
 /* Compact Typography */
 .card-title {
-  font-size: 0.9rem !important;
+  font-size: 1rem !important;
 }
 
 .list-group-item {
@@ -1341,12 +1976,12 @@ ol li::marker {
 }
 
 .list-group-item h6 {
-  font-size: 0.8rem !important;
+  font-size: 0.875rem !important;
   margin-bottom: 0.25rem !important;
 }
 
 .list-group-item p {
-  font-size: 0.75rem !important;
+  font-size: 0.8125rem !important;
 }
 
 /* Compact Spacing */
@@ -1381,15 +2016,12 @@ ol li::marker {
 
 /* Compact Badges */
 .badge {
-  font-size: 0.7rem !important;
+  font-size: 0.8125rem !important;
   padding: 0.25rem 0.5rem !important;
+  letter-spacing: var(--letter-spacing-ui);
 }
 
-/* Compact Icons */
-.bi {
-  font-size: 0.875rem !important;
-}
-
+/* Icon sizing is owned by the ICON LADDER block above. */
 .fs-4 {
   font-size: 1.25rem !important;
 }
@@ -1400,7 +2032,7 @@ ol li::marker {
 
 /* Compact Form Elements */
 .form-control {
-  font-size: 0.875rem !important;
+  font-size: 0.9375rem !important;
   padding: 0.375rem 0.75rem !important;
 }
 
@@ -1415,13 +2047,13 @@ ol li::marker {
 }
 
 .alert-heading {
-  font-size: 0.9rem !important;
+  font-size: 1rem !important;
   margin-bottom: 0.5rem !important;
 }
 
 /* Compact Table */
 .table {
-  font-size: 0.875rem !important;
+  font-size: 0.9375rem !important;
 }
 
 .table th,
@@ -1472,7 +2104,7 @@ ol li::marker {
 
 /* Compact Tooltip */
 .tooltip {
-  font-size: 0.75rem !important;
+  font-size: 0.8125rem !important;
 }
 
 /* Compact Popover */
@@ -1556,8 +2188,8 @@ ol li::marker {
 
 .sidebar-section-title {
   color: rgba(255, 255, 255, 0.7);
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.8125rem;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 0 1rem;
@@ -1581,7 +2213,7 @@ ol li::marker {
   color: rgba(255, 255, 255, 0.8);
   text-decoration: none;
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 400;
   transition: all 0.2s;
   border-left: 3px solid transparent;
 }
@@ -1589,14 +2221,12 @@ ol li::marker {
 .sidebar-link:hover {
   color: white;
   background-color: rgba(255, 255, 255, 0.1);
-  border-left-color: rgba(255, 255, 255, 0.5);
   text-decoration: none;
 }
 
 .sidebar-link.active {
   color: white;
   background-color: rgba(255, 255, 255, 0.15);
-  border-left-color: white;
 }
 
 .sidebar-link i {
@@ -1626,7 +2256,7 @@ body:not(.dashboard-app) .main-content {
 
 .top-bar h4 {
   color: #495057;
-  font-weight: 600;
+  font-weight: 700;
   margin: 0;
 }
 
@@ -1734,16 +2364,16 @@ body:not(.dashboard-app) .main-content {
 
 /* Blue Divider */
 .blue-divider {
-  height: 2px;
-  background: linear-gradient(90deg, #1e3c72 0%, #2a5298 50%, #1e3c72 100%);
-  border-radius: 1px;
-  opacity: 0.8;
+  height: 1px;
+  background: var(--hairline-strong);
+  margin: var(--spacing-md) 0;
+
 }
 
 /* Section Title */
 .section-title {
   color: #495057;
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: 1.5rem;
   text-align: center;
 }
@@ -1830,7 +2460,7 @@ body:not(.dashboard-app) .main-content {
 
 .card-title {
   color: #495057;
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: 0;
 }
 
@@ -1867,7 +2497,7 @@ body:not(.dashboard-app) .main-content {
 
 .deadline-content h6 {
   color: #495057;
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: 0.25rem;
 }
 
@@ -1888,7 +2518,7 @@ body:not(.dashboard-app) .main-content {
 
 .activity-content h6 {
   color: #495057;
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: 0.25rem;
 }
 
@@ -1972,7 +2602,7 @@ body:not(.dashboard-app) .main-content {
 }
 
 .site-footer .footer-brand .brand-logo h3 {
-  font-family: var(--font-sans) !important;
+  font-family: var(--font-serif) !important;
   font-size: 2rem !important;
   font-weight: 700 !important;
   color: white !important;
@@ -2128,8 +2758,8 @@ body:not(.dashboard-app) footer {
 
 /* Footer Styles (moved from layout.php inline styles) */
 .footer-divider {
-  height: 4px;
-  background: linear-gradient(90deg, #fbbf24 0%, #f59e0b 50%, #ea580c 100%);
+  height: 1px;
+  background: rgba(255, 255, 255, 0.14);
   margin-top: 0;
 }
 
@@ -2217,7 +2847,7 @@ body:not(.dashboard-app) footer {
 }
 
 .site-footer .footer-meta {
-  font-size: 11px;
+  font-size: 0.8125rem;
   opacity: 0.8;
   line-height: 1.4;
 }
@@ -2254,14 +2884,20 @@ body:not(.dashboard-app) footer {
 }
 
 .stats-card .stats-icon {
-  width: 32px !important;
-  height: 32px !important;
+  width: var(--tile-sm) !important;
+  height: var(--tile-sm) !important;
+  border-radius: var(--radius-sm) !important;
+  background: var(--surface-tint) !important;
+  border: var(--hairline) !important;
+  box-shadow: var(--shadow-sm) !important;
 }
+.stats-card .stats-icon .bi { font-size: var(--icon-md) !important; }
 
 .feature-card .feature-icon {
-  width: 28px !important;
-  height: 28px !important;
+  width: var(--tile-xs) !important;
+  height: var(--tile-xs) !important;
 }
+.feature-card .feature-icon .bi { font-size: var(--icon-md) !important; }
 
 .section-title span {
   font-size: 0.875rem !important;
@@ -2269,13 +2905,15 @@ body:not(.dashboard-app) footer {
 }
 
 .blue-divider {
-  height: 2px !important;
-  opacity: 0.6 !important;
+  height: 1px;
+  background: var(--hairline-strong);
+  margin: var(--spacing-md) 0;
+
 }
 
 .progress {
   height: 6px !important;
-  font-size: 0.75rem !important;
+  font-size: 0.8125rem !important;
 }
 
 .performance-message {
@@ -2294,7 +2932,7 @@ body:not(.dashboard-app) footer {
 }
 
 .btn-sm {
-  font-size: 0.75rem !important;
+  font-size: 0.8125rem !important;
   padding: 0.25rem 0.5rem !important;
 }
 
@@ -2327,12 +2965,18 @@ body:not(.dashboard-app) footer {
   padding-bottom: 1rem !important;
 }
 
+/* NOTE: gutter classes must set Bootstrap's --bs-gutter-* custom properties,
+ * NEVER a literal flex/grid `gap`. Columns are sized to sum to 100% width, so
+ * an extra gap (e.g. `gap: 0.75rem`) overflows the flex line and wraps the
+ * last column below its siblings (the announcements two-column layout bug). */
 .g-3 {
-  gap: 0.75rem !important;
+  --bs-gutter-x: 1rem !important;
+  --bs-gutter-y: 1rem !important;
 }
 
 .g-4 {
-  gap: 1rem !important;
+  --bs-gutter-x: 1.5rem !important;
+  --bs-gutter-y: 1.5rem !important;
 }
 
 /* Compact Badges */
@@ -2341,11 +2985,7 @@ body:not(.dashboard-app) footer {
   padding: 0.25rem 0.5rem !important;
 }
 
-/* Compact Icons */
-.bi {
-  font-size: 0.875rem !important;
-}
-
+/* Icon sizing is owned by the ICON LADDER block above. */
 /* Compact Typography Sizes */
 .fs-4 {
   font-size: 1rem !important;
@@ -2377,7 +3017,7 @@ body:not(.dashboard-app) footer {
 
 /* Compact Tables */
 .table {
-  font-size: 0.875rem !important;
+  font-size: 0.9375rem !important;
 }
 
 .table th,
@@ -2427,7 +3067,7 @@ body:not(.dashboard-app) footer {
 
 /* Compact Tooltips */
 .tooltip {
-  font-size: 0.75rem !important;
+  font-size: 0.8125rem !important;
 }
 
 /* Compact Popovers */
@@ -2503,7 +3143,7 @@ footer .brand-name,
 }
 
 .brand-name {
-  font-family: var(--font-sans) !important;
+  font-family: var(--font-serif) !important;
   font-size: 1.8rem !important;
   font-weight: 700 !important;
   color: white !important;
@@ -2581,7 +3221,7 @@ footer .brand-name,
 
 .link-section a i {
   color: #93c5fd !important;
-  font-size: 0.75rem !important;
+  font-size: 0.8125rem !important;
   width: 12px !important;
 }
 
@@ -2667,7 +3307,7 @@ footer .brand-name,
 
 .site-footer .brand-name {
   color: white !important;
-  font-family: var(--font-sans) !important;
+  font-family: var(--font-serif) !important;
   font-size: 2rem !important;
   font-weight: 700 !important;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
@@ -2732,7 +3372,7 @@ footer .brand-name,
 }
 
 .footer-brand .brand-logo h3 {
-  font-family: var(--font-sans) !important;
+  font-family: var(--font-serif) !important;
   font-size: 2rem !important;
   font-weight: 700 !important;
   color: white !important;
@@ -2766,7 +3406,7 @@ footer .brand-name,
 /* Social Links */
 .social-links h5 {
   font-size: 1rem !important;
-  font-weight: 600 !important;
+  font-weight: 700 !important;
   color: white !important;
   margin-bottom: 1rem !important;
   display: flex !important;
@@ -2900,7 +3540,7 @@ footer .brand-name,
 .footer-partnerships h5,
 .footer-newsletter h5 {
   font-size: 1rem !important;
-  font-weight: 600 !important;
+  font-weight: 700 !important;
   color: white !important;
   margin-bottom: 1rem !important;
   display: flex !important;
@@ -2985,7 +3625,7 @@ footer .brand-name,
   background: #fbbf24 !important;
   border-color: #fbbf24 !important;
   color: #1e40af !important;
-  font-weight: 600 !important;
+  font-weight: 700 !important;
 }
 
 .newsletter-form .btn-accent:hover {
@@ -2996,7 +3636,7 @@ footer .brand-name,
 
 .newsletter-features small {
   color: rgba(255, 255, 255, 0.7) !important;
-  font-size: 0.75rem !important;
+  font-size: 0.8125rem !important;
   display: flex !important;
   align-items: center !important;
   gap: 0.25rem !important;
@@ -3059,7 +3699,7 @@ footer .brand-name,
 }
 
 .footer-badges .badge {
-  font-size: 0.75rem !important;
+  font-size: 0.8125rem !important;
   padding: 0.375rem 0.75rem !important;
   display: flex !important;
   align-items: center !important;
@@ -3068,7 +3708,7 @@ footer .brand-name,
 
 .footer-version {
   color: rgba(255, 255, 255, 0.6) !important;
-  font-size: 0.75rem !important;
+  font-size: 0.8125rem !important;
   display: flex !important;
   align-items: center !important;
   gap: 0.25rem !important;
@@ -3142,13 +3782,12 @@ footer .brand-name,
   border: none;
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.25);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.10), 0 24px 56px -8px rgba(15, 23, 42, 0.16);
 }
 
 .citizens-charter-modal__header {
   background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
   color: #fff;
-  border-bottom: 3px solid #fbbf24;
 }
 
 .citizens-charter-modal__header .modal-title {
@@ -3187,7 +3826,6 @@ footer .brand-name,
   margin: 0;
   padding: 0;
   background: #fff;
-  border-bottom: 4px solid #cbd5e1;
 }
 
 .citizens-charter-page-wrap:last-child {
@@ -3230,13 +3868,12 @@ footer .brand-name,
   border: none;
   border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.28);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.10), 0 24px 56px -8px rgba(15, 23, 42, 0.16);
 }
 
 .school-materials-modal__header {
   background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #2563eb 100%);
   color: #fff;
-  border-bottom: 3px solid #fbbf24;
   padding: 1rem 1.25rem;
 }
 
@@ -3298,7 +3935,7 @@ footer .brand-name,
 
 .school-material-card__category {
   display: inline-block;
-  font-size: 0.68rem;
+  font-size: 0.8125rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -3325,9 +3962,9 @@ footer .brand-name,
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem 0.85rem;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   color: #94a3b8;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .school-material-card__actions {

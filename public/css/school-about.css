@@ -1,14 +1,23 @@
-/* Principal Section â€“ new layout */
+/* Principal Section - new layout */
 #landing .principal-section:not(.section-light):not(.section-dark) {
   background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%) !important;
 }
 
 #landing .principal-card {
-  background: #fff;
+  position: relative;
+  background: #ffffff;
   border-radius: 24px;
-  box-shadow: 0 24px 64px rgba(30, 64, 175, 0.12), 0 8px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 20px 56px rgba(30, 64, 175, 0.1), 0 6px 20px rgba(0, 0, 0, 0.05);
   overflow: hidden;
   border: 1px solid rgba(30, 64, 175, 0.08);
+}
+
+/* Minimalist PH flag accent — a slim gradient bar across the top of the card */
+#landing .principal-accent-bar {
+  height: 6px;
+  background: linear-gradient(90deg,
+    #0038a8 0%, #0038a8 50%,
+    #ce1126 50%, #ce1126 100%);
 }
 
 #landing .principal-card-inner {
@@ -20,7 +29,7 @@
 }
 
 #landing .principal-photo-wrap {
-  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -33,7 +42,8 @@
   max-width: 280px;
   border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 20px 50px rgba(30, 64, 175, 0.2);
+  box-shadow: 0 20px 50px rgba(30, 64, 175, 0.18);
+  border: 1px solid rgba(30, 64, 175, 0.1);
 }
 
 #landing .principal-photo {
@@ -49,8 +59,10 @@
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 0.6rem 1rem;
-  background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+  padding: 0.6rem 1rem 0.8rem;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   color: #fff;
   font-size: 0.8rem;
   font-weight: 700;
@@ -65,15 +77,20 @@
   flex-direction: column;
   justify-content: center;
   gap: 1.25rem;
-  background: linear-gradient(165deg, #ffffff 0%, #f8fafc 55%, #f1f5f9 100%);
+  background: #ffffff;
 }
 
 #landing .principal-header {
   position: relative;
   z-index: 1;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 #landing .principal-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.18em;
@@ -84,11 +101,11 @@
 
 #landing .principal-name {
   font-size: clamp(1.5rem, 2.5vw, 1.85rem);
-  font-weight: 800;
+  font-weight: 700;
   color: #0f172a;
   margin: 0 0 0.65rem 0;
   line-height: 1.15;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 #landing .principal-rank {
@@ -103,19 +120,18 @@
   display: inline-flex;
   align-items: center;
   padding: 0.35rem 0.75rem;
-  font-size: 0.72rem;
-  font-weight: 800;
+  font-size: 0.8125rem;
+  font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #ffffff;
-  background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%);
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+  background: #0f172a;
+  border-radius: 999px;
 }
 
 #landing .principal-school {
   font-size: 0.9rem;
-  font-weight: 500;
+  font-weight: 400;
   color: #64748b;
 }
 
@@ -123,12 +139,10 @@
   position: relative;
   margin: 0;
   padding: 1.75rem 1.5rem 1.5rem 2rem;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.95) 0%, rgba(239, 246, 255, 0.9) 100%);
-  border: 1px solid rgba(59, 130, 246, 0.15);
-  border-radius: 16px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 4px 20px rgba(30, 64, 175, 0.08);
+  background: #fafcff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
   overflow: hidden;
 }
 
@@ -200,7 +214,7 @@
   border-radius: 10px;
   border: 1px solid #e2e8f0;
   font-size: 0.8rem;
-  font-weight: 600;
+  font-weight: 700;
   color: #334155;
   transition: background 0.2s, border-color 0.2s;
 }
@@ -239,7 +253,7 @@
     padding: 2rem 1.5rem;
     text-align: center;
   }
-  
+
   #landing .principal-message-box {
     padding: 1.35rem 1.15rem 1.15rem 1.35rem;
   }
@@ -284,7 +298,7 @@
   }
 
   #landing .principal-badge {
-    font-size: 0.72rem;
+    font-size: 0.8125rem;
     padding: 0.55rem 0.85rem;
   }
 
@@ -313,7 +327,7 @@
   }
 
   #landing .principal-rank-badge {
-    font-size: 0.68rem;
+    font-size: 0.8125rem;
   }
 
   #landing .principal-credentials {
@@ -352,39 +366,220 @@
   align-items: stretch !important;
 }
 
+/* Two near-neighbour grounds rather than two opposites: a cool blue and a warm
+   sand, both already in the site's palette. Enough to tell the panels apart,
+   close enough that they read as one family. */
 #landing .vision-mission-panel {
-  background: #ffffff !important;
-  border-radius: 16px !important;
-  padding: clamp(1.25rem, 2.5vw, 2rem) !important;
-  border: 1px solid rgba(30, 64, 175, 0.1) !important;
-  box-shadow: 0 12px 32px rgba(30, 64, 175, 0.1), 0 4px 12px rgba(0, 0, 0, 0.06) !important;
+  position: relative !important;
+  display: flex !important;
+  flex-direction: column !important;
   height: 100% !important;
+  padding: 0 !important;
+  border-radius: 18px !important;
+  border: 1px solid rgba(30, 64, 175, 0.16) !important;
+  box-shadow: 0 12px 30px rgba(30, 64, 175, 0.08) !important;
+  overflow: hidden !important;
+  background: #f8fbff !important;
+}
+
+/* The two panel grounds: a cool blue and a warm sand, so the pair reads as one
+   family rather than two competing blocks. */
+#landing .vm-panel--vision {
+  background: #f8fbff !important;
+  border-color: rgba(30, 64, 175, 0.18) !important;
+}
+
+#landing .vm-panel--mission {
+  background: #fffdf7 !important;
+  border-color: rgba(180, 120, 20, 0.24) !important;
+}
+
+/* Brand lockup: the school seal beside the panel name, so each panel is
+   branded rather than just titled.
+
+   The band carries the panel's brand colour so the panel name can be white.
+   It has to: the panel body below is #f8fbff / #fffdf7, and white text on
+   those measures 1.04:1 and 1.02:1 - completely invisible. Putting the colour
+   on the band is also what makes the two panels read apart at a glance. */
+#landing .vm-panel__head {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.85rem !important;
+  padding: 1.1rem 1.5rem !important;
+  background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18) !important;
+}
+
+/* The 4px top bar now sits on the same dark band, so it becomes a light
+   highlight rather than a second dark gradient that would blend into it. */
+#landing .vm-panel--vision::before {
+  background: linear-gradient(90deg, #93c5fd 0%, #dbeafe 100%) !important;
+}
+
+#landing .vm-panel--mission::before {
+  background: linear-gradient(90deg, #fcd34d 0%, #fef3c7 100%) !important;
+}
+
+#landing .vm-panel--mission .vm-panel__head {
+  background: linear-gradient(135deg, #92400e 0%, #b45309 100%) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.22) !important;
+}
+
+#landing .vm-panel__logo {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 50% !important;
+  object-fit: contain !important;
+  background: #fff !important;
+  /* The old blue ring disappeared against the navy band and read as a stray
+     line over the amber one; a translucent white ring works on both. */
+  border: 1px solid rgba(255, 255, 255, 0.55) !important;
+  flex-shrink: 0 !important;
+}
+
+#landing .vm-panel__headings {
+  min-width: 0 !important;
 }
 
 #landing .vision-mission-panel .vm-title {
-  font-size: clamp(1.35rem, 2.2vw, 1.85rem) !important;
-  margin-bottom: 1rem !important;
+  font-size: clamp(1.3rem, 2vw, 1.6rem) !important;
+  line-height: 1.15 !important;
+  margin: 0 !important;
+  color: #fff !important;
+  /* The base .vm-title rule paints its glyphs with a gradient by setting
+     -webkit-text-fill-color: transparent over a background-clip: text gradient.
+     Both have to be undone or the letters stay transparent and `color` is
+     ignored - this is the reason the panel names looked "gradient coloured"
+     before. */
+  background: none !important;
+  -webkit-text-fill-color: #fff !important;
+  background-clip: border-box !important;
+  -webkit-background-clip: border-box !important;
 }
 
-#landing .vision-mission-panel .mission-list {
-  margin-bottom: 0 !important;
+/* The kicker sat at #64748b, which is 2.4:1 on the old white band and would
+   have been unreadable on the new dark one. */
+#landing .vm-panel__kicker {
+  font-size: 0.8125rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase !important;
+  margin: 0.2rem 0 0 !important;
 }
 
-#landing .vision-mission-panel .mission-list li {
-  font-size: clamp(0.88rem, 1.05vw, 1rem) !important;
-  padding: 0.65rem 0 0.65rem 1.75rem !important;
-  margin-bottom: 0.5rem !important;
+#landing .vm-panel--vision .vm-panel__kicker {
+  color: #dbe3f4 !important;
 }
 
-#landing .vision-mission-panel p {
-  font-size: clamp(0.9rem, 1.1vw, 1.05rem) !important;
+#landing .vm-panel--mission .vm-panel__kicker {
+  color: #f3e2c4 !important;
+}
+
+#landing .vm-panel__body {
+  display: flex !important;
+  flex-direction: column !important;
+  flex-grow: 1 !important;
+  padding: 1.35rem 1.5rem 1.6rem !important;
+}
+
+/* The official DepEd statement, set as a quotation. */
+#landing .vm-quote {
+  position: relative !important;
+  margin: 0 0 1.1rem !important;
+  padding: 1rem 2.4rem 1rem 2.7rem !important;
+  background: rgba(255, 255, 255, 0.85) !important;
+  border: 1px solid rgba(30, 64, 175, 0.14) !important;
+  border-radius: 0 12px 12px 0 !important;
+}
+
+/* The quotation marks live in CSS, not in the markup: as real characters they
+   would be announced aloud before the sentence they belong to. */
+#landing .vm-quote::before {
+  content: '\201C' !important;
+  position: absolute !important;
+  left: 0.75rem !important;
+  top: 0.3rem !important;
+  font-size: 2.6rem !important;
+  line-height: 1 !important;
+  font-weight: 700 !important;
+  color: rgba(30, 64, 175, 0.2) !important;
+}
+
+#landing .vm-quote::after {
+  content: '\201D' !important;
+  position: absolute !important;
+  right: 0.6rem !important;
+  bottom: -0.2rem !important;
+  font-size: 2.4rem !important;
+  line-height: 1 !important;
+  font-weight: 700 !important;
+  color: rgba(30, 64, 175, 0.14) !important;
+}
+
+#landing .vm-quote p {
+  font-size: clamp(0.9rem, 1.05vw, 1rem) !important;
   line-height: 1.65 !important;
-  color: #475569 !important;
-  margin-bottom: 0.85rem !important;
+  color: #334155 !important;
+  margin: 0 0 0.6rem !important;
 }
 
-#landing .vision-mission-panel p:last-child {
+#landing .vm-quote p:last-child {
   margin-bottom: 0 !important;
+}
+
+#landing .vm-panel__lead {
+  font-size: 0.95rem !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+  margin: 0 0 0.6rem !important;
+}
+
+#landing .vm-list {
+  list-style: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.5rem !important;
+}
+
+#landing .vm-list li {
+  position: relative !important;
+  padding: 0.6rem 0.8rem 0.6rem 2.1rem !important;
+  font-size: clamp(0.86rem, 1vw, 0.94rem) !important;
+  line-height: 1.55 !important;
+  color: #475569 !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+  border: 1px solid rgba(30, 64, 175, 0.1) !important;
+  border-radius: 10px !important;
+}
+
+#landing .vm-list li::before {
+  content: '' !important;
+  position: absolute !important;
+  left: 0.8rem !important;
+  top: 1.05rem !important;
+  width: 7px !important;
+  height: 7px !important;
+  border-radius: 50% !important;
+  background: #1e3a8a !important;
+}
+
+/* Reuse the same list on the mission side, in its own accent. */
+#landing .vm-panel--mission .vm-list li::before {
+  background: #b45309 !important;
+}
+
+#landing .vm-panel--mission .vm-quote {
+  border-color: rgba(180, 120, 20, 0.2) !important;
+}
+
+#landing .vm-panel--mission .vm-quote::before {
+  color: rgba(180, 120, 20, 0.24) !important;
+}
+
+#landing .vm-panel--mission .vm-quote::after {
+  color: rgba(180, 120, 20, 0.18) !important;
 }
 
 #landing .vision-mission-container {
@@ -416,7 +611,7 @@
 #landing .vision-card:hover,
 #landing .mission-card:hover {
   transform: translateY(-12px) !important;
-  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.25), 0 12px 32px rgba(30, 64, 175, 0.15) !important;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.10), 0 24px 56px -8px rgba(15, 23, 42, 0.16) !important;
   border-color: rgba(30, 64, 175, 0.3) !important;
 }
 
@@ -448,10 +643,10 @@
 
 #landing .vm-title {
   font-size: 2.5rem !important;
-  font-weight: 800 !important;
+  font-weight: 700 !important;
   color: #0f172a !important;
   margin: 0 !important;
-  letter-spacing: -0.02em !important;
+  letter-spacing: 0 !important;
   background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%) !important;
   -webkit-background-clip: text !important;
   -webkit-text-fill-color: transparent !important;
@@ -469,7 +664,7 @@
   line-height: 1.7 !important;
   color: #475569 !important;
   margin-bottom: 1.5rem !important;
-  font-weight: 500 !important;
+  font-weight: 400 !important;
 }
 
 #landing .mission-list {
@@ -484,7 +679,7 @@
   font-size: 1.125rem !important;
   line-height: 1.6 !important;
   color: #475569 !important;
-  font-weight: 500 !important;
+  font-weight: 400 !important;
   border-bottom: 1px solid rgba(30, 64, 175, 0.08) !important;
   transition: all 0.3s ease !important;
 }
@@ -515,7 +710,6 @@
   padding: 1.5rem !important;
   border-radius: 12px !important;
   margin-top: 1.5rem !important;
-  border-left: 4px solid #fbbf24 !important;
   position: relative !important;
 }
 
@@ -526,7 +720,7 @@
   z-index: 1 !important;
   margin-bottom: 1rem !important;
   color: #374151 !important;
-  font-weight: 500 !important;
+  font-weight: 400 !important;
 }
 
 #landing .vision-additional p:last-child {
@@ -566,7 +760,7 @@
   width: 60px !important;
   height: 60px !important;
   background: white !important;
-  border: 3px solid #1e40af !important;
+  border: var(--hairline-strong) !important;
   border-radius: 50% !important;
   display: flex !important;
   align-items: center !important;
@@ -705,7 +899,7 @@
   font-size: 0.7rem !important;
   padding: 0.25rem 0.5rem !important;
   border-radius: 4px !important;
-  font-weight: 500 !important;
+  font-weight: 400 !important;
   border: 1px solid rgba(255, 255, 255, 0.2) !important;
   backdrop-filter: blur(10px) !important;
 }
@@ -784,7 +978,7 @@
   background: #f1f5f9 !important;
   color: #475569 !important;
   font-size: clamp(0.72rem, 0.9vw, 0.8rem) !important;
-  font-weight: 500 !important;
+  font-weight: 400 !important;
   padding: 0.15rem 0.45rem !important;
   border-radius: 4px !important;
   border: none !important;

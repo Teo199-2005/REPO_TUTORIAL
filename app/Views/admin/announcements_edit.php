@@ -3,11 +3,8 @@
 
 <style>
 .blue-divider {
-  height: 3px;
-  background: linear-gradient(90deg, #007bff, #0056b3);
-  border-radius: 2px;
-  margin: 1rem 0;
-}
+  height: 1px;
+  background: var(--hairline-strong);
 
 .form-floating textarea {
   min-height: 120px;
@@ -21,7 +18,6 @@
 
 .original-content {
   background: #e3f2fd;
-  border-left: 4px solid #2196f3;
   padding: 1rem;
   border-radius: 4px;
 }

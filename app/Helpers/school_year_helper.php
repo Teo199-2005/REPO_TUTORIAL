@@ -54,3 +54,62 @@ if (!function_exists('get_current_term')) {
         return 3;
     }
 }
+
+if (! function_exists('previous_school_year_choices')) {
+    /**
+     * School years a transferee could be coming from: the running one plus the
+     * previous ten, newest first. A transferee may have left school a while
+     * ago, so this is wider than school_year_choices() (which is the only two
+     * years an administrator may pick for the current term).
+     *
+     * @param \DateTimeImmutable|null $today Injectable for tests; defaults to today
+     *
+     * @return list<string> YYYY-YYYY values, current one first
+     */
+    function previous_school_year_choices(?\DateTimeImmutable $today = null): array
+    {
+        $today = $today ?? new \DateTimeImmutable('today');
+
+        $start = (int) $today->format('Y');
+        if ((int) $today->format('n') < 6) {
+            $start -= 1;
+        }
+
+        $years = [];
+        for ($back = 0; $back <= 10; $back++) {
+            $from = $start - $back;
+            $years[] = $from . '-' . ($from + 1);
+        }
+
+        return $years;
+    }
+}
+
+if (! function_exists('school_year_choices')) {
+    /**
+     * The only two school years an administrator may pick: the running one and
+     * the one before it, both derived from today's date (the Philippine school
+     * year opens in June). Example for 2026: ['2026-2027', '2025-2026'].
+     *
+     * @param \DateTimeImmutable|null $today Injectable for tests; defaults to today
+     *
+     * @return list<string> Exactly two YYYY-YYYY values, current one first
+     */
+    function school_year_choices(?\DateTimeImmutable $today = null): array
+    {
+        $today = $today ?? new \DateTimeImmutable('today');
+
+        $start = (int) $today->format('Y');
+        if ((int) $today->format('n') < 6) {
+            // January to May: the year that opened last June is still running
+            // (mirrors the fallback in get_current_school_year()).
+            $start -= 1;
+        }
+
+        return [
+            $start . '-' . ($start + 1),
+            ($start - 1) . '-' . $start,
+        ];
+    }
+}
+

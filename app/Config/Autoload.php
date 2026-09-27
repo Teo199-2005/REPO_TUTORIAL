@@ -87,5 +87,5 @@ class Autoload extends AutoloadConfig
      *
      * @var list<string>
      */
-    public $helpers = ['url', 'form', 'setting', 'auth', 'school_year', 'grade_level', 'student_form', 'teacher_form', 'admin_access', 'pdf_logo', 'asset', 'landing', 'materials', 'platform_rating', 'portal_nav', 'sned'];
+    public $helpers = ['url', 'form', 'setting', 'auth', 'school_year', 'grade_level', 'grade', 'student_form', 'teacher_form', 'admin_access', 'teacher_access', 'pdf_logo', 'asset', 'landing', 'materials', 'platform_rating', 'portal_nav', 'sned', 'demo_accounts', 'schedule', 'phone', 'student_profile', 'password_policy', 'arithmetic_captcha', 'principal', 'id_card', 'learner_development', 'school_identity', 'audit', 'audit_display', 'admin_ui', 'mascot'];
 }

@@ -47,14 +47,11 @@
                                                         <?= strtoupper(substr($student['first_name'], 0, 1)) ?>
                                                     </div>
                                                     <div>
-                                                        <strong><?= esc($student['first_name'] . ' ' . $student['last_name']) ?></strong>
-                                                        <?php if ($student['middle_name']): ?>
-                                                            <br><small class="text-muted"><?= esc($student['middle_name']) ?></small>
-                                                        <?php endif; ?>
+                                                        <strong><?= esc(trim($student['first_name'] . ' ' . (!empty($student['middle_name']) ? strtoupper(substr($student['middle_name'], 0, 1)) . '. ' : '') . $student['last_name'] . (!empty($student['suffix']) ? ' ' . $student['suffix'] : ''))) ?></strong>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td><?= esc($student['email']) ?></td>
+                                            <td><?= esc($student['email'] ?? '') ?></td>
                                             <td>
                                                 <span class="badge bg-info"><?= esc(grade_level_label((int) ($student['grade_level'] ?? 0))) ?></span>
                                             </td>
@@ -98,31 +95,58 @@
                         </div>
                         
                         <!-- Pagination -->
-                        <?php if ($totalPages > 1): ?>
-                        <div class="d-flex justify-content-center mt-4">
-                            <nav>
-                                <ul class="pagination">
+                        <?php
+                            $firstShown = ($currentPage - 1) * $perPage + 1;
+                            $lastShown  = min($currentPage * $perPage, $totalRecords);
+
+                            // Windowed page list: 1 … 4 5 6 … 12
+                            $window    = 1; // pages shown on each side of current
+                            $pageLinks = [];
+                            for ($i = 1; $i <= $totalPages; $i++) {
+                                if ($i === 1 || $i === $totalPages || abs($i - $currentPage) <= $window) {
+                                    $pageLinks[] = $i;
+                                }
+                            }
+                            // Re-add ellipsis markers where numbers were skipped.
+                            $paged = [];
+                            $prev  = 0;
+                            foreach ($pageLinks as $p) {
+                                if ($prev && $p - $prev > 1) {
+                                    $paged[] = '…';
+                                }
+                                $paged[] = $p;
+                                $prev = $p;
+                            }
+                        ?>
+                        <div class="d-flex flex-column flex-md-row justify-content-between align-items-center mt-3 gap-2">
+                            <span class="text-muted small">
+                                Showing <strong><?= $firstShown ?></strong>&ndash;<strong><?= $lastShown ?></strong>
+                                of <strong><?= $totalRecords ?></strong> application<?= $totalRecords === 1 ? '' : 's' ?>
+                            </span>
+                            <nav aria-label="Application history pagination">
+                                <ul class="pagination pagination-sm mb-0">
                                     <li class="page-item <?= $currentPage <= 1 ? 'disabled' : '' ?>">
-                                        <a class="page-link" href="?page=<?= $currentPage - 1 ?>">
+                                        <a class="page-link" href="?page=<?= max(1, $currentPage - 1) ?>" aria-label="Previous page">
                                             <i class="bi bi-chevron-left"></i> Previous
                                         </a>
                                     </li>
-                                    
-                                    <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-                                        <li class="page-item <?= $i == $currentPage ? 'active' : '' ?>">
-                                            <a class="page-link" href="?page=<?= $i ?>"><?= $i ?></a>
-                                        </li>
-                                    <?php endfor; ?>
-                                    
+                                    <?php foreach ($paged as $p): ?>
+                                        <?php if ($p === '…'): ?>
+                                            <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+                                        <?php else: ?>
+                                            <li class="page-item <?= $p === $currentPage ? 'active' : '' ?>" <?= $p === $currentPage ? 'aria-current="page"' : '' ?>>
+                                                <a class="page-link" href="?page=<?= $p ?>"><?= $p ?></a>
+                                            </li>
+                                        <?php endif; ?>
+                                    <?php endforeach; ?>
                                     <li class="page-item <?= $currentPage >= $totalPages ? 'disabled' : '' ?>">
-                                        <a class="page-link" href="?page=<?= $currentPage + 1 ?>">
+                                        <a class="page-link" href="?page=<?= min($totalPages, $currentPage + 1) ?>" aria-label="Next page">
                                             Next <i class="bi bi-chevron-right"></i>
                                         </a>
                                     </li>
                                 </ul>
                             </nav>
                         </div>
-                        <?php endif; ?>
                     <?php endif; ?>
                 </div>
             </div>

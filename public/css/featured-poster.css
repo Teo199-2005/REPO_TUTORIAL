@@ -12,18 +12,95 @@
   background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 45%, #2563eb 100%);
 }
 
+/* Student featured banner: blue frame that fills the card.
+   solid gradient background — no tiling, no gaps. */
 .dashboard-app .featured-student-banner {
   position: relative;
   overflow: hidden;
-  height: 440px;
-  min-height: 440px;
-  max-height: 440px;
+  height: 100%;
+  min-height: 0;
   background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 45%, #2563eb 100%);
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: cover;
+}
+
+/* The featured card owns the visible border and lets the banner fill it,
+   so there is no white panel left under the poster. */
+.dashboard-app .student-featured-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  /* Slightly stronger frame so the featured container reads as a real card */
+  border: 2px solid rgba(37, 99, 235, 0.65);
+  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 45%, #2563eb 100%);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10);
+  border-radius: 0.9rem;
+  padding: 10px;
+  /* Stretch to the left column height on desktop so bottoms align. */
+  align-self: stretch;
+  width: 100%;
+  height: 100%;
+}
+
+@media (min-width: 992px) {
+  .dashboard-app .student-featured-card {
+    min-height: 100%;
+  }
+  .dashboard-app .student-featured-card .featured-student-banner {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .dashboard-app .student-featured-card .featured-student-banner > img {
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+  }
+}
+
+.dashboard-app .student-featured-card .featured-student-banner {
+  flex: 1 1 auto;
+  /* Use flex column so the image takes available space and the caption
+     overlays at the bottom without collapsing the banner height. */
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  min-height: 0;
+  /* Blue shows through whenever the poster is shorter than the frame */
+  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 45%, #2563EB 100%);
+  background-repeat: no-repeat;
+  border-radius: 0.65rem;
+  overflow: hidden;
+}
+
+/* The image sits in normal flow and fills available space.
+   object-fit: contain ensures the whole poster is visible without stretching. */
+.dashboard-app .student-featured-card .featured-student-banner > img {
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  max-height: none;
+  object-fit: contain;
+  object-position: center center;
+  display: block;
+  border-radius: 0.65rem;
+  margin-bottom: auto;
+}
+
+/* Caption overlay pinned to bottom of banner.
+   Uses absolute positioning relative to the banner container. */
+.dashboard-app .student-featured-card .featured-student-banner > div[style*="position:absolute"] {
+  position: absolute !important;
+  left: 16px;
+  bottom: 16px;
+  z-index: 2;
+  text-shadow: 0 1px 6px rgba(15, 23, 42, 0.55);
 }
 
 .dashboard-app .featured-poster__img,
-.dashboard-app .featured-poster-banner__img,
-.dashboard-app .featured-student-banner > img {
+.dashboard-app .featured-poster-banner__img {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -73,9 +150,11 @@
   object-fit: cover;
 }
 
-/* Student dashboard: fill the poster frame (avoid letterbox empty bands). */
+/* Student dashboard: show the whole poster, centered on the y axis.
+   Never stretch or tile it — short images sit centered on the blue frame. */
 .dashboard-app .featured-student-banner > img {
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center center;
 }
 
 @media (max-width: 991.98px) {
@@ -86,10 +165,17 @@
     max-height: 220px;
   }
 
-  .dashboard-app .featured-student-banner {
-    height: 300px;
-    min-height: 300px;
-    max-height: 300px;
+  /* Stacked layout: the column height is auto, so the banner needs a fixed
+     height here (and has to out-rank the `height:auto` rule above). */
+  .dashboard-app .student-featured-card .featured-student-banner {
+    flex: 0 0 auto;
+    height: 280px;
+    min-height: 280px;
+    max-height: 280px;
+  }
+  .dashboard-app .student-featured-card .featured-student-banner > img {
+    min-height: 0;
+    max-height: 100%;
   }
 }
 
@@ -101,9 +187,14 @@
     max-height: 200px;
   }
 
-  .dashboard-app .featured-student-banner {
+  .dashboard-app .student-featured-card .featured-student-banner {
+    flex: 0 0 auto;
     height: 240px;
     min-height: 240px;
     max-height: 240px;
+  }
+  .dashboard-app .student-featured-card .featured-student-banner > img {
+    min-height: 0;
+    max-height: 100%;
   }
 }

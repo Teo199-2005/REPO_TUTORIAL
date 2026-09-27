@@ -30,6 +30,8 @@ if (! function_exists('admin_valid_page_keys')) {
             'platform_ratings',
             'pending_applications',
             'profile',
+            'audit_log',
+            'backups',
         ];
     }
 }
@@ -57,6 +59,8 @@ if (! function_exists('admin_page_label')) {
             'id_cards' => 'Student ID cards',
             'platform_ratings' => 'Platform feedback',
             'profile' => 'Profile',
+            'audit_log' => 'Activity log',
+            'backups' => 'Backup & Restore',
         ];
 
         return $labels[$key] ?? $key;
@@ -87,6 +91,8 @@ if (! function_exists('admin_page_icon')) {
             'id_cards' => 'bi-person-badge',
             'platform_ratings' => 'bi-stars',
             'profile' => 'bi-person-circle',
+            'audit_log' => 'bi-shield-check',
+            'backups' => 'bi-database-check',
             default => 'bi-layout-text-window-reverse',
         };
     }
@@ -149,6 +155,7 @@ if (! function_exists('admin_portal_nav_definition')) {
             ['page' => 'pending_applications', 'href' => base_url('admin/students/pending'), 'icon' => 'bi-clock-history', 'label' => 'Pending Applications', 'badge' => 'pending-applications-count'],
             ['page' => 'students', 'href' => base_url('admin/students'), 'icon' => 'bi-people-fill', 'label' => 'Students'],
             ['page' => 'teachers', 'href' => base_url('admin/teachers'), 'icon' => 'bi-person-video3', 'label' => 'Teachers'],
+            ['page' => 'teachers', 'href' => base_url('admin/teachers/pending'), 'icon' => 'bi-person-plus', 'label' => 'Pending Teacher', 'badge' => 'pending-teachers-count'],
             ['page' => 'sections', 'href' => base_url('admin/sections'), 'icon' => 'bi-grid-3x3-gap', 'label' => 'Sections & Subjects'],
             ['page' => 'schedules', 'href' => base_url('admin/schedules'), 'icon' => 'bi-calendar-week', 'label' => 'Schedules'],
             ['page' => 'analytics', 'href' => base_url('admin/analytics'), 'icon' => 'bi-graph-up', 'label' => 'Analytics'],
@@ -163,6 +170,8 @@ if (! function_exists('admin_portal_nav_definition')) {
             ['page' => 'childpro_gad', 'href' => base_url('admin/childpro-gad'), 'icon' => 'bi-people', 'label' => 'CHILDPRO / GAD'],
             ['page' => 'programs_projects', 'href' => base_url('admin/programs-projects'), 'icon' => 'bi-folder2-open', 'label' => 'Programs & Projects'],
             ['page' => 'platform_ratings', 'href' => base_url('admin/platform-ratings'), 'icon' => 'bi-stars', 'label' => 'Platform feedback'],
+            ['page' => 'audit_log', 'href' => base_url('admin/audit-log'), 'icon' => 'bi-shield-check', 'label' => 'Activity log'],
+            ['page' => 'backups', 'href' => base_url('admin/backups'), 'icon' => 'bi-database-check', 'label' => 'Backup & Restore'],
             ['page' => 'profile', 'href' => base_url('admin/profile'), 'icon' => 'bi-person-circle', 'label' => 'Profile'],
         ];
     }
@@ -238,11 +247,15 @@ if (! function_exists('admin_page_key_from_path')) {
             return 'sections';
         }
 
-        if (in_array($seg, ['debug', 'fix-sections', 'fix-enrollment-counts'], true)) {
-            return 'dashboard';
+        // Developmental domains (SNED) are managed from the Settings page and
+        // from the per-section Subjects button, so staff need the permission of
+        // the page hosting that UI. Without this mapping the key resolved to
+        // null and every sned/* request was denied for admin_staff.
+        if ($seg === 'sned') {
+            return 'settings';
         }
 
-        if ($seg === 'fix-sofia-auth') {
+        if (in_array($seg, ['fix-enrollment-counts'], true)) {
             return 'dashboard';
         }
 
@@ -287,6 +300,8 @@ if (! function_exists('admin_page_url')) {
             'records' => 'admin/records',
             'id_cards' => 'admin/id-cards',
             'platform_ratings' => 'admin/platform-ratings',
+            'audit_log' => 'admin/audit-log',
+            'backups' => 'admin/backups',
             'profile' => 'admin/profile',
         ];
 

@@ -191,7 +191,7 @@ class Dashboard extends BaseController
         $teacherPoster = featured_dashboard_poster('teacher');
 
         return view('teacher/dashboard', [
-            'title' => 'Teacher Dashboard - LPHS SMS',
+            'title' => 'Teacher Dashboard - CSCS Tap n Track',
             'teacher' => $teacher,
             'featuredPosterTeacher'    => $teacherPoster['path'],
             'featuredPosterTeacherUrl' => $teacherPoster['url'],
@@ -204,6 +204,7 @@ class Dashboard extends BaseController
             'totalStudents' => count($myStudents),
             'totalSubjects' => count($mySubjects),
             'currentQuarter' => $this->getCurrentQuarter(),
+            'currentTerm'    => $this->getCurrentQuarter(),
             'hasSnedSection' => $hasSnedSection
         ]);
     }
@@ -213,15 +214,30 @@ class Dashboard extends BaseController
      */
     private function getCurrentQuarter()
     {
-        $systemSettingModel = new \App\Models\SystemSettingModel();
-        if (method_exists($systemSettingModel, 'getCurrentQuarter')) {
-            return $systemSettingModel->getCurrentQuarter();
+        // The administrator-configured term in system_settings is the single
+        // source of truth (same decision Student\Dashboard::getCurrentTerm()
+        // and the get_current_term() helper make).
+        //
+        // This used to probe method_exists($model, 'getCurrentQuarter'), but
+        // SystemSettingModel only exposes getCurrentTerm(), so the probe never
+        // matched and the page silently fell back to a month-of-year guess -
+        // which is why changing the term in Admin > Settings never reached the
+        // teacher's Enter Grades page or dashboard.
+        try {
+            $term = (new \App\Models\SystemSettingModel())->getCurrentTerm();
+
+            if ($term >= 1 && $term <= 3) {
+                return $term;
+            }
+        } catch (\Throwable $e) {
+            // Database unavailable - fall through to the shared helper.
         }
-        $month = (int) date('n');
-        if ($month >= 6 && $month <= 8) return 1;
-        if ($month >= 9 && $month <= 11) return 2;
-        if ($month >= 12 || $month <= 3) return 3;
-        return 4;
+
+        // Same fallback semantics as get_current_school_year(): the school
+        // year helper is already used throughout this controller.
+        helper('school_year');
+
+        return get_current_term();
     }
 
     public function grades()
@@ -303,9 +319,10 @@ class Dashboard extends BaseController
         $sectionGradingType = 'numerical';
         $gradingSymbols = [];
         $advisorySectionId = null;
+        $advisorySectionGrade = 0;
         if ($teacher) {
             $advisorySection = $db->table('sections')
-                ->select('id, grading_type, section_name')
+                ->select('id, grading_type, section_name, grade_level')
                 ->where('adviser_id', $teacher['id'])
                 ->where('is_active', 1)
                 ->get()
@@ -315,10 +332,11 @@ class Dashboard extends BaseController
             
             if ($advisorySection) {
                 $advisorySectionId = $advisorySection['id'];
+                $advisorySectionGrade = (int) ($advisorySection['grade_level'] ?? 0);
                 $sectionGradingType = $advisorySection['grading_type'] ?? 'numerical';
                 
                 // Get grading symbols for non-numerical sections
-                if ($sectionGradingType === 'non_numerical' && $advisorySectionId) {
+                if (in_array($sectionGradingType, ['non_numerical', 'custom'], true) && $advisorySectionId) {
                     $gradingSymbols = $db->table('section_grading_symbols')
                         ->where('section_id', $advisorySectionId)
                         ->where('is_active', 1)
@@ -347,8 +365,53 @@ class Dashboard extends BaseController
             }
         }
         
+        // A non-numerical section is graded with developmental domains and
+        // symbols — the numerical subject grid must never appear for it
+        // (a symbol typed into a numeric field gets stored as 0.00). The
+        // domain grid is rendered INLINE on this page; no portal redirect.
+        $isNonNumericalSection = in_array($sectionGradingType, ['non_numerical', 'custom'], true);
+        if ($isNonNumericalSection) {
+            $subjects = [];
+            $studentGrades = [];
+        }
+
+        // Developmental-domain grading data for the inline grid.
+        $snedSection        = null;
+        $snedDomains        = [];
+        $snedQuarters       = sned_quarters();
+        $snedGradesByQuarter = [];
+        $snedActiveQuarter  = 1;
+        $snedSchoolYear     = get_current_school_year();
+        if ($isNonNumericalSection && $advisorySectionId !== null && !empty($students)) {
+            try {
+                $snedSection = $db->table('sections')
+                    ->select('id, section_name, grade_level, grading_type')
+                    ->where('id', $advisorySectionId)
+                    ->get()
+                    ->getRowArray();
+
+                $categoryModel = new \App\Models\SnedCategoryModel();
+                $snedDomains = $categoryModel->getAllCategoriesWithFields(
+                    (int) $advisorySectionId,
+                    $advisorySectionGrade
+                );
+
+                $snedGradeModel = new \App\Models\SnedGradeModel();
+                $studentIds = array_map('intval', array_column($students, 'id'));
+                foreach ($snedQuarters as $q) {
+                    $snedGradesByQuarter[$q] = $snedGradeModel->getStudentsWithGrades($studentIds, $snedSchoolYear, $q);
+                }
+
+                $snedActiveQuarter = min(max((int) ($this->getCurrentQuarter() ?: 1), 1), 4);
+            } catch (\Throwable $e) {
+                log_message('error', 'Enter Grades: failed to load developmental-domain data for section ' . $advisorySectionId . ': ' . $e->getMessage());
+                $snedDomains = [];
+                $snedGradesByQuarter = [];
+            }
+        }
+
         return view('teacher/grades', [
-            'title' => 'Enter Grades - LPHS SMS',
+            'title' => 'Enter Grades - CSCS Tap n Track',
             'students' => $students,
             'subjects' => $subjects,
             'teacher' => $teacher,
@@ -358,6 +421,8 @@ class Dashboard extends BaseController
             'gradingEnabled' => true,
             'currentTerm' => $this->getCurrentQuarter(),
             'isAdvisory' => true,
+            'isNonNumericalSection' => $isNonNumericalSection,
+            'sectionGradingType' => $sectionGradingType,
             'advisoryData' => [
                 'students' => $students,
                 'studentGrades' => $studentGrades
@@ -366,7 +431,13 @@ class Dashboard extends BaseController
             'currentPage' => $currentPage,
             'totalPages' => $totalPages,
             'sectionGradingType' => $sectionGradingType,
-            'gradingSymbols' => $gradingSymbols
+            'gradingSymbols' => $gradingSymbols,
+            'snedSection' => $snedSection,
+            'snedDomains' => $snedDomains,
+            'snedQuarters' => $snedQuarters,
+            'snedGradesByQuarter' => $snedGradesByQuarter,
+            'snedActiveQuarter' => $snedActiveQuarter,
+            'snedSchoolYear' => $snedSchoolYear,
         ]);
     }
 
@@ -380,7 +451,9 @@ class Dashboard extends BaseController
             'student_id' => 'required|integer',
             'subject_id' => 'required|integer',
             'quarter' => 'required|integer|greater_than[0]|less_than[5]',
-            'grade' => 'required|decimal|greater_than_equal_to[60]|less_than_equal_to[100]',
+            // The 60 report-card floor is not validated away here: a posted 44
+            // or 59 is raised with clamp_report_card_grade() below and stored.
+            'grade' => 'required|decimal|less_than_equal_to[100]',
             'remarks' => 'permit_empty|max_length[255]'
         ];
 
@@ -403,13 +476,20 @@ class Dashboard extends BaseController
             return redirect()->back()->with('error', 'You are not authorized to save grades for this student.');
         }
 
+        // Report card floor: a posted 44 or 59 is stored as 60.
+        $grade = clamp_report_card_grade($this->request->getPost('grade'));
+
+        if ($grade === null) {
+            return redirect()->back()->withInput()->with('error', 'Please enter a grade between ' . min_report_card_grade() . ' and ' . max_report_card_grade() . '.');
+        }
+
         $data = [
             'student_id' => $studentId,
             'subject_id' => (int) $this->request->getPost('subject_id'),
             'teacher_id' => (int) $teacher['id'],
             'school_year' => get_current_school_year(),
             'quarter' => (int) $this->request->getPost('quarter'),
-            'grade' => (float) $this->request->getPost('grade'),
+            'grade' => $grade,
             'remarks' => $this->request->getPost('remarks')
         ];
 
@@ -460,8 +540,12 @@ class Dashboard extends BaseController
             return redirect()->back()->with('error', 'Invalid grade data - term missing.');
         }
 
-        // Validate term
-        $term = (int) $term;
+        // The active term in system_settings is the single source of truth -
+        // the same value the Enter Grades page displays. Trusting the posted
+        // term here let a stale page (opened before the administrator switched
+        // the term) silently file new grades under the old term.
+        $term = $this->getCurrentQuarter();
+
         if ($term < 1 || $term > 4) {
             return redirect()->back()->with('error', 'Invalid term.');
         }
@@ -518,12 +602,19 @@ class Dashboard extends BaseController
                         continue;
                     }
                     $gradeFloat = (float) $gradeValue;
-                    if ($gradeFloat < 0 || $gradeFloat > 100) {
+                    if ($gradeFloat > 100) {
                         log_message('warning', "Grade out of range: {$gradeFloat}");
                         $skippedCount++;
                         continue;
                     }
-                    $data['grade'] = $gradeFloat;
+                    // Report card floor: a 44 or 59 typed into the entry page is
+                    // stored as 60 instead of being saved off-scale. The model
+                    // applies the same floor as a last gate.
+                    $flooredGrade = clamp_report_card_grade($gradeFloat);
+                    if ($flooredGrade !== $gradeFloat) {
+                        log_message('info', "Grade {$gradeFloat} raised to {$flooredGrade} (report card floor).");
+                    }
+                    $data['grade'] = $flooredGrade;
                 }
                 
                 if ($gradeModel->upsertGrade($data)) {
@@ -538,6 +629,19 @@ class Dashboard extends BaseController
         log_message('info', 'Processed grades details: ' . json_encode($processedGrades));
         
         if ($savedCount > 0) {
+            audit_event('grade.saved', [
+                'category'      => 'data',
+                'status'        => 'success',
+                'resource_type' => 'grade',
+                'description'   => $savedCount . ' grade entr' . ($savedCount === 1 ? 'y' : 'ies') . ' saved by a teacher',
+                'metadata'      => [
+                    'teacher_id' => (int) ($teacher['id'] ?? 0),
+                    'saved'      => (int) $savedCount,
+                    'skipped'    => (int) $skippedCount,
+                    'term'       => (int) ($this->request->getPost('quarter') ?? 0) ?: null,
+                ],
+            ]);
+
             return redirect()->back()->with('success', "Successfully saved {$savedCount} grade(s).");
         } else {
             $debugInfo = [
@@ -577,7 +681,7 @@ class Dashboard extends BaseController
                 ->get()->getRowArray();
 
             if ($advisorySection) {
-                $advisoryStudents = $studentModel->select('students.id, students.lrn, students.first_name, students.last_name, students.gender, students.grade_level, students.enrollment_status, sections.section_name, sections.grading_type')
+                $advisoryStudents = $studentModel->select('students.id, students.lrn, students.first_name, students.last_name, students.gender, students.grade_level, students.enrollment_status, students.can_view_report_card, sections.section_name, sections.grading_type')
                     ->join('sections', 'sections.id = students.section_id', 'left')
                     ->where('students.section_id', $advisorySection['id'])
                     ->where('students.enrollment_status', 'enrolled')
@@ -610,7 +714,7 @@ class Dashboard extends BaseController
             }
 
             foreach ($sectionGroups as $section) {
-                $sectionStudents = $studentModel->select('students.id, students.lrn, students.first_name, students.last_name, students.gender, students.grade_level, students.enrollment_status, sections.section_name, sections.grading_type')
+                $sectionStudents = $studentModel->select('students.id, students.lrn, students.first_name, students.last_name, students.gender, students.grade_level, students.enrollment_status, students.can_view_report_card, sections.section_name, sections.grading_type')
                     ->join('sections', 'sections.id = students.section_id', 'left')
                     ->where('students.section_id', $section['id'])
                     ->where('students.enrollment_status', 'enrolled')
@@ -625,7 +729,7 @@ class Dashboard extends BaseController
         }
 
         return view('teacher/students', [
-            'title' => 'My Students - LPHS SMS',
+            'title' => 'My Students - CSCS Tap n Track',
             'advisoryStudents' => $advisoryStudents,
             'advisorySection' => $advisorySection,
             'subjectSections' => $subjectSections,
@@ -639,18 +743,9 @@ class Dashboard extends BaseController
             return redirect()->to(base_url('/'));
         }
         
-        $teacherId = $this->auth->id();
-        $teacherModel = new \App\Models\TeacherModel();
-        $scheduleModel = new \App\Models\TeacherScheduleModel();
-        
-        // Get teacher record
-        $teacher = $teacherModel->where('user_id', $teacherId)->first();
-        $schedules = [];
-        
-        if ($teacher) {
-            $schedules = $scheduleModel->getTeacherSchedule($teacher['id']);
-        }
-        
+        $payload = $this->mySchedulePayload();
+        $teacher = $payload['teacher'];
+
         $db = \Config\Database::connect();
         $sections = $db->table('sections')->select('id, section_name, grade_level')->orderBy('grade_level', 'ASC')->orderBy('section_name', 'ASC')->get()->getResultArray();
         $subjects = [];
@@ -659,12 +754,86 @@ class Dashboard extends BaseController
         }
 
         return view('teacher/schedule_view', [
-            'title' => 'My Schedule - LPHS SMS',
+            'title' => 'My Schedule - CSCS Tap n Track',
             'teacher' => $teacher,
-            'schedules' => $schedules,
+            'schedules' => $payload['schedules'],
             'subjects' => $subjects,
             'sections' => $sections
         ]);
+    }
+
+    /**
+     * PDF twin of My Schedule (teacher/schedule-pdf).
+     *
+     * Renders the very same week through reports/_schedule_grid, so the
+     * download can never disagree with the page it was taken from.
+     */
+    public function schedulePdf()
+    {
+        if (!$this->auth->user()->inGroup('teacher')) {
+            return redirect()->to(base_url('/'));
+        }
+
+        helper('school_year');
+
+        $payload = $this->mySchedulePayload();
+
+        $html = view('teacher/schedule_pdf', [
+            'teacher'    => $payload['teacher'],
+            'schedules'  => $payload['schedules'],
+            'schoolYear' => get_current_school_year(),
+            'reportDate' => date('F j, Y'),
+        ]);
+
+        $options = new \Dompdf\Options();
+        $options->set('defaultFont', 'Times');
+        $options->set('isRemoteEnabled', false);
+        $options->set('isHtml5ParserEnabled', true);
+        $options->set('isPhpEnabled', false);
+
+        $dompdf = new \Dompdf\Dompdf($options);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'landscape');
+        $dompdf->render();
+
+        $lastName = (string) ($payload['teacher']['last_name'] ?? '');
+        $suffix   = $lastName === ''
+            ? ''
+            : '_' . preg_replace('/[^A-Za-z0-9]+/', '_', $lastName);
+
+        return $this->sendPdfInline($dompdf, 'CSCS_Schedule' . $suffix . '_' . date('Y-m-d') . '.pdf');
+    }
+
+    /**
+     * The signed-in teacher's record plus the week shown on My Schedule: their
+     * own blocks AND the timetable of every section they advise, shaped for the
+     * weekly grid.
+     *
+     * Shared by schedule() and schedulePdf() so the page and its export always
+     * read the same data.
+     *
+     * @return array{teacher: array<string, mixed>|null, schedules: array<string, array<string, array<string, mixed>>>}
+     */
+    private function mySchedulePayload(): array
+    {
+        $teacherModel = new \App\Models\TeacherModel();
+        $teacher      = $teacherModel->where('user_id', $this->auth->id())->first();
+
+        $schedules = [];
+
+        if ($teacher) {
+            // The adviser of a section has to see that section's timetable even
+            // though the blocks are assigned to the teachers who teach them,
+            // otherwise My Schedule reads "No schedule set" for an adviser
+            // whose class is fully scheduled.
+            $schedules = model(\App\Models\TeacherScheduleModel::class)
+                ->getTeacherSchedule($teacher['id'], null, true);
+        }
+
+        return [
+            'teacher'   => $teacher,
+            'schedules' => $this->groupScheduleForView($schedules),
+        ];
     }
 
     public function manageSchedule()
@@ -693,12 +862,40 @@ class Dashboard extends BaseController
         }
 
         return view('teacher/schedule', [
-            'title' => 'Manage Schedule - LPHS SMS',
+            'title' => 'Manage Schedule - CSCS Tap n Track',
             'teacher' => $teacher,
-            'schedules' => $schedules,
+            'schedules' => $this->groupScheduleForView($schedules ?? []),
             'subjects' => $subjects,
             'sections' => $sections
         ]);
+    }
+
+    /**
+     * Reshape flat teacher_schedules rows into the $schedules[day][timeSlot]
+     * map the schedule views expect. Passing the raw flat list left the views
+     * iterating row keys ('teacher_id', 'subject_id', ...) as if they were
+     * 'HH:MM-HH:MM' slots, which threw PHP warnings that CI escalates to
+     * exceptions — the "Whoops!" 500 on the live server.
+     *
+     * Unscheduled assignment-only rows (00:00:00-00:00:00, day 'TBD') carry no
+     * timetable slot, so they are skipped.
+     */
+    private function groupScheduleForView(array $rows): array
+    {
+        $grouped = [];
+        foreach ($rows as $row) {
+            $day = strtolower((string) ($row['day_of_week'] ?? ''));
+            if ($day === '' || $day === 'tbd') {
+                continue;
+            }
+            $start = (string) ($row['start_time'] ?? '');
+            $end   = (string) ($row['end_time'] ?? '');
+            if ($start === '' || $end === '' || $start === $end) {
+                continue;
+            }
+            $grouped[$day][$start . '-' . $end] = $row;
+        }
+        return $grouped;
     }
 
     public function saveSchedule()
@@ -778,7 +975,7 @@ class Dashboard extends BaseController
         }
         
         return view('teacher/attendance', [
-            'title' => 'Student Attendance - LPHS SMS',
+            'title' => 'Student Attendance - CSCS Tap n Track',
             'students' => $students,
             'teacher' => $teacher,
             'attendanceData' => $attendanceData,
@@ -902,7 +1099,7 @@ class Dashboard extends BaseController
         }
         
         return view('teacher/attendance_history', [
-            'title' => 'Attendance History - LPHS SMS',
+            'title' => 'Attendance History - CSCS Tap n Track',
             'students' => $students,
             'teacher' => $teacher
         ]);
@@ -934,7 +1131,7 @@ class Dashboard extends BaseController
         }
         
         return view('teacher/sections', [
-            'title' => 'My Sections - LPHS SMS',
+            'title' => 'My Sections - CSCS Tap n Track',
             'sections' => $sections,
             'teacher' => $teacher
         ]);
@@ -1008,7 +1205,7 @@ class Dashboard extends BaseController
         if (empty($students)) {
             return $this->response->setJSON([
                 'success' => false,
-                'message' => 'No unassigned students found for Grade ' . $gradeLevel
+                'message' => 'No unassigned students found for ' . grade_level_label((int) $gradeLevel)
             ]);
         }
         
@@ -1085,14 +1282,22 @@ class Dashboard extends BaseController
         }
         
         // Get student and verify teacher has access
-        $student = $studentModel->select('students.*, sections.section_name')
+        $student = $studentModel->select('students.*, sections.section_name, sections.grading_type, CONCAT(teachers.first_name, " ", teachers.last_name) as adviser_name')
             ->join('sections', 'sections.id = students.section_id', 'left')
+            ->join('teachers', 'teachers.id = sections.adviser_id', 'left')
             ->where('students.id', $studentId)
             ->where('sections.adviser_id', $teacher['id'])
             ->first();
         
         if (!$student) {
             return redirect()->back()->with('error', 'Student not found or not in your section');
+        }
+
+        // Non-numerical (SNED) sections use developmental domains, not subjects.
+        // Route those students to the SNED report card instead of producing an
+        // empty numerical report card.
+        if (in_array($student['grading_type'] ?? 'numerical', ['non_numerical', 'custom'], true)) {
+            return redirect()->to(base_url('teacher/sned/report-card-pdf/' . $studentId));
         }
         
         // Get subjects for student's grade level
@@ -1151,7 +1356,343 @@ class Dashboard extends BaseController
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->render();
         
-        $filename = 'LPHS_Report_Card_' . $student['first_name'] . '_' . $student['last_name'] . '_' . date('Y-m-d') . '.pdf';
-        $dompdf->stream($filename, ['Attachment' => false]);
+        $filename = 'CSCS_Report_Card_' . $student['first_name'] . '_' . $student['last_name'] . '_' . date('Y-m-d') . '.pdf';
+        return $this->sendPdfInline($dompdf, $filename);
     }
-}
+    /**
+     * Toggle whether a student may view their own report card
+     * (teacher/students -> "View Access" badge / bulk toggle).
+     */
+    public function toggleReportCardAccess()
+    {
+        if (!$this->auth->user()->inGroup('teacher')) {
+            return $this->response->setJSON(['success' => false, 'error' => 'Unauthorized']);
+        }
+
+        $payload   = $this->request->getJSON(true) ?: $this->request->getPost();
+        $studentId = (int) ($payload['student_id'] ?? 0);
+        $canView   = ! empty($payload['can_view']) ? 1 : 0;
+
+        if ($studentId <= 0) {
+            return $this->response->setJSON(['success' => false, 'error' => 'Student not specified']);
+        }
+
+        $teacher = model(\App\Models\TeacherModel::class)->where('user_id', $this->auth->id())->first();
+        if (!$teacher) {
+            return $this->response->setJSON(['success' => false, 'error' => 'Teacher record not found']);
+        }
+
+        // Only the advisory teacher may change report card access.
+        $db      = \Config\Database::connect();
+        $student = $db->table('students')
+            ->select('students.id')
+            ->join('sections', 'sections.id = students.section_id', 'left')
+            ->where('students.id', $studentId)
+            ->where('sections.adviser_id', $teacher['id'])
+            ->get()->getRowArray();
+
+        if (!$student) {
+            return $this->response->setJSON(['success' => false, 'error' => 'Student not found or not in your section']);
+        }
+
+        $db->table('students')->where('id', $studentId)->update([
+            'can_view_report_card' => $canView,
+            'updated_at'           => date('Y-m-d H:i:s'),
+        ]);
+
+        return $this->response->setJSON([
+            'success'  => true,
+            'can_view' => (bool) $canView,
+            'message'  => $canView
+                ? 'Report card access enabled.'
+                : 'Report card access disabled.',
+        ]);
+    }
+
+    /**
+     * Send report card notifications to the selected students' accounts.
+     * Payload: {student_ids: [..]}
+     */
+    public function sendAllReportCards()
+    {
+        return $this->sendReportCardNotifications();
+    }
+
+    /**
+     * Send a report card notification to a single student.
+     */
+    public function sendReportCard()
+    {
+        $payload = $this->request->getJSON(true) ?: $this->request->getPost();
+
+        return $this->sendReportCardNotifications([ (int) ($payload['student_id'] ?? 0) ]);
+    }
+
+    /**
+     * Shared implementation for the report card notification endpoints.
+     *
+     * @param array|null $studentIds When null, ids are taken from the request.
+     */
+    private function sendReportCardNotifications(?array $studentIds = null)
+    {
+        if (!$this->auth->user()->inGroup('teacher')) {
+            return $this->response->setJSON(['success' => false, 'error' => 'Unauthorized']);
+        }
+
+        if ($studentIds === null) {
+            $payload    = $this->request->getJSON(true) ?: $this->request->getPost();
+            $studentIds = array_map('intval', (array) ($payload['student_ids'] ?? []));
+        }
+
+        $studentIds = array_values(array_filter(array_map('intval', (array) $studentIds)));
+        if (empty($studentIds)) {
+            return $this->response->setJSON(['success' => false, 'error' => 'No students selected']);
+        }
+
+        $teacher = model(\App\Models\TeacherModel::class)->where('user_id', $this->auth->id())->first();
+        if (!$teacher) {
+            return $this->response->setJSON(['success' => false, 'error' => 'Teacher record not found']);
+        }
+
+        $db = \Config\Database::connect();
+
+        // Restrict to students in this teacher's advisory section.
+        $students = $db->table('students')
+            ->select('students.id, students.first_name, students.last_name, students.user_id')
+            ->join('sections', 'sections.id = students.section_id', 'left')
+            ->where('sections.adviser_id', $teacher['id'])
+            ->whereIn('students.id', $studentIds)
+            ->get()->getResultArray();
+
+        if (empty($students)) {
+            return $this->response->setJSON(['success' => false, 'error' => 'No valid students in your section']);
+        }
+
+        $notificationModel = model(\App\Models\NotificationModel::class);
+        $sent    = 0;
+        $skipped = 0;
+
+        foreach ($students as $s) {
+            if (empty($s['user_id'])) {
+                $skipped++;
+                continue; // no student account to notify
+            }
+
+            $notificationModel->insert([
+                'user_id'    => (int) $s['user_id'],
+                'type'       => 'report_card',
+                'title'      => 'Report Card Available',
+                'message'    => 'Your report card is now available. Please contact your class adviser for details.',
+                'is_read'    => 0,
+                'created_at' => date('Y-m-d H:i:s'),
+                'updated_at' => date('Y-m-d H:i:s'),
+            ]);
+            $sent++;
+        }
+
+        return $this->response->setJSON([
+            'success' => true,
+            'sent'    => $sent,
+            'skipped' => $skipped,
+            'message' => "Report card notifications sent to {$sent} student(s)"
+                . ($skipped > 0 ? " ({$skipped} skipped - no student account)" : '') . '.',
+        ]);
+    }
+
+    /**
+     * Remove students from the teacher's advisory section.
+     * Payload: {student_ids: [..]}
+     */
+    public function removeStudent()
+    {
+        if (!$this->auth->user()->inGroup('teacher')) {
+            return $this->response->setJSON(['success' => false, 'error' => 'Unauthorized']);
+        }
+
+        $payload    = $this->request->getJSON(true) ?: $this->request->getPost();
+        $studentIds = array_values(array_filter(array_map('intval', (array) ($payload['student_ids'] ?? []))));
+
+        if (empty($studentIds)) {
+            return $this->response->setJSON(['success' => false, 'error' => 'No students selected']);
+        }
+
+        $teacher = model(\App\Models\TeacherModel::class)->where('user_id', $this->auth->id())->first();
+        if (!$teacher) {
+            return $this->response->setJSON(['success' => false, 'error' => 'Teacher record not found']);
+        }
+
+        $db = \Config\Database::connect();
+        $db->transStart();
+
+        // Only students inside this teacher's advisory section may be removed.
+        $valid = $db->table('students')
+            ->select('students.id')
+            ->join('sections', 'sections.id = students.section_id', 'left')
+            ->where('sections.adviser_id', $teacher['id'])
+            ->whereIn('students.id', $studentIds)
+            ->get()->getResultArray();
+
+        foreach ($valid as $s) {
+            $db->table('students')->where('id', $s['id'])->update([
+                'section_id' => null,
+                'updated_at' => date('Y-m-d H:i:s'),
+            ]);
+        }
+
+        $db->transComplete();
+
+        if ($db->transStatus() === false) {
+            return $this->response->setJSON(['success' => false, 'error' => 'Failed to remove students']);
+        }
+
+        return $this->response->setJSON([
+            'success' => true,
+            'removed' => count($valid),
+            'message' => count($valid) . ' student(s) removed from your section.',
+        ]);
+    }
+
+    /**
+     * Submit grade recommendations from a subject teacher to the advisory
+     * teacher (teacher/grades -> "Submit grade recommendations").
+     * Payload: {section_id, subject_id, grades: {student_id: {term: value}}}
+     */
+    public function submitGradeRecommendation()
+    {
+        if (!$this->auth->user()->inGroup('teacher')) {
+            return $this->response->setJSON(['success' => false, 'error' => 'Unauthorized']);
+        }
+
+        $payload   = $this->request->getJSON(true) ?: $this->request->getPost();
+        $sectionId = (int) ($payload['section_id'] ?? 0);
+        $subjectId = (int) ($payload['subject_id'] ?? 0);
+        $grades    = (array) ($payload['grades'] ?? []);
+
+        if ($sectionId <= 0 || $subjectId <= 0 || empty($grades)) {
+            return $this->response->setJSON(['success' => false, 'error' => 'Invalid submission data']);
+        }
+
+        $teacherId = $this->auth->id();
+        $teacher   = model(\App\Models\TeacherModel::class)->where('user_id', $teacherId)->first();
+        if (!$teacher) {
+            return $this->response->setJSON(['success' => false, 'error' => 'Teacher record not found']);
+        }
+
+        $db = \Config\Database::connect();
+
+        // The submitter must actually teach this subject in this section.
+        $teaches = $db->table('teacher_schedules')
+            ->where('teacher_id', $teacher['id'])
+            ->where('section_id', $sectionId)
+            ->where('subject_id', $subjectId)
+            ->countAllResults();
+
+        if ($teaches === 0) {
+            return $this->response->setJSON(['success' => false, 'error' => 'You do not teach this subject in this section']);
+        }
+
+        $section = $db->table('sections')
+            ->select('id, section_name, adviser_id')
+            ->where('id', $sectionId)
+            ->get()->getRowArray();
+
+        if (!$section) {
+            return $this->response->setJSON(['success' => false, 'error' => 'Section not found']);
+        }
+
+        $schoolYear = get_current_school_year();
+        $saved   = 0;
+        $invalid = 0;
+
+        $db->transStart();
+
+        foreach ($grades as $studentId => $terms) {
+            $studentId = (int) $studentId;
+            if ($studentId <= 0 || !is_array($terms)) {
+                $invalid++;
+                continue;
+            }
+
+            foreach ($terms as $term => $value) {
+                $term  = (int) $term;
+                $value = trim((string) $value);
+                if ($term < 1 || $term > 4 || $value === '') {
+                    $invalid++;
+                    continue;
+                }
+
+                // Recommendations land in the same grades table, so numeric
+                // entries obey the report card floor too (44 or 59 -> 60).
+                // Symbol grades (P, AP, D, B, NO/NA) pass through untouched.
+                if (is_numeric($value)) {
+                    $value = clamp_report_card_grade($value);
+                }
+
+                $existing = $db->table('grades')
+                    ->where('student_id', $studentId)
+                    ->where('subject_id', $subjectId)
+                    ->where('school_year', $schoolYear)
+                    ->where('term', $term)
+                    ->where('deleted_at', null)
+                    ->get()->getRowArray();
+
+                if ($existing) {
+                    $db->table('grades')->where('id', $existing['id'])->update([
+                        'grade'      => $value,
+                        'teacher_id' => $teacher['id'],
+                        'remarks'    => 'Recommended',
+                        'updated_at' => date('Y-m-d H:i:s'),
+                    ]);
+                } else {
+                    $db->table('grades')->insert([
+                        'student_id'    => $studentId,
+                        'subject_id'    => $subjectId,
+                        'teacher_id'    => $teacher['id'],
+                        'school_year'   => $schoolYear,
+                        'term'          => $term,
+                        'grade'         => $value,
+                        'remarks'       => 'Recommended',
+                        'date_recorded' => date('Y-m-d H:i:s'),
+                        'created_at'    => date('Y-m-d H:i:s'),
+                        'updated_at'    => date('Y-m-d H:i:s'),
+                    ]);
+                }
+                $saved++;
+            }
+        }
+
+        $db->transComplete();
+
+        if ($db->transStatus() === false) {
+            return $this->response->setJSON(['success' => false, 'error' => 'Failed to save grade recommendations']);
+        }
+
+        // Notify the advisory teacher (if any) that recommendations arrived.
+        if (! empty($section['adviser_id'])) {
+            $adviser = $db->table('teachers')
+                ->select('user_id')
+                ->where('id', (int) $section['adviser_id'])
+                ->get()->getRowArray();
+
+            if ($adviser && ! empty($adviser['user_id']) && (int) $adviser['user_id'] !== $teacherId) {
+                model(\App\Models\NotificationModel::class)->insert([
+                    'user_id'    => (int) $adviser['user_id'],
+                    'type'       => 'grade_recommendation',
+                    'title'      => 'Grade Recommendations Submitted',
+                    'message'    => 'A subject teacher submitted grade recommendations for section ' . $section['section_name'] . '. Please review them under Enter Grades.',
+                    'is_read'    => 0,
+                    'created_at' => date('Y-m-d H:i:s'),
+                    'updated_at' => date('Y-m-d H:i:s'),
+                ]);
+            }
+        }
+
+        return $this->response->setJSON([
+            'success' => true,
+            'saved'   => $saved,
+            'invalid' => $invalid,
+            'message' => "Grade recommendations submitted ({$saved} entries saved).",
+        ]);
+    }
+
+    }

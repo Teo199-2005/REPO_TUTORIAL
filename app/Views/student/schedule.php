@@ -8,9 +8,15 @@
             <p class="text-muted mb-0"><?= esc($student['first_name'] . ' ' . $student['last_name']) ?></p>
         <?php endif; ?>
     </div>
-    <a href="<?= base_url('student/dashboard') ?>" class="btn btn-outline-secondary">
-        <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
-    </a>
+    <div class="d-flex gap-2">
+        <a href="<?= base_url('student/schedule-pdf') ?>" class="btn btn-primary"
+           target="_blank" rel="noopener">
+            <i class="bi bi-file-earmark-pdf"></i> Export PDF
+        </a>
+        <a href="<?= base_url('student/dashboard') ?>" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+        </a>
+    </div>
 </div>
 
 <div class="card">
@@ -116,12 +122,15 @@
                                             <?php 
                                             $bgColor = $colorScheme[$index % 10];
                                             $isYellow = in_array($bgColor, ['#F4D03F', '#F9E79F', '#F7DC6F', '#F8E6A0', '#FAE5B8']);
-                                            $textColor = $isYellow ? '#1a1a1a' : '#ffffff';
-                                            $borderColor = $isYellow ? 'rgba(0, 0, 0, 0.15)' : 'rgba(255, 255, 255, 0.2)';
+                                            $textColor = '#0f172a';
+                                            $borderColor = 'rgba(15, 23, 42, 0.10)';
                                             $accentColor = $isYellow ? '#34495E' : '#F4D03F';
                                             ?>
-                                            <div class="schedule-item p-3 rounded shadow-sm" style="background: <?= $bgColor ?>; border-left: 4px solid <?= $accentColor ?>;">
-                                                <div class="fw-bold mb-2 pb-2" style="color: <?= $textColor ?>; font-size: 1rem; border-bottom: 1px solid <?= $borderColor ?>;"><?= $formattedTime ?></div>
+                                            <div class="schedule-item p-3 rounded shadow-sm" style="background: color-mix(in srgb, <?= $bgColor ?> 12%, #ffffff); border: 1px solid <?= $borderColor ?>; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 12px -2px rgba(15, 23, 42, 0.06);">
+                                                <div class="d-flex align-items-center gap-2 mb-2">
+                                                    <span class="status-dot" style="background: <?= $accentColor ?>;" aria-hidden="true"></span>
+                                                    <div class="fw-bold" style="color: <?= $textColor ?>; font-size: 1rem;"><?= $formattedTime ?></div>
+                                                </div>
                                                 <div class="fw-bold mb-2 pb-2" style="color: <?= $textColor ?>; font-size: 1.1rem; border-bottom: 1px solid <?= $borderColor ?>;"><?= esc($currentSchedule['subject_name']) ?></div>
                                                 <div class="mb-2 pb-2" style="color: <?= $textColor ?>; font-size: 1rem; border-bottom: 1px solid <?= $borderColor ?>;"><?= esc($currentSchedule['teacher_name']) ?></div>
                                                 <?php if (!empty($currentSchedule['room'])): ?>

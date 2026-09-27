@@ -8,6 +8,8 @@
   </div>
 </div>
 
+<?= $this->include('partials/mascot_announce_head') ?>
+
 <div class="card">
   <div class="card-header">
     <h5 class="card-title mb-0">
@@ -21,7 +23,11 @@
           <div class="d-flex justify-content-between align-items-start mb-2">
             <div class="d-flex align-items-center gap-2">
               <?php if (!$announcement['is_read']): ?>
-                <span class="badge bg-success">New</span>
+                <?php if (mascot_exists('sticker-new')): ?>
+                  <?= mascot_sticker_for('new', ['class' => 'mascot-chip mascot-chip--sm', 'alt' => 'New']) ?>
+                <?php else: ?>
+                  <span class="badge bg-success">New</span>
+                <?php endif; ?>
               <?php endif; ?>
               <h6 class="mb-1 <?= !$announcement['is_read'] ? 'fw-bold' : '' ?>"><?= esc($announcement['title']) ?></h6>
             </div>
@@ -59,7 +65,6 @@
 }
 .unread-announcement {
   background-color: #e7f3ff;
-  border-left: 4px solid #0d6efd;
   padding-left: 12px;
 }
 </style>

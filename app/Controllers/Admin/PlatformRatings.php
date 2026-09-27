@@ -37,7 +37,7 @@ class PlatformRatings extends BaseController
             ->countAllResults();
 
         $emptyViewData = [
-            'title'             => 'Platform feedback - CSCS SMS',
+            'title'             => 'Platform feedback - CSCS Tap n Track',
             'eligibleStudents'  => $eligibleStudents,
             'eligibleTeachers'  => $eligibleTeachers,
             'ratedStudents'     => 0,
@@ -96,7 +96,7 @@ class PlatformRatings extends BaseController
         $responses = $this->fetchResponsesWithNames($db, $roleFilter, $hasTermColumns);
 
         return view('admin/platform_ratings', [
-            'title'             => 'Platform feedback - CSCS SMS',
+            'title'             => 'Platform feedback - CSCS Tap n Track',
             'eligibleStudents'  => $eligibleStudents,
             'eligibleTeachers'  => $eligibleTeachers,
             'ratedStudents'     => $ratedStudents,

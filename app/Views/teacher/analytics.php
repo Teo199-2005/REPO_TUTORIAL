@@ -8,9 +8,10 @@
 }
 
 .overview-card {
-  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
+  background: var(--surface-tint);
+  border: var(--hairline);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
 }
 
 .stat-chips {
@@ -23,7 +24,7 @@
   padding: 4px 8px;
   border-radius: 12px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
   white-space: nowrap;
 }
 
@@ -144,6 +145,141 @@
     </div>
   </div>
 </div>
+<?php else: ?>
+
+<?php if (! empty($isDomainMode)): ?>
+<?php
+  // ---- Non-numerical section: developmental-domain (symbol) analytics ----
+  $da = $domainAnalytics ?? [];
+  $symbols = $da['symbols'] ?? ['P' => 0, 'AP' => 0, 'D' => 0, 'B' => 0, 'NO' => 0];
+  $sectionLabel = isset($teacherSection) && $teacherSection
+    ? esc(grade_level_label((int) $teacherSection['grade_level'])) . ' · ' . esc($teacherSection['section_name'])
+    : 'Section';
+?>
+<div class="analytics-page compact">
+  <div class="card overview-card mb-3">
+    <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-2 py-2">
+      <div class="d-flex align-items-center gap-2">
+        <h6 class="mb-0">Class overview</h6>
+        <small class="text-muted"><?= $sectionLabel ?> · Developmental Domains (symbols, not grades)</small>
+      </div>
+      <div class="stat-chips">
+        <span class="stat-chip bg-primary-soft">Students <strong><?= count($da['students'] ?? []) ?></strong></span>
+        <span class="stat-chip bg-blue-soft">Completion <strong><?= number_format($da['completionRate'] ?? 0, 1) ?>%</strong></span>
+        <span class="stat-chip bg-green-soft">Mastery (P+AP) <strong><?= number_format($da['masteryRate'] ?? 0, 1) ?>%</strong></span>
+        <span class="stat-chip bg-amber-soft">Attendance <strong><?= number_format($attendanceRate, 1) ?>%</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="analytics-layout">
+    <div class="analytics-cell">
+      <div class="charts-grid">
+        <div class="card chart-card">
+          <div class="card-header d-flex justify-content-between align-items-center py-2">
+            <strong class="small">Symbol distribution</strong>
+            <small class="text-muted d-none d-md-inline"><?= (int) ($da['assessed'] ?? 0) ?> of <?= (int) ($da['totalIndicators'] ?? 0) ?> indicators assessed</small>
+          </div>
+          <div class="card-body py-2">
+            <div style="height: 190px; position: relative;">
+              <canvas id="symbolDistributionChart"></canvas>
+            </div>
+            <div class="row text-center mt-2">
+              <div class="col"><div class="h6 mb-0 text-success"><?= $symbols['P'] ?></div><small class="text-muted">P</small></div>
+              <div class="col"><div class="h6 mb-0 text-primary"><?= $symbols['AP'] ?></div><small class="text-muted">AP</small></div>
+              <div class="col"><div class="h6 mb-0 text-warning"><?= $symbols['D'] ?></div><small class="text-muted">D</small></div>
+              <div class="col"><div class="h6 mb-0 text-danger"><?= $symbols['B'] ?></div><small class="text-muted">B</small></div>
+              <div class="col"><div class="h6 mb-0 text-secondary"><?= $symbols['NO'] ?></div><small class="text-muted">NO/NA</small></div>
+            </div>
+            <small class="text-muted d-block mt-2">Mastery = P + AP among rated indicators (NO/NA excluded).</small>
+          </div>
+        </div>
+
+        <div class="card chart-card">
+          <div class="card-header d-flex justify-content-between align-items-center py-2">
+            <strong class="small">Assessment coverage per quarter</strong>
+            <small class="text-muted d-none d-md-inline">All quarters · <?= esc($schoolYear ?? '') ?></small>
+          </div>
+          <div class="card-body py-2">
+            <?php $coverage = $da['quarterCoverage'] ?? [1 => 0, 2 => 0, 3 => 0, 4 => 0]; $maxQ = max(1, max($coverage)); ?>
+            <?php foreach ($coverage as $q => $count): ?>
+              <div class="metric-row">
+                <span>Quarter <?= (int) $q ?></span>
+                <span style="flex:1; margin: 0 10px;">
+                  <div class="progress" style="height: 8px;">
+                    <div class="progress-bar bg-info" style="width: <?= (int) round(($count / $maxQ) * 100) ?>%;"></div>
+                  </div>
+                </span>
+                <strong><?= (int) $count ?></strong>
+              </div>
+            <?php endforeach; ?>
+            <small class="text-muted d-block mt-2">Assessed indicators per quarter (symbols are stored per quarter, independent of the admin term).</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="analytics-cell">
+      <div class="card mb-3">
+        <div class="card-header py-2"><strong class="small">Developmental Domains</strong></div>
+        <div class="card-body py-2">
+          <?php if (! empty($da['domains'])): ?>
+            <?php foreach ($da['domains'] as $domain): ?>
+              <div class="mb-2">
+                <div class="d-flex justify-content-between align-items-center">
+                  <span class="small"><?= esc($domain['name']) ?></span>
+                  <small class="text-muted"><?= (int) $domain['assessed'] ?>/<?= (int) $domain['total'] ?> · <?= number_format($domain['mastery'], 1) ?>% mastery</small>
+                </div>
+                <div class="progress" style="height: 8px;">
+                  <div class="progress-bar bg-success" style="width: <?= (int) round($domain['total'] > 0 ? ($domain['assessed'] / $domain['total']) * 100 : 0) ?>%;"></div>
+                </div>
+              </div>
+            <?php endforeach; ?>
+          <?php else: ?>
+            <div class="metric-row mb-0"><span class="text-muted small">No developmental domains configured</span><strong>-</strong></div>
+          <?php endif; ?>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header py-2"><strong class="small"><?= isset($teacherSection) ? esc($teacherSection['section_name']) : 'Section' ?> Students</strong></div>
+        <div class="card-body py-2">
+          <?php if (! empty($da['students'])): ?>
+            <?php foreach ($da['students'] as $student): ?>
+              <div class="metric-row">
+                <span><?= esc($student['name']) ?></span>
+                <strong class="small">
+                  <?= (int) $student['assessed'] ?> assessed
+                  <?php if ($student['assessed'] > 0): ?>
+                    · <span class="text-success">P <?= (int) $student['P'] ?></span>
+                    · <span class="text-primary">AP <?= (int) $student['AP'] ?></span>
+                    · <span class="text-warning">D <?= (int) $student['D'] ?></span>
+                    · <span class="text-danger">B <?= (int) $student['B'] ?></span>
+                  <?php else: ?>
+                    · <span class="text-muted">not yet assessed</span>
+                  <?php endif; ?>
+                </strong>
+              </div>
+            <?php endforeach; ?>
+          <?php else: ?>
+            <div class="metric-row mb-0"><span class="text-muted small">No students enrolled</span><strong>-</strong></div>
+          <?php endif; ?>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header py-2"><strong class="small">Section Metrics</strong></div>
+        <div class="card-body py-2">
+          <div class="metric-row"><span>Completion Rate</span><strong><?= number_format($da['completionRate'] ?? 0, 1) ?>%</strong></div>
+          <div class="metric-row"><span>Mastery Rate (P+AP)</span><strong><?= number_format($da['masteryRate'] ?? 0, 1) ?>%</strong></div>
+          <div class="metric-row"><span>Attendance Rate</span><strong><?= number_format($attendanceRate, 1) ?>%</strong></div>
+          <div class="metric-row mb-0"><span>Students</span><strong><?= count($da['students'] ?? []) ?></strong></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <?php else: ?>
 
 <div class="analytics-page compact">
@@ -387,10 +523,26 @@
 
 <?php endif; ?>
 
+<?php endif; ?>
+
 
 
 <!-- Chart.js Library -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Chart.js draws on a canvas, so no CSS cascade can reach it: the platform
+// typeface has to be handed to Chart.js explicitly, otherwise axis ticks,
+// legends and data labels fall back to Chart.js' own default stack.
+if (typeof Chart !== 'undefined') {
+  if (Chart.defaults.font) {
+    Chart.defaults.font.family = "'Times New Roman', Times, 'Liberation Serif', 'DejaVu Serif', serif";
+    Chart.defaults.font.weight = 400;
+  } else if (Chart.defaults.global) {
+    Chart.defaults.global.defaultFontFamily = "'Times New Roman', Times, 'Liberation Serif', 'DejaVu Serif', serif";
+    Chart.defaults.global.defaultFontWeight = 'normal';
+  }
+}
+</script>
 
 <script>
 // Chart data from PHP
@@ -401,6 +553,63 @@ const attendanceStats = <?= json_encode($analytics['attendanceStats'] ?? []) ?>;
 const analytics = <?= json_encode($analytics ?? []) ?>;
 const schoolYear = '<?= $schoolYear ?? get_current_school_year() ?>';
 const currentTerm = '<?= $currentTerm ?? '1' ?>';
+const IS_DOMAIN_MODE = <?= ! empty($isDomainMode) ? 'true' : 'false' ?>;
+const domainSymbols = <?= json_encode($da['symbols'] ?? []) ?>;
+
+// Symbol Distribution Doughnut Chart (non-numerical sections)
+function initSymbolDistributionChart() {
+  const el = document.getElementById('symbolDistributionChart');
+  if (!el) return;
+  const ctx = el.getContext('2d');
+
+  const data = [
+    domainSymbols.P || 0,
+    domainSymbols.AP || 0,
+    domainSymbols.D || 0,
+    domainSymbols.B || 0,
+    domainSymbols.NO || 0
+  ];
+
+  const totalAssessed = data.reduce((a, b) => a + b, 0);
+  if (totalAssessed === 0) {
+    ctx.font = '14px Times New Roman, Times, serif';
+    ctx.fillStyle = '#6b7280';
+    ctx.textAlign = 'center';
+    ctx.fillText('No symbols entered yet', ctx.canvas.width / 2, ctx.canvas.height / 2);
+    return;
+  }
+
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['P — Proficient', 'AP — Approaching', 'D — Developing', 'B — Beginning', 'NO/NA'],
+      datasets: [{
+        data: data,
+        backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#9ca3af'],
+        borderWidth: 3,
+        borderColor: '#ffffff',
+        hoverBorderWidth: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { usePointStyle: true, padding: 12, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const total = context.dataset.data.reduce((a, b) => a + b, 0);
+              const percentage = total > 0 ? ((context.parsed / total) * 100).toFixed(1) : 0;
+              return context.label + ': ' + context.parsed + ' (' + percentage + '%)';
+            }
+          }
+        }
+      },
+      cutout: '60%'
+    }
+  });
+}
 
 // Grade Distribution Doughnut Chart
 function initGradeDistributionChart() {
@@ -419,7 +628,7 @@ function initGradeDistributionChart() {
   
   // If no grades, show a placeholder
   if (totalGrades === 0) {
-    ctx.font = '14px Arial';
+    ctx.font = '14px Times New Roman, Times, serif';
     ctx.fillStyle = '#6b7280';
     ctx.textAlign = 'center';
     ctx.fillText('No grades entered yet', ctx.canvas.width / 2, ctx.canvas.height / 2);
@@ -481,7 +690,7 @@ function initTermTrendsChart() {
   const hasData = termTrends.some(t => t.average > 0);
 
   if (!hasData) {
-    ctx.font = '14px Arial';
+    ctx.font = '14px Times New Roman, Times, serif';
     ctx.fillStyle = '#6b7280';
     ctx.textAlign = 'center';
     ctx.fillText('No grade trends yet', ctx.canvas.width / 2, ctx.canvas.height / 2);
@@ -642,7 +851,7 @@ function initPerformanceChart() {
   
   // If no data, show placeholder
   if (!hasData) {
-    ctx.font = '14px Arial';
+    ctx.font = '14px Times New Roman, Times, serif';
     ctx.fillStyle = '#6b7280';
     ctx.textAlign = 'center';
     ctx.fillText('No performance data yet', ctx.canvas.width / 2, ctx.canvas.height / 2);
@@ -734,8 +943,12 @@ document.addEventListener('DOMContentLoaded', function() {
   const totalStudents = <?= $totalStudents ?>;
   
   if (totalStudents > 0) {
-    initGradeDistributionChart();
-    initTermTrendsChart();
+    if (IS_DOMAIN_MODE) {
+      initSymbolDistributionChart();
+    } else {
+      initGradeDistributionChart();
+      initTermTrendsChart();
+    }
     initAttendanceChart();
     initPerformanceChart();
   }

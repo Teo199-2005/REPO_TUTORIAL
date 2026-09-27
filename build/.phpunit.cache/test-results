@@ -1,1 +1,0 @@
-{"version":2,"defects":{"Tests\\Feature\\PasswordResetApproveTest::testApproveWithCsrfTokenHeader":7,"Tests\\Feature\\PasswordResetApproveTest::testApproveWithoutCsrfTokenFails":8},"times":{"Tests\\Feature\\PasswordResetApproveTest::testApproveWithCsrfTokenHeader":0.064,"Tests\\Feature\\PasswordResetApproveTest::testApproveWithoutCsrfTokenFails":0.019}}

@@ -9,7 +9,7 @@ $forceShow = (bool) session()->getFlashdata('platform_rating_required');
     <div class="platform-rating-logout-header">
       <i class="bi bi-stars text-warning fs-3"></i>
       <div>
-        <h3 id="platformRatingLogoutTitle" class="h5 mb-1">Rate CSCS SMS before you leave</h3>
+        <h3 id="platformRatingLogoutTitle" class="h5 mb-1">Rate CSCS Tap n Track before you leave</h3>
         <p class="text-muted small mb-0">
           Required feedback for <strong><?= esc($logoutRatingSchoolYear) ?></strong> · <?= esc(platform_rating_term_label($logoutRatingTerm)) ?>
         </p>
@@ -61,7 +61,7 @@ $forceShow = (bool) session()->getFlashdata('platform_rating_required');
   border-radius: 16px;
   max-width: 480px;
   width: 100%;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.10), 0 24px 56px -8px rgba(15, 23, 42, 0.16);
   overflow: hidden;
 }
 .platform-rating-logout-header {

@@ -348,7 +348,7 @@ function buildAssignStudentsModal({ sectionId, sectionName, gradeLevel }) {
         <div class="mb-3">
           <div class="p-3 bg-light rounded">
             <h6 class="mb-1">${sectionName}</h6>
-            <small class="text-muted">${formatGradeLevel(gradeLevel)} • Unassigned students only</small>
+            <small class="text-muted">${formatGradeLevel(gradeLevel)} &bull; Unassigned students only</small>
           </div>
         </div>
         <div id="unassignedStudentsList"></div>
@@ -494,7 +494,7 @@ function assignSelectedStudents(sectionId) {
     headers: {
       'Content-Type': 'application/json',
       'X-Requested-With': 'XMLHttpRequest',
-      '<?= csrf_token() ?>': '<?= csrf_hash() ?>'
+      'X-CSRF-TOKEN': '<?= csrf_hash() ?>'
     },
     body: JSON.stringify({ student_ids: selectedStudents })
   })

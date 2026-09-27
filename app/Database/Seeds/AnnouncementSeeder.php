@@ -9,7 +9,7 @@ class AnnouncementSeeder extends Seeder
     {
         $data = [
             [
-                'title' => 'Welcome to CSCS SMS',
+                'title' => 'Welcome to CSCS Tap n Track',
                 'slug' => 'welcome-lphs-sms',
                 'body' => 'Our School Management System is now live. Students can register online.',
                 'target_roles' => 'all',

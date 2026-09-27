@@ -40,7 +40,7 @@ $tabId = $isAdvisory ? 'advisory' : 'section-' . ($sectionId ?? 'unknown');
             </button>
         </div>
         <div class="card-body">
-            <form id="bulkGradesForm-<?= $tabId ?>" method="post" action="<?= base_url('teacher/grades/bulk') ?>" onsubmit="console.log('Form submitting...')">
+            <form id="bulkGradesForm-<?= $tabId ?>" method="post" action="<?= base_url('teacher/grades/bulk') ?>" onsubmit="clampAllGrades(this); console.log('Form submitting...')">
                 <?= csrf_field() ?>
                 <input type="hidden" name="term" value="<?= (int) $currentTerm ?>">
                 <input type="hidden" name="grading_type" value="<?= esc($sectionGradingType ?? 'numerical') ?>">
@@ -169,7 +169,7 @@ $tabId = $isAdvisory ? 'advisory' : 'section-' . ($sectionId ?? 'unknown');
                                                     <input type="number" class="form-control form-control-sm grade-input-<?= $tabId ?>" 
                                                            name="grades[<?= $student['id'] ?>][<?= $subjectId ?>]" 
                                                            value="<?= $gradeValue ?>" 
-                                                           min="0" max="100" step="0.1" 
+                                                           min="<?= (float) min_report_card_grade() ?>" max="<?= (float) max_report_card_grade() ?>" step="0.1" 
                                                            style="display: none; min-width: 100px; width: 100%; position: relative; z-index: 10;" 
                                                            onchange="updateTotal('<?= $tabId ?>', <?= $student['id'] ?>)" 
                                                            oninput="validateGrade(this)">
@@ -257,7 +257,7 @@ $tabId = $isAdvisory ? 'advisory' : 'section-' . ($sectionId ?? 'unknown');
                                                 <input type="number" class="form-control form-control-sm grade-input-<?= $tabId ?>" 
                                                        name="grades[<?= $student['id'] ?>][<?= $subjectId ?>]" 
                                                        value="<?= $gradeValue ?>" 
-                                                       min="0" max="100" step="0.1" 
+                                                       min="<?= (float) min_report_card_grade() ?>" max="<?= (float) max_report_card_grade() ?>" step="0.1" 
                                                        style="display: none; width: 80px; position: relative; z-index: 10;" 
                                                        onchange="updateTotal('<?= $tabId ?>', <?= $student['id'] ?>)" 
                                                        oninput="validateGrade(this)">
@@ -350,14 +350,71 @@ function cancelInputMode(tabId) {
     toggleInputMode(tabId);
 }
 
+// Lowest grade a report card may show. Anything under it is raised to it - on
+// the server and in the box the teacher typed in - so 44 or 59 becomes 60.
+// This partial renders once per section tab, hence the redeclaration guard.
+if (typeof MIN_REPORT_CARD_GRADE === 'undefined') {
+    var MIN_REPORT_CARD_GRADE = <?= (float) min_report_card_grade() ?>;
+    var MAX_REPORT_CARD_GRADE = <?= (float) max_report_card_grade() ?>;
+}
+
+// Pull one value into the 60-100 range; null means "no usable number typed".
+function floorGrade(value) {
+    const numeric = parseFloat(value);
+    if (isNaN(numeric)) {
+        return null;
+    }
+    if (numeric < MIN_REPORT_CARD_GRADE) {
+        return MIN_REPORT_CARD_GRADE;
+    }
+    if (numeric > MAX_REPORT_CARD_GRADE) {
+        return MAX_REPORT_CARD_GRADE;
+    }
+    return numeric;
+}
+
 function validateGrade(input) {
     const value = parseFloat(input.value);
-    if (value < 0) {
-        input.value = 0;
-    } else if (value > 100) {
-        input.value = 100;
+    if (isNaN(value)) {
+        return;
+    }
+    if (value > MAX_REPORT_CARD_GRADE) {
+        input.value = MAX_REPORT_CARD_GRADE;
     }
 }
+
+// The floor is applied when the teacher leaves the field, never on every
+// keystroke: clamping while typing would turn "75" into 60 on the "7" and 100
+// on the "5".
+function clampGradeToFloor(input) {
+    if (!input || input.value === '') {
+        return;
+    }
+    const floored = floorGrade(input.value);
+    if (floored === null) {
+        return;
+    }
+    input.value = floored;
+}
+
+// Used by the form's onsubmit and by the recommendation sender, so a value the
+// teacher never blurred still posts as 60 instead of 44.
+function clampAllGrades(form) {
+    if (!form) {
+        return;
+    }
+    form.querySelectorAll('input[type="number"]').forEach(clampGradeToFloor);
+}
+
+// Grades stored before the floor existed are pulled up as soon as the page
+// loads, so a stale 44 can neither trip the field's own min="60" validation nor
+// be re-saved unchanged.
+function clampGradesOnLoad() {
+    document.querySelectorAll('input[type="number"][class*="grade-input-"]').forEach(clampGradeToFloor);
+}
+
+clampGradesOnLoad();
+document.addEventListener('DOMContentLoaded', clampGradesOnLoad);
 
 function updateTotal(tabId, studentId) {
     const inputs = document.querySelectorAll(`#bulkGradesForm-${tabId} input[name^="grades[${studentId}]"], #bulkGradesForm-${tabId} select[name^="grades[${studentId}]"]`);
@@ -369,8 +426,11 @@ function updateTotal(tabId, studentId) {
         if (input.tagName === 'SELECT') {
             return;
         }
-        const value = parseFloat(input.value);
-        if (!isNaN(value) && value > 0) {
+        // The posted value is the floored one, so the running total matches
+        // what the report card will store.
+        clampGradeToFloor(input);
+        const value = floorGrade(input.value);
+        if (value !== null) {
             total += value;
             count++;
         }
@@ -386,6 +446,7 @@ function updateTotal(tabId, studentId) {
 
 function submitRecommendation(tabId, sectionId, subjectId) {
     const form = document.getElementById(`bulkGradesForm-${tabId}`);
+    clampAllGrades(form);
     const formData = new FormData(form);
     const grades = {};
     

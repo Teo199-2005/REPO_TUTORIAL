@@ -23,7 +23,7 @@ class StudentNutrition extends BaseController
         $sections = $sectionModel->orderBy('grade_level', 'ASC')->orderBy('section_name', 'ASC')->findAll();
 
         return view('admin/student_nutrition', [
-            'title'          => 'Student nutrition / BMI - CSCS SMS',
+            'title'          => 'Student nutrition / BMI - CSCS Tap n Track',
             'students'       => $this->getFilteredRows(),
             'sections'       => $sections,
             'filter_grade'   => $this->request->getGet('grade_level'),
@@ -53,7 +53,10 @@ class StudentNutrition extends BaseController
         $html = view('admin/student_nutrition_pdf', $data);
 
         $options = new \Dompdf\Options();
-        $options->set('defaultFont', 'Helvetica');
+        $options->set('defaultFont', 'Times');
+        $options->set('isRemoteEnabled', false);
+        $options->set('isHtml5ParserEnabled', true);
+        $options->set('isPhpEnabled', false);
         $dompdf = new \Dompdf\Dompdf($options);
         $dompdf->loadHtml($html);
         $dompdf->setPaper('A4', 'landscape');
@@ -66,8 +69,8 @@ class StudentNutrition extends BaseController
     {
         $parts = [];
         $g = $this->request->getGet('grade_level');
-        if ($g !== null && $g !== '') {
-            $parts[] = 'Grade ' . $g;
+        if ($g !== null && $g !== '' && ctype_digit((string) $g)) {
+            $parts[] = grade_level_label((int) $g);
         }
         $sid = $this->request->getGet('section_id');
         if ($sid !== null && $sid !== '') {
